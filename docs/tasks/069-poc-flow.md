@@ -1,6 +1,6 @@
 # Task 069: The POC flow, end to end on the deployed app
 
-- **Status:** in-progress
+- **Status:** in-review
 - **Milestone:** POC (2026-11-13)
 - **Zone / package:** `e2e` (steps), `.github/workflows/deploy.yml` (the preview's tag selection)
 - **Feature file:** `docs/features/poc-flow.feature`
@@ -42,10 +42,10 @@ The POC is one story that a viewer can follow, from a customer to a report, on a
 - More `@poc` scenarios, or moving piece-level scenarios into the preview set.
 
 ## Acceptance criteria
-- [ ] The `@poc` flow passes locally (CI's `e2e` job). Scenario: "An admin sets up the work, a worker does it on site, the admin adds the report, and a partner sees only their own".
+- [x] The `@poc` flow passes locally (CI's `e2e` job). Scenario: "An admin sets up the work, a worker does it on site, the admin adds the report, and a partner sees only their own".
 - [ ] The same scenario passes against the PR's preview URL in the deploy job, after `@smoke`, without hitting the sign-up limit. Same scenario, run with `E2E_TAGS="@smoke or @poc"`.
 - [ ] Every step it uses goes through the app only: run against the preview, with no `DATABASE_URL` or storage settings on the runner. Same scenario, preview run.
-- [ ] The partner user sees only their own project and its site. The partner part of the same scenario.
+- [x] The partner user sees only their own project and its site. The partner part of the same scenario.
 
 (The second criterion of the earlier draft, "the demo account on the deployed app shows the whole flow", moved to task 076.)
 
