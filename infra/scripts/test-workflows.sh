@@ -45,6 +45,9 @@ check "installs the dashboard itself" has 'pnpm install --frozen-lockfile --filt
 check "DATABASE_URL only in the seed command's environment (never exported or echoed)" \
   hasnt '(export +DATABASE_URL|echo .*DATABASE_URL|^ +DATABASE_URL=[^ ]*$)'
 check "no shell tracing" hasnt 'set -[a-z]*x'
+check "fails with the proxy's log when the proxy doesn't start" \
+  has 'fail "The Cloud SQL proxy didn.t start: \$\(tail -c 300 proxy-seed\.log \| oneline\)"'
+check "defines oneline before the proxy check uses it" before '^ +oneline\(\) ' 'proxy didn.t start'
 check "a skip is a notice" has '::notice title=Demo data::'
 check "a refusal or failure is a warning" has '::warning title=Demo data::'
 

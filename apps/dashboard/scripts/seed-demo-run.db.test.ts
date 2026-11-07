@@ -4,7 +4,7 @@ process.env.DB_POOL_MAX = "1";
 
 import { isDeepStrictEqual } from "node:util";
 
-import { and, eq, inArray, schema, sql } from "@repo/db";
+import { and, buildPoolConfig, eq, inArray, schema, sql } from "@repo/db";
 import { getMaintenanceDb } from "@repo/db/maintenance";
 import { afterAll, describe, expect, it } from "vitest";
 
@@ -23,6 +23,27 @@ const now = new Date();
 const counts = planCounts(buildDemoPlan(now));
 const userIds: string[] = [];
 const workspaceIds: string[] = [];
+
+// What the seed sends, seen on the pool's connection (pg's own types aren't a dashboard dependency).
+type QueryResult = { rows: Record<string, unknown>[] };
+type PgClient = { query: (...args: unknown[]) => unknown };
+type PgPool = { on: (event: "acquire", listener: (client: PgClient) => void) => void; query: (text: string, values?: unknown[]) => Promise<QueryResult>; end: () => Promise<void> };
+const pool = (db as unknown as { $client: PgPool }).$client;
+/** The statements sent since the last reset, and a hook run after each one (while its transaction is open). */
+const sent = { statements: [] as string[], after: null as ((text: string) => Promise<void>) | null };
+const watched = new WeakSet<PgClient>();
+pool.on("acquire", (client) => {
+  if (watched.has(client)) return;
+  watched.add(client);
+  const query = client.query.bind(client);
+  client.query = (...args: unknown[]) => {
+    const text = typeof args[0] === "string" ? args[0] : String((args[0] as { text?: string })?.text ?? "");
+    sent.statements.push(text);
+    const result = query(...args);
+    const after = sent.after;
+    return after && result instanceof Promise ? result.then(async (value) => (await after(text), value)) : result;
+  };
+});
 
 /** A throwaway account (`@example.test`), in `workspaces` workspaces with `role`, and maybe another member. */
 async function account(label: string, { workspaces = 1, role = "admin", otherMember = false } = {}) {
@@ -105,6 +126,7 @@ async function readingsAccepted(workspaceId: string) {
 }
 
 afterAll(async () => {
+  sent.after = null;
   // Deleting a workspace takes its customers, projects, visits, readings and forms with it.
   if (workspaceIds.length > 0) await db.delete(schema.workspace).where(inArray(schema.workspace.id, workspaceIds));
   if (userIds.length > 0) await db.delete(schema.user).where(inArray(schema.user.id, userIds));
@@ -198,6 +220,12 @@ describe("seed:demo (local)", () => {
     expect(forms.filter((f) => f.status === "published")).toHaveLength(1);
   });
 
+  it("finds the account by its email in any case, with spaces around it", async () => {
+    const me = await account("case-local");
+    expect((await runSeedDemo(db, { email: `  ${me.email.toUpperCase()} `, deploy: false }, now)).code).toBe(0);
+    expect(await rowCounts(me.workspaceId)).toMatchObject({ projects: counts.projects });
+  });
+
   it("refuses an email with no account", async () => {
     const result = await runSeedDemo(db, { email: `${run}-nobody@example.test`, deploy: false }, now);
     expect(result.code).toBe(1);
@@ -262,5 +290,72 @@ describe("seed:demo --deploy", () => {
     expect(result.code).toBe(1);
     expect(result.message).toMatch(/--workspace/);
     expect(await rowCounts(me.workspaceId)).toMatchObject({ customers: 0, forms: 0 });
+  });
+
+  it("finds the demo account by its email in any case, with spaces around it", async () => {
+    const me = await account("case-deploy");
+    expect(await runSeedDemo(db, { email: ` ${me.email.toUpperCase()}  `, deploy: true }, now)).toEqual({ code: 0, message: seedSummary(counts) });
+  });
+
+  it("never deletes, nor looks for demo data to replace", async () => {
+    const me = await account("no-replace");
+    sent.statements = [];
+    expect((await runSeedDemo(db, { email: me.email, deploy: true }, now)).code).toBe(0);
+    expect(sent.statements.filter((text) => /^\s*delete\b/i.test(text))).toEqual([]);
+    expect(sent.statements.filter((text) => /^select "id" from "organization"/.test(text))).toEqual([]);
+  });
+
+  it("leaves demo customers in another workspace as they are", async () => {
+    const other = await account("other-demo");
+    expect((await runSeedDemo(db, { email: other.email, deploy: false }, now)).code).toBe(0);
+    const before = await db.select().from(schema.organization).where(eq(schema.organization.workspaceId, other.workspaceId));
+    const otherRows = await rowCounts(other.workspaceId);
+
+    const me = await account("beside-demo");
+    expect((await runSeedDemo(db, { email: me.email, deploy: true }, now)).code).toBe(0);
+
+    expect(await db.select().from(schema.organization).where(eq(schema.organization.workspaceId, other.workspaceId))).toEqual(before);
+    expect(await rowCounts(other.workspaceId)).toEqual(otherRows);
+  });
+
+  it("holds the workspace row until it commits: a new member or customer (a key-share lock) waits", async () => {
+    const me = await account("lock");
+    const joiner = `${run}-joiner`;
+    userIds.push(joiner);
+    await db.insert(schema.user).values({ id: joiner, name: "Joiner", email: `${joiner}@example.test` });
+    // A second session, as another request would be.
+    const PoolOf = pool.constructor as new (config: unknown) => PgPool;
+    const second = new PoolOf(buildPoolConfig({ ...process.env, DB_POOL_MAX: "1" }, null));
+    const outcomes: string[] = [];
+    const attempt = async (label: string, text: string, values: unknown[]) => {
+      try {
+        await second.query("begin");
+        await second.query("set local lock_timeout = '300ms'");
+        await second.query(text, values);
+        outcomes.push(`${label}: went through`);
+      } catch (error) {
+        outcomes.push(`${label}: ${(error as { code?: string }).code}`);
+      } finally {
+        await second.query("rollback");
+      }
+    };
+    sent.after = async (text) => {
+      if (!/for update/i.test(text)) return;
+      sent.after = null;
+      await attempt("key share", "select id from workspace where id = $1 for key share", [me.workspaceId]);
+      await attempt("member", "insert into workspace_member (workspace_id, user_id, role) values ($1, $2, 'admin')", [me.workspaceId, joiner]);
+      await attempt("customer", "insert into organization (id, workspace_id, kind, name) values ($1, $2, 'customer', 'Late')", [`${run}-late`, me.workspaceId]);
+    };
+    try {
+      expect((await runSeedDemo(db, { email: me.email, deploy: true }, now)).code).toBe(0);
+      expect(outcomes).toEqual(["key share: 55P03", "member: 55P03", "customer: 55P03"]);
+      // Once the seed has committed, the same lock is free.
+      outcomes.length = 0;
+      await attempt("key share", "select id from workspace where id = $1 for key share", [me.workspaceId]);
+      expect(outcomes).toEqual(["key share: went through"]);
+    } finally {
+      sent.after = null;
+      await second.end();
+    }
   });
 });

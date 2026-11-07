@@ -103,13 +103,37 @@ describe("seedSummary", () => {
   });
 });
 
+/** The shape of Drizzle's `DrizzleQueryError`: the query and its parameters in the message, the driver's error as cause. */
+class QueryError extends Error {
+  constructor(
+    readonly query: string,
+    readonly params: unknown[],
+    override readonly cause: unknown,
+  ) {
+    super(`Failed query: ${query}\nparams: ${params}`);
+  }
+}
+
 describe("failureText", () => {
-  it("is the error's message, not the error object with its details", () => {
-    const error = Object.assign(new Error("connect ECONNREFUSED 127.0.0.1:5432"), { detail: `Key (email)=(${email})`, connection });
-    expect(failureText(error)).toBe("Seeding failed: connect ECONNREFUSED 127.0.0.1:5432");
+  const userId = "3f0f1c7e-8a7b-4d7e-9a51-2b7c0f9d1e44";
+
+  it("never shows a failed query's parameters, only the database's code and message", () => {
+    const cause = Object.assign(new Error('duplicate key value violates unique constraint "site_visit_pkey"'), { code: "23505", detail: `Key (id)=(${userId})` });
+    const error = new QueryError('select "id" from "user" where "user"."email" = $1', [email, userId], cause);
+    const text = failureText(error);
+    expect(text).toBe('Seeding failed (23505): duplicate key value violates unique constraint "site_visit_pkey"');
+    expect(text).not.toContain(email);
+    expect(text).not.toContain(userId);
+    expect(text).not.toMatch(/Failed query|params/);
   });
 
-  it("takes something thrown that isn't an Error as text", () => {
-    expect(failureText("boom")).toBe("Seeding failed: boom");
+  it("shows a connection error's code, not its message or details", () => {
+    const error = Object.assign(new Error("connect ECONNREFUSED 127.0.0.1:5432"), { code: "ECONNREFUSED", connection });
+    expect(failureText(error)).toBe("Seeding failed (ECONNREFUSED).");
+  });
+
+  it("shows nothing of an error with neither a code nor a cause", () => {
+    expect(failureText(new Error(`No user ${email}`))).toBe("Seeding failed.");
+    expect(failureText("boom")).toBe("Seeding failed.");
   });
 });
