@@ -185,6 +185,7 @@ jobs:
           fi
           echo "::add-mask::$DEMO_EMAIL"
           fail() { echo "::warning title=Demo data::$1"; exit 1; }
+          oneline() { tr '\n' ' ' | cut -c1-500; }
           . infra/scripts/environment.sh
           PASSWORD="$(gcloud secrets versions access latest --secret="$DB_MIGRATE_PASSWORD_SECRET")" ||
             fail "Couldn't read the database password."
@@ -194,8 +195,9 @@ jobs:
           ./cloud-sql-proxy --port 5432 "$CLOUDSQL_CONNECTION" > proxy-seed.log 2>&1 &
           trap 'kill %1 2>/dev/null || true' EXIT
           for _ in $(seq 1 20); do (echo > /dev/tcp/127.0.0.1/5432) 2>/dev/null && break; sleep 1; done
+          (echo > /dev/tcp/127.0.0.1/5432) 2>/dev/null ||
+            fail "The Cloud SQL proxy didn't start: $(tail -c 300 proxy-seed.log | oneline)"
 
-          oneline() { tr '\n' ' ' | cut -c1-500; }
           set +e
           OUT="$(DATABASE_URL="postgres://${DB_MIGRATE_LOGIN}:${PASSWORD}@127.0.0.1:5432/${DB_NAME}" DB_POOL_MAX=1 \
             pnpm --silent --filter @repo/dashboard seed:demo --deploy --email "$DEMO_EMAIL" 2> "$RUNNER_TEMP/seed.err")"
