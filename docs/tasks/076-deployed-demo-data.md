@@ -1,6 +1,6 @@
 # Task 076: Demo data on the deployed app
 
-- **Status:** todo (one open question: question 4, how the demo email stays out of the public logs)
+- **Status:** todo (ready: all four open questions answered, 2026-11-07)
 - **Milestone:** POC (2026-11-13)
 - **Zone / package:** `apps/dashboard` (`scripts/seed-demo.ts`, `features/demo/`), `.github/workflows/deploy.yml`, `infra/README.md` (docs only). No Terraform change, no migration.
 - **Feature file:** none (no visible behavior of the app; the seed's own tests and a check by hand on the deployed app)
@@ -26,7 +26,7 @@ The POC is shown on the deployed app, and a viewer should find a customer's whol
   - Runs in one transaction, as today: a failure leaves nothing half-seeded.
   - Local runs without `--deploy` behave as today (including refusing an email with no account), plus the field data.
 - **A `Seed demo data` step in `deploy.yml`:**
-  - **When:** on `push` to `main` only (never on `pull_request`, so never on the preview database or its throwaway accounts), only when `DEMO_EMAIL` is set (question 4: a repository secret by default), after the migrations; placed after `Check shell URL`, so the new revision is already serving when it runs.
+  - **When:** on `push` to `main` only (never on `pull_request`, so never on the preview database or its throwaway accounts), only when the repository secret `DEMO_EMAIL` is set (question 4; tested in the shell, since `if:` can't read secrets), after the migrations; placed after `Check shell URL`, so the new revision is already serving when it runs.
   - **Never blocks the deploy of `main`:** `continue-on-error: true` and `timeout-minutes: 10`. The app is already deployed by then, the demo data is a convenience, and a red `main` for it would hide real failures. A failure or refusal shows as a `::warning::` annotation on the run; a skip as a `::notice::`.
   - **Connection:** it starts the Cloud SQL proxy as the migration step does and connects as `app`'s owner login (`DB_MIGRATE_LOGIN` / `DB_MIGRATE_PASSWORD_SECRET` from `infra/scripts/environment.sh`), with the password from Secret Manager through main's deployer, which can already read it. No new identity, no Terraform change. Sharing the proxy start with the migration step through a small helper script is the implementer's choice.
   - **No secret in the log:** the password and the email are masked (`::add-mask::`) before any other command. `DATABASE_URL` is built in the shell and passed only in the seed command's environment (`DATABASE_URL=… DB_POOL_MAX=1 pnpm --filter @repo/dashboard seed:demo --deploy --email "$DEMO_EMAIL"`), never echoed, no `set -x`. `DB_POOL_MAX=1`: the seed needs one connection and shares `app`'s connection budget with the running app (task 075).
@@ -69,12 +69,13 @@ The POC is shown on the deployed app, and a viewer should find a customer's whol
 ## Open questions (for the owner)
 1. **How does the seed reach the deployed database?** **Answered 2026-11-07: (a)**, a step in `deploy.yml`, on `main` deploys only, after the migrations, that runs `seed:demo --email "$DEMO_EMAIL"` when `DEMO_EMAIL` is set and only when the demo workspace has no demo data yet. No Terraform change and no new identity.
 2. **Photos and a report in the seed?** **Answered 2026-11-07: no files in the seed.** The owner uploads one photo and one report on the demo project by hand through the app.
-3. **Which email is the demo account?** **Answered 2026-11-07:** an address the owner controls, set by the owner as `DEMO_EMAIL` in the repository settings; never committed.
-4. **Open: a repository secret rather than a repository variable for `DEMO_EMAIL`?** The repository is public, and so are its Actions logs. GitHub prints a step's `env:` values and its script (with `${{ vars.… }}` filled in) at the top of the step's log, and doesn't mask variables, so a `DEMO_EMAIL` *variable* would show the demo login in every `main` run's log; `::add-mask::` only hides it from later lines. A *secret* of the same name is masked everywhere and costs nothing else (the step tests it in the shell instead of in `if:`). **Recommended default:** set `DEMO_EMAIL` as a repository secret. Alternative: keep the variable and accept the email in public logs.
+3. **Which email is the demo account?** **Answered 2026-11-07:** an address the owner controls, set by the owner as `DEMO_EMAIL` in the repository settings (a secret, question 4); never committed.
+4. **A repository secret rather than a repository variable for `DEMO_EMAIL`?** **Answered 2026-11-07: a repository secret**, as recommended. The repository is public, and so are its Actions logs. GitHub prints a step's `env:` values and its script (with `${{ vars.… }}` filled in) at the top of the step's log, and doesn't mask variables, so a `DEMO_EMAIL` *variable* would show the demo login in every `main` run's log; `::add-mask::` only hides it from later lines. A *secret* of the same name is masked everywhere and costs nothing else (the step tests it in the shell instead of in `if:`). **Recommended default:** set `DEMO_EMAIL` as a repository secret. Alternative: keep the variable and accept the email in public logs.
 
 ## Progress log
 - 2026-11-07 – Split from task 069: the demo data on the deployed app needs a decision on how a seed reaches the deployed database through CI, which doesn't belong in 069's e2e change. Three open questions for the owner, each with a recommended default.
 - 2026-11-07 – The owner answered questions 1–3 with the recommended defaults: route (a) (a step in the `main` deploy, no Terraform), no files in the seed, an owner-controlled address in `DEMO_EMAIL`. Scope made concrete: `seed:demo --deploy` (skip when not signed up / no workspace / demo data exists; refuse anything but a single-member workspace the account administers; no personal data in the output), a `continue-on-error` step after the shell deploy with `DB_POOL_MAX=1`. New question 4: a public log would show a `DEMO_EMAIL` variable, so a secret is recommended.
+- 2026-11-07 – The owner answered question 4: `DEMO_EMAIL` is a repository secret (masked in the public Actions logs). Ready.
 
 ## Parking lot
 - Reset the demo account's data from CI (a "reseed" flag), if the owner wants a clean demo before each showing. Until then, a reseed means a new demo account (a new `DEMO_EMAIL`) or a local-style delete that this task doesn't provide.

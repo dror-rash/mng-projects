@@ -42,7 +42,7 @@ Build a modern, full-stack Project Management application on a Next.js multi-zon
    - 057 storage → 060 form templates → 061 readings → 064 uploaded reports;
    - 070 home and menu, in parallel with 071 hierarchy in the database (then `reset:local` and `seed:demo` locally) → 072 hierarchy pages (owner, 2026-11-04; all three done: PRs #41, #42, #44).
 3. 069: the `@poc` flow against the deployed preview, walking customer → site → project (after 070–072).
-4. 076: demo data on the deployed app (split from 069): a `seed:demo --deploy` step in the `main` deploy, no files in the seed (owner, 2026-11-07); waits on one question, `DEMO_EMAIL` as a secret or a variable.
+4. 076: demo data on the deployed app (split from 069): a `seed:demo --deploy` step in the `main` deploy, no files in the seed (owner, 2026-11-07), `DEMO_EMAIL` a repository secret; ready.
 
 M13 tasks 062, 063 and 065 continue after the POC.
 
@@ -111,3 +111,4 @@ M13 tasks 062, 063 and 065 continue after the POC.
 - 2026-11-05 – Task 061 done (PR #50): readings are live; the POC lane 057 → 060 → 061 → 064 is complete. PR #50 was the first fully green preview: task 075's hand check passed and most of task 068's preview checks are done (open: an upload and download by hand). Next: task 069 (`@poc` flow).
 - 2026-11-07 – Task 069 ready: `poc-flow.feature` has one `@poc` scenario (admin → worker → admin → partner, three sign-ups) whose steps all go through the app, so it runs against the preview; against a deployment the e2e helpers space sign-ups and sign-ins 10 seconds apart (`@smoke` kept, rule 13), and the preview job runs `@smoke or @poc`. The deployed demo data moved to task 076 (todo, three open questions for the owner: how the seed reaches the deployed database through CI, files in the seed, the demo email).
 - 2026-11-07 – Task 076: the owner chose route (a) (a `seed:demo --deploy` step on `main` deploys, after the shell deploy, `continue-on-error`, no Terraform), no files in the seed, and an owner-controlled `DEMO_EMAIL`. Scope made concrete (visits and readings of a published demo form; skip when not signed up or demo data exists; refuse any workspace but the demo account's own). Not ready: question 4, a public Actions log would show a `DEMO_EMAIL` variable, so a secret is recommended.
+- 2026-11-07 – Task 076 ready: the owner made `DEMO_EMAIL` a repository secret (question 4), so the demo login stays out of the public Actions logs.
