@@ -1,6 +1,6 @@
 # Task 076: Demo data on the deployed app
 
-- **Status:** in-review
+- **Status:** done (PR #52); the first seed on `main` waits on the owner (below)
 - **Milestone:** POC (2026-11-13)
 - **Zone / package:** `apps/dashboard` (`scripts/seed-demo.ts`, `features/demo/`), `.github/workflows/deploy.yml`, `infra/README.md` (docs only). No Terraform change, no migration.
 - **Feature file:** none (no visible behavior of the app; the seed's own tests and a check by hand on the deployed app)
@@ -107,6 +107,7 @@ The POC is shown on the deployed app, and a viewer should find a customer's whol
   - Pinned (green from the start): a second session's `select … for key share` on the demo workspace, a new membership and a new customer each hit `lock_timeout` (55P03) while the seed's transaction holds the row, and go through after it commits; `--deploy` leaves another workspace's demo customers as they are. The lock comment now says why it holds (foreign-key key-share locks wait for `FOR UPDATE`).
   - Also: `"published" satisfies FormStatus`; `WORKSPACE_FLAG_REFUSED` exported instead of made-up facts; no `as` casts on the counts; a comment on a Choice field without options; `test:infra` runs `test-workflows.sh`; `infra/README.md`'s connection budget counts the demo seed's 1.
   - Checks: dashboard unit 432, dashboard `test:db` 18, `pnpm test:infra` exit 0 (`test-workflows.sh` 20/20), lint and typecheck clean. A `--deploy` run against a closed port prints `Seeding failed (ECONNREFUSED).`, exit 1. E2E not run (lane 1 is running it).
+- 2026-11-07 – Merged (PR #52) after merging `main` (task 069's `deploy.yml`, `infra/README.md` and plan lines; both kept). CI `verify`, `e2e` and the preview `deploy` passed. Lane 2 removed. Still open, on the owner: set the `DEMO_EMAIL` secret, sign up on the `main` URL, open the dashboard, re-run the `main` Deploy (it seeds; a later run skips), then upload a photo and a report; then tick the four CI/deployed criteria with the run links.
 
 ## Parking lot
 - Reset the demo account's data from CI (a "reseed" flag), if the owner wants a clean demo before each showing. Until then, a reseed means a new demo account (a new `DEMO_EMAIL`) or a local-style delete that this task doesn't provide.

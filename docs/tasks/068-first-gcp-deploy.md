@@ -59,9 +59,9 @@ The POC must run on the internet, not just on a laptop. Row-level security has n
 - [x] A PR gets a preview URL, and the `@smoke` scenarios (later `@poc`, task 069) pass against it. The full suite keeps running in CI's `e2e` job.
 - [ ] `main` deploys, and an owner can sign up and see the dashboard on the `run.app` URL.
 - [x] The runtime role check passes on Cloud SQL and is part of the deploy.
-- [ ] Requests with invite tokens are not in Cloud Run logs.
+- [x] Requests with invite tokens are not in Cloud Run logs.
 - [x] On the first preview, Better Auth sees a client IP: the shell's logs have no "Rate limiting could not determine a client IP".
-- [ ] On the preview, a file uploaded by hand downloads again (no `@smoke` scenario uploads).
+- [x] On the preview, a file uploaded by hand downloads again (no `@smoke` scenario uploads).
 - [ ] Previews run as their own service account, database login and Better Auth secret; the preview login can't connect to `app`.
 - [ ] Preview Playwright traces and reports are not published.
 - [x] A PR deploy can't read main's secrets or deploy as a `*-runtime` service account, shown on the first preview (for example the preview deployer's IAM bindings, or an access check that fails as expected).
@@ -123,6 +123,7 @@ The POC must run on the internet, not just on a laptop. Row-level security has n
 
   Still open, on the first preview (task 069's PR): the `@smoke` run, a client IP in the shell logs, an upload and download by hand, the preview deployer refused at deploy time, tag removal by the cleanup job. Still open, for the owner: sign up on the `main` URL and see the dashboard.
 - 2026-11-05 – First green preview (PR #50, task 061): `@smoke` 3/3 against `pr-50---shell-preview`; the runtime role check passed on `app_preview` as `preview_runtime` and migrations ran as `preview_owner`, so Cloud SQL accepts the preview logins' passwords. The shell-preview logs have no "could not determine a client IP" (83 entries during the run). All six services run their image by digest, the previews from `images-preview`. The preview deployer has no binding on main's services, `images`, `better-auth-secret`, `db-password` or the `*-runtime` accounts (re-read after the deploy; project-wide only `roles/cloudsql.client`). The Policy Troubleshooter API is disabled, and enabling it would be a change outside Terraform, so no access check was run as that account. After the merge, the Preview cleanup job removed the `pr-50` tags (no tags left on the three preview services), so `runDeployer` covers deploy, tag and untag. Still open: an upload and download by hand on a preview (task 069's PR); the invite-token log criterion (no invite request has run on a deployment yet); and the owner signing up on the `main` URL.
+- 2026-11-07 – On PR #51's and #52's previews the `@poc` flow (task 069) uploaded a photo and a report through the app and downloaded the report again, so the upload criterion is met by the scenario rather than by hand. Invite tokens: the flow created and opened two invite links on each preview; the links carry the token after `#`, so the Cloud Run logs show only `/dashboard/invite` (no request URL with `invite?` since 13:00 UTC). Still open: the owner signing up on the `main` URL, and `terraform plan` showing no changes (the cosmetic `scaling` drift is parked).
 
 ## Parking lot
 - Neon instead of Cloud SQL to scale to zero (re-test the `app_user` setup first).
