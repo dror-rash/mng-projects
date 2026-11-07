@@ -162,10 +162,11 @@ ones: `bash infra/scripts/test-environment.sh` fails when they differ.
      `deploy-service.sh` refuses a tag.
   3. Builds the shell with `EXAMPLE_ZONE_URL` and `DASHBOARD_ZONE_URL` (Next.js bakes rewrites in at **build
      time**) and deploys it.
-  4. PRs: checks the shell URL, runs the `@smoke` scenarios against it, and posts it on the PR.
-- **PR previews run the `@smoke` scenarios only**, one worker, no traces and no uploaded report (public
-  repository; traces would hold the test accounts' passwords and cookies). The full suite needs
-  `AUTH_DISABLE_RATE_LIMIT`, which a deployment never sets (rule 13).
+  4. PRs: checks the shell URL, runs the `@smoke` scenarios and the `@poc` flow against it, and posts it on the PR.
+- **PR previews run the `@smoke` scenarios and the `@poc` flow only**, one worker, no traces and no uploaded
+  report (public repository; traces would hold the test accounts' passwords and cookies). The full suite needs
+  `AUTH_DISABLE_RATE_LIMIT`, which a deployment never sets (rule 13); the e2e helpers space sign-ups and
+  sign-ins at least 11.5 s apart against a deployment (`e2e/support/pacing.ts`).
 - `preview-cleanup.yml` removes the `pr-<N>` tags of the three `-preview` services when the PR closes (as
   `deployer-preview`). A missing tag is a notice; any other failure is logged and fails the job.
 - Deployers get the custom role `runDeployer` on their own environment's services: the `run.*` permissions of
