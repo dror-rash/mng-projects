@@ -1,4 +1,4 @@
-import { expect } from "@playwright/test";
+import { expect, type Page } from "@playwright/test";
 
 import { Given, Then, When } from "./fixtures";
 
@@ -10,15 +10,25 @@ When("I open {string}", async ({ page }, path: string) => {
   await page.goto(path);
 });
 
-When("I follow the {string} link", async ({ page }, name: string) => {
+/** Follows the link named `name` and waits for its page (query string included). */
+export async function followLink(page: Page, name: string) {
   const link = page.getByRole("link", { name, exact: true });
   const href = await link.getAttribute("href");
   await link.click();
-  // Wait for the navigation (query string included), so the next step can't pass against the page we just left.
+  // Wait for the navigation, so the next step can't pass against the page we just left.
   if (href?.startsWith("/")) {
     const target = href.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     await expect(page).toHaveURL(new RegExp(`${target}$`));
   }
+}
+
+/** Text the page shows, not values sitting in form fields. */
+export function shownText(page: Page, text: string) {
+  return page.getByText(text).and(page.locator(":not(textarea):not(input):not(option)")).first();
+}
+
+When("I follow the {string} link", async ({ page }, name: string) => {
+  await followLink(page, name);
 });
 
 Then("I see the heading {string}", async ({ page }, text: string) => {
@@ -53,7 +63,7 @@ When("I press {string}", async ({ page }, name: string) => {
 
 // Text the page shows, not values sitting in form fields.
 Then("I see the text {string}", async ({ page }, text: string) => {
-  await expect(page.getByText(text).and(page.locator(":not(textarea):not(input):not(option)")).first()).toBeVisible();
+  await expect(shownText(page, text)).toBeVisible();
 });
 
 Then("I see the {string} button", async ({ page }, name: string) => {

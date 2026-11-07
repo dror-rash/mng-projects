@@ -183,7 +183,7 @@ jobs:
         run: pnpm exec bddgen && pnpm exec playwright test --workers=1 --trace=off
         env:
           BASE_URL: ${{ steps.shell.outputs.url }}
-          E2E_TAGS: "@smoke or @poc"
+          E2E_TAGS: "(@smoke or @poc) and not @wip"
       - name: Comment preview URL
         if: env.IS_PR == 'true'
         env:

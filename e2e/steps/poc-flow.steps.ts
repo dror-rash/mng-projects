@@ -1,6 +1,7 @@
 import { expect, type Page } from "@playwright/test";
 
 import { addFile, fileOf } from "./attachments.steps";
+import { followLink, shownText } from "./common.steps";
 import { Given, type People, type ScenarioState, signUp, Then, When } from "./fixtures";
 import { openReadingForm, saveReading } from "./readings.steps";
 import { taskCard, taskInColumn } from "./project-tasks.steps";
@@ -39,9 +40,6 @@ async function openProject(page: Page, name: string) {
   return new URL(page.url()).pathname;
 }
 
-/** Text the page shows, not values sitting in form fields (like "I see the text"). */
-const shown = (page: Page, text: string) => page.getByText(text).and(page.locator(":not(textarea):not(input):not(option)")).first();
-
 for (const role of ["worker", "partner user"] as const) {
   Given(`the ${role} {string} joins with the invite link`, async ({ people, state }, name: string) => {
     await joinWithInviteLink(people, state, role, name);
@@ -53,7 +51,7 @@ for (const role of ["worker", "partner user"] as const) {
   });
 
   Then(`the ${role} sees the text {string}`, async ({ state }, text: string) => {
-    await expect(shown(person(state, role).page, text)).toBeVisible();
+    await expect(shownText(person(state, role).page, text)).toBeVisible();
   });
 }
 
@@ -106,11 +104,7 @@ When("the worker moves the task {string} to {string}", async ({ state }, title: 
 // --- The partner user ------------------------------------------------------------------------------------------
 
 When("the partner user follows the {string} link", async ({ state }, name: string) => {
-  const { page } = person(state, "partner user");
-  const link = page.getByRole("link", { name, exact: true });
-  const href = await link.getAttribute("href");
-  await link.click();
-  if (href?.startsWith("/")) await expect(page).toHaveURL((url) => url.pathname === href.split("?")[0]);
+  await followLink(person(state, "partner user").page, name);
 });
 
 Then("the partner user sees the heading {string}", async ({ state }, text: string) => {

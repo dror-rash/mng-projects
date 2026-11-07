@@ -46,6 +46,10 @@ export const SIGN_IN_PATH = "/api/auth/sign-in/email";
  * Sign-up and sign-in pacing (task 069): against a deployment (BASE_URL), no request to one of those paths goes
  * out within 10 seconds plus a margin of the previous one to the same path, so the run stays under Better Auth's
  * limit (3 per 10 seconds per IP). Locally the limit is off (AUTH_DISABLE_RATE_LIMIT) and nothing waits.
+ * The timeline lives in the worker process: after a failed scenario Playwright starts a new worker with an empty
+ * timeline, whose first sign-up and sign-in can follow the last ones by less than `gapMs`. A gap above the 10 s
+ * window keeps the server's count at 1, so that extra request makes 2, still under 3: the margin absorbs a
+ * restart. Don't tighten `gapMs` toward the limit.
  */
 export const pacer = createPacer({ enabled: Boolean(process.env.BASE_URL), gapMs: 11_500 });
 
