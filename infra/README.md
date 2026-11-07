@@ -265,11 +265,11 @@ password are masked. To start over, use a new demo account (a new `DEMO_EMAIL`);
 - Connections on `db-f1-micro` (22 for logins; task 075): previews at most 10 (`preview_runtime` 3 × 1 × 2 + 1 =
   7, `preview_owner` 3), `main` 12 (3 zones × 1 busy instance × `DB_POOL_MAX=4`). That fills all 22 with no
   margin, and counts one busy instance per zone: `main` can scale to 5 instances per zone (5 × 3 × 4 = 60), and a
-  main deploy briefly adds its own (migration lock + migration 2, then provisioning 2, then the role check 1)
-  while the old revision still serves. Idle pool connections close after 10 s (`pg`'s default). That timer
-  runs between requests because CPU is always allocated (`run.googleapis.com/cpu-throttling: false`, checked
-  on `dashboard-preview` and `shell`), so an older revision's instances (the previous push of the same PR, or
-  `main`'s old revision during a rollout) release their connections within about 10 s of their last request.
+  main deploy briefly adds its own (migration lock + migration 2, then provisioning 2, then the role check 1,
+  then the demo seed 1) while the old revision still serves. Idle pool connections close after 10 s (`pg`'s
+  default). That timer runs between requests because CPU is always allocated
+  (`run.googleapis.com/cpu-throttling: false`, checked on `dashboard-preview` and `shell`), so an older
+  revision's instances (the previous push of the same PR, or `main`'s old revision during a rollout) release their connections within about 10 s of their last request.
   So this only bites under real load. Before real load: a bigger tier or a connection pooler, or lower `max_instances`.
 - Services are public (`allUsers`). If org policy forbids that, put a load balancer with IAP in front.
 - Previews share the production project and Cloud SQL instance. Use a separate project for staging if data
