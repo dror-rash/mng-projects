@@ -2,7 +2,7 @@ import { and, asc, desc, eq, inArray, isNotNull, schema, sql } from "@repo/db";
 import type { getMaintenanceDb } from "@repo/db/maintenance";
 
 import { decideDeploySeed, planCounts, seedSummary } from "@/features/demo/deploy-seed";
-import { buildDemoPlan, DEMO_FORM, DEMO_TAG, type DemoCustomer, demoReadingValues } from "@/features/demo/seed-plan";
+import { buildDemoPlan, DEMO_FORM, DEMO_TAG, type DemoCustomer, demoReadingValues, type DemoVisit } from "@/features/demo/seed-plan";
 import type { ReadingField } from "@/features/readings/reading-values";
 import { currentWorkspaceId } from "@/features/workspaces/current-workspace";
 
@@ -20,6 +20,9 @@ export type SeedResult = { code: 0 | 1; message: string };
 
 /** The workspace to seed and the user who seeds it, or why not. */
 type Target = { userId: string; workspaceId: string; workspaceName: string } | { result: SeedResult };
+
+/** The version of the demo form that readings are filled against, with its fields. */
+type DemoFormVersion = { versionId: string; fields: ReadingField[] };
 
 /** Demo customers and sub-companies: they carry the demo tag. */
 const isDemo = sql`${schema.organization.tags} @> array[${DEMO_TAG}]::text[]`;
@@ -125,7 +128,7 @@ async function removeDemoData(tx: Tx, workspaceId: string): Promise<number> {
  * The published version of the workspace's demo form, with its fields: a published form of that name if there
  * is one (used as it is, never changed), otherwise a new one, made and published the way the app does.
  */
-async function demoFormVersion(tx: Tx, workspaceId: string, userId: string): Promise<{ versionId: string; fields: ReadingField[] }> {
+async function demoFormVersion(tx: Tx, workspaceId: string, userId: string): Promise<DemoFormVersion> {
   const [existing] = await tx
     .select({ versionId: schema.formTemplateVersion.id })
     .from(schema.formTemplate)
@@ -171,13 +174,12 @@ async function demoFormVersion(tx: Tx, workspaceId: string, userId: string): Pro
 async function seedPlan(tx: Tx, plan: DemoCustomer[], userId: string, workspaceId: string) {
   const id = () => crypto.randomUUID();
   const form = await demoFormVersion(tx, workspaceId, userId);
-  const user = { id: userId };
 
   for (const customer of plan) {
     const organizationId = id();
     await tx.insert(schema.organization).values({
       id: organizationId,
-      ownerId: user.id,
+      ownerId: userId,
       workspaceId,
       kind: "customer",
       name: customer.name,
@@ -194,12 +196,9 @@ async function seedPlan(tx: Tx, plan: DemoCustomer[], userId: string, workspaceI
       .update(schema.organization)
       .set({ primaryContactId: contacts.find((c) => c.primary)!.id })
       .where(eq(schema.organization.id, organizationId));
-    await tx.insert(schema.organizationNote).values(customer.notes.map((n) => ({ id: id(), organizationId, authorId: user.id, ...n })));
+    await tx.insert(schema.organizationNote).values(customer.notes.map((n) => ({ id: id(), organizationId, authorId: userId, ...n })));
 
     /** Sites with their on-site contacts (task 054); deleted with their customer on a rerun. */
-    // Read before the helper: narrowing doesn't carry into a nested function.
-    const createdBy = user.id;
-    const siteWorkspaceId = workspaceId;
     // Site ids by organization and name, for the projects at them (task 055).
     const siteIds = new Map<string, string>();
     async function insertSites(siteOrganizationId: string, sites: typeof customer.sites) {
@@ -207,7 +206,7 @@ async function seedPlan(tx: Tx, plan: DemoCustomer[], userId: string, workspaceI
         const siteId = id();
         siteIds.set(`${siteOrganizationId}:${site.name}`, siteId);
         const { contacts: siteContacts, ...fields } = site;
-        await tx.insert(schema.site).values({ id: siteId, workspaceId: siteWorkspaceId, organizationId: siteOrganizationId, createdBy, ...fields });
+        await tx.insert(schema.site).values({ id: siteId, workspaceId, organizationId: siteOrganizationId, createdBy: userId, ...fields });
         await tx.insert(schema.siteContact).values(siteContacts.map((c) => ({ id: id(), siteId, ...c })));
       }
     }
@@ -220,7 +219,7 @@ async function seedPlan(tx: Tx, plan: DemoCustomer[], userId: string, workspaceI
       subCompanyIds.set(sub.name, subId);
       await tx.insert(schema.organization).values({
         id: subId,
-        ownerId: user.id,
+        ownerId: userId,
         workspaceId,
         kind: "customer",
         parentId: organizationId,
@@ -240,7 +239,7 @@ async function seedPlan(tx: Tx, plan: DemoCustomer[], userId: string, workspaceI
         id: projectId,
         name: project.name,
         description: project.description,
-        ownerId: user.id,
+        ownerId: userId,
         workspaceId,
         organizationId: projectOrganizationId,
         siteId: siteIds.get(`${projectOrganizationId}:${project.site}`)!,
@@ -257,7 +256,7 @@ async function seedPlan(tx: Tx, plan: DemoCustomer[], userId: string, workspaceI
             priority: t.priority,
             dueDate: t.dueDate,
             completedAt: t.completedAt,
-            assigneeId: t.assignedToMe ? user.id : null,
+            assigneeId: t.assignedToMe ? userId : null,
             organizationId: t.linkCustomer ? projectOrganizationId : null,
             createdAt: t.createdAt,
             updatedAt: t.completedAt ?? t.createdAt,
@@ -273,7 +272,7 @@ async function seedPlan(tx: Tx, plan: DemoCustomer[], userId: string, workspaceI
  * A project's visits (task 058) by `userId`, who was there, each recorded on its day; and the readings some carry
  * (task 061), filled in half an hour into the visit.
  */
-async function insertVisits(tx: Tx, projectId: string, visits: DemoCustomer["projects"][number]["visits"], userId: string, form: { versionId: string; fields: ReadingField[] }) {
+async function insertVisits(tx: Tx, projectId: string, visits: DemoVisit[], userId: string, form: DemoFormVersion) {
   if (visits.length === 0) return;
   const rows = visits.map((visit) => ({ visit, id: crypto.randomUUID() }));
   await tx.insert(schema.siteVisit).values(

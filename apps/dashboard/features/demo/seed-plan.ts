@@ -311,8 +311,8 @@ function plusDays(date: CalendarDate, days: number): CalendarDate {
 }
 
 /**
- * Demo customers, projects, tasks and visits (with readings of `DEMO_FORM`), with dates relative to `now` (UTC calendar
- * days, like the app). Pure and deterministic: the same day gives the same plan.
+ * Demo customers, projects, tasks and visits (some with a reading of `DEMO_FORM`), with dates relative to `now`
+ * (UTC calendar days, like the app). Pure and deterministic: the same day gives the same plan.
  */
 export function buildDemoPlan(now: Date): DemoCustomer[] {
   const today = todayUtc(now);
