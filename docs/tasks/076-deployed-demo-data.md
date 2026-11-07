@@ -1,6 +1,6 @@
 # Task 076: Demo data on the deployed app
 
-- **Status:** in-progress
+- **Status:** in-review
 - **Milestone:** POC (2026-11-13)
 - **Zone / package:** `apps/dashboard` (`scripts/seed-demo.ts`, `features/demo/`), `.github/workflows/deploy.yml`, `infra/README.md` (docs only). No Terraform change, no migration.
 - **Feature file:** none (no visible behavior of the app; the seed's own tests and a check by hand on the deployed app)
