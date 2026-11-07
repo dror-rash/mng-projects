@@ -1,6 +1,6 @@
 # Task 069: The POC flow, end to end on the deployed app
 
-- **Status:** todo
+- **Status:** in-progress
 - **Milestone:** POC (2026-11-13)
 - **Zone / package:** `e2e` (steps), `.github/workflows/deploy.yml` (the preview's tag selection)
 - **Feature file:** `docs/features/poc-flow.feature`
@@ -82,6 +82,7 @@ The POC is one story that a viewer can follow, from a customer to a report, on a
 - 2026-11-02 – Planned. The owner agreed to leave offline capture and the generated report out of the POC.
 - 2026-11-04 – Noted the preview limits found in task 068: the sign-up rate limit (`@smoke` already uses all 3 sign-ups per 10 seconds) and no direct database access from the preview run.
 - 2026-11-07 – Feature file written (`poc-flow.feature`, one `@poc` scenario, `@wip`), scope made concrete (names, the partner's project at the same site), the steps that must be app-only listed, the rate-limit approach chosen (pacing when `BASE_URL` is set, `@smoke` kept), and the preview job's tags set to `@smoke or @poc`. Demo data on the deployed app moved to task 076: it needs a decision on how a seed reaches the deployed database through CI (identities and possibly Terraform), which doesn't belong in an e2e change.
+- 2026-11-07 – Started in lane 1 (`feat/poc-flow`).
 
 ## Parking lot
 - Run `@poc` against `main` after each deploy too (needs a decision on throwaway accounts in the production database; today they would accumulate there).
