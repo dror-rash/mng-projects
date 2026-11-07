@@ -10,11 +10,11 @@ async function openProjectFromDashboard(page: Page, name: string) {
   await expect(page.getByRole("heading", { name, level: 1 })).toBeVisible();
 }
 
-function taskCard(page: Page, title: string) {
+export function taskCard(page: Page, title: string) {
   return page.getByRole("listitem").filter({ hasText: title });
 }
 
-function taskInColumn(page: Page, title: string, column: string) {
+export function taskInColumn(page: Page, title: string, column: string) {
   return page.getByRole("region", { name: column }).getByRole("listitem").filter({ hasText: title });
 }
 

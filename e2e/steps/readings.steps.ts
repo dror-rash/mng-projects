@@ -49,7 +49,7 @@ async function openVisit(page: Page, path: string) {
 }
 
 /** From the visit's page: "Add a reading", then the form's link; waits for its "Save reading". */
-async function openReadingForm(page: Page, path: string, form: string) {
+export async function openReadingForm(page: Page, path: string, form: string) {
   await openVisit(page, path);
   const add = page.getByRole("link", { name: "Add a reading", exact: true });
   await expect(add).toBeVisible();
@@ -60,7 +60,7 @@ async function openReadingForm(page: Page, path: string, form: string) {
 }
 
 /** Saves the reading form and waits for the reading's page (its heading, the form's name); returns its id. */
-async function saveReading(page: Page, form: string) {
+export async function saveReading(page: Page, form: string) {
   await pressAndWait(page, "Save reading");
   await expect(page.getByRole("heading", { name: form, level: 1 })).toBeVisible();
   await expect(page).toHaveURL(/\/readings\/[^/?#]+$/);
