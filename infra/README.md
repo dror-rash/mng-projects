@@ -163,6 +163,7 @@ ones: `bash infra/scripts/test-environment.sh` fails when they differ.
   3. Builds the shell with `EXAMPLE_ZONE_URL` and `DASHBOARD_ZONE_URL` (Next.js bakes rewrites in at **build
      time**) and deploys it.
   4. PRs: checks the shell URL, runs the `@smoke` scenarios against it, and posts it on the PR.
+  5. `main`: seeds the demo account's workspace once (see [Demo data](#demo-data)); never fails the deploy.
 - **PR previews run the `@smoke` scenarios only**, one worker, no traces and no uploaded report (public
   repository; traces would hold the test accounts' passwords and cookies). The full suite needs
   `AUTH_DISABLE_RATE_LIMIT`, which a deployment never sets (rule 13).
@@ -206,6 +207,7 @@ prints the hashes: add them next to the existing ones (a pin may be a list of ha
 database, e.g. `scripts/lane.sh exec <n> -- pnpm test:infra`).
 
 CI runs the tests of all these scripts against the migrated database, and `test-preview-migrate.sh`.
+`bash infra/scripts/test-workflows.sh` checks the deploy's demo-seed step stays `main`-only, non-blocking and masked.
 
 ## Files (GCS)
 - `<PROJECT_ID>-files` for `main` (no lifecycle rule: attachments are soft-deleted in the database and stay
@@ -237,6 +239,27 @@ CI runs the tests of all these scripts against the migrated database, and `test-
   Terraform state, so keep the state bucket private.
 - Generate and commit migrations locally with `pnpm db:generate` whenever `packages/db/src/schema.ts` changes.
 - Behind a custom domain, set `APP_URL` so Better Auth's base URL and origin checks match.
+
+## Demo data
+A `main` deploy fills the demo account's workspace with demo data once (task 076), so a viewer of the deployed app
+finds whole stories instead of an empty dashboard. In order:
+1. Set the demo account's email, an address you control, as a repository **secret** (not a variable: the
+   repository and its Actions logs are public): `gh secret set DEMO_EMAIL`.
+2. Sign up with that email on the `main` URL.
+3. Open the dashboard once (that creates the account's workspace).
+4. Push to `main`, or re-run the latest Deploy run on `main` (`gh run rerun <id>`).
+
+The `Seed demo data` step (after the shell is deployed) runs `seed:demo --deploy` through the Cloud SQL proxy as
+`app`'s owner login, with one connection (`DB_POOL_MAX=1`). It adds 5 demo customers (tagged `demo`) with
+sub-companies, sites, 75 projects with tasks in every state, past visits, and readings of a published
+`Site inspection (demo)` reading form. No photos, reports or other files: upload a photo and a report on a demo
+project by hand through the app.
+
+It never wipes or replaces anything: it skips (a notice on the run) until the account has signed up and opened
+the dashboard, and from then on whenever the workspace has demo data, deleted or not, so hand edits stay. It
+refuses (a warning, nothing written) unless the account is the admin and only member of exactly one workspace.
+A refusal or failure never fails the deploy (`continue-on-error`). The log shows counts only; the email and
+password are masked. To start over, use a new demo account (a new `DEMO_EMAIL`); there is no reseed from CI.
 
 ## Known limits / follow-ups
 - Connections on `db-f1-micro` (22 for logins; task 075): previews at most 10 (`preview_runtime` 3 × 1 × 2 + 1 =
