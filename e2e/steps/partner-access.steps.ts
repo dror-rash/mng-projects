@@ -2,7 +2,7 @@ import { type APIRequestContext, expect, type Locator, type Page } from "@playwr
 import { eq, schema } from "@repo/db";
 import { getMaintenanceDb } from "@repo/db/maintenance";
 
-import { type Account, Given, origin, type People, type ScenarioState, signUp, Then, userId, When } from "./fixtures";
+import { type Account, authPost, Given, type People, SIGN_IN_PATH, SIGN_UP_PATH, type ScenarioState, signUp, Then, userId, When } from "./fixtures";
 import { chooseCustomerAndSite, insertCustomerWithSite } from "./project-form";
 import { pressAndWait } from "./workspaces.steps";
 
@@ -36,7 +36,7 @@ const taskPath = (state: ScenarioState, task: string) =>
 /** Signs up an account through the API without signing anyone in; returns it with the new user's id. */
 async function newAccount(request: APIRequestContext, name: string) {
   const account: Account = { email: `${name.toLowerCase()}-${crypto.randomUUID()}@example.com`, password: "correct-horse-battery" };
-  expect((await request.post("/api/auth/sign-up/email", { data: { name, ...account }, headers: { origin } })).ok()).toBeTruthy();
+  expect((await authPost(request, SIGN_UP_PATH, { name, ...account })).ok()).toBeTruthy();
   const [user] = await getMaintenanceDb().select({ id: schema.user.id }).from(schema.user).where(eq(schema.user.email, account.email));
   return { account, id: user!.id };
 }
@@ -47,7 +47,7 @@ export async function pageOf(state: ScenarioState, people: People, who: "admin" 
   expect(entry, `no ${who} in this scenario`).toBeDefined();
   if (!entry!.page) {
     const page = await people.newPerson();
-    expect((await page.request.post("/api/auth/sign-in/email", { data: entry!.account, headers: { origin } })).ok()).toBeTruthy();
+    expect((await authPost(page.request, SIGN_IN_PATH, entry!.account)).ok()).toBeTruthy();
     entry!.page = page;
   }
   return entry!.page;

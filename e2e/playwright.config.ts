@@ -17,14 +17,19 @@ const dashboardUrl = `http://localhost:${process.env.DASHBOARD_PORT ?? 3002}`;
 // Locally: dev servers. In CI: the workflow builds first, then we run `start`.
 const mode = process.env.CI ? "start" : "dev";
 
+// BASE_URL: a deployment (the preview run). Uploads and server actions go to Cloud Run and Cloud SQL, and the
+// sign-up pacing (fixtures.ts) can wait about 11.5 s inside one scenario, so both timeouts are longer there.
+const deployed = Boolean(process.env.BASE_URL);
+
 export default defineConfig({
   testDir,
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: 0, // flaky tests are bugs; fix them
+  ...(deployed ? { timeout: 90_000 } : {}),
   // Dev servers compile each route on its first visit, which can take several seconds under parallel load.
-  // CI runs production builds, so it keeps Playwright's default 5s.
-  expect: { timeout: process.env.CI ? 5_000 : 15_000 },
+  // CI runs production builds, so it keeps Playwright's default 5s, except against a deployment.
+  expect: { timeout: process.env.CI && !deployed ? 5_000 : 15_000 },
   reporter: process.env.CI ? [["html", { open: "never" }], ["github"]] : "list",
   use: {
     baseURL: process.env.BASE_URL ?? shellUrl,
@@ -32,7 +37,7 @@ export default defineConfig({
   },
   projects: [{ name: "chromium", use: { ...devices["Desktop Chrome"] } }],
   // Set BASE_URL to run against a preview deploy and skip local servers.
-  webServer: process.env.BASE_URL
+  webServer: deployed
     ? undefined
     : [
         // The shell owns /api/auth. Every scenario signs up from one IP, which production rate limits would block.

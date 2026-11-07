@@ -36,7 +36,7 @@ const section = (page: Page) => page.getByRole("region", { name: "Photos and fil
 export const uploadError = (page: Page) => page.getByRole("alert").filter({ hasText: /\S/ });
 
 /** Picks the file (or a file on disk) with the hidden input behind the button, then waits for the upload to settle. */
-async function addFile(page: Page, button: string, file: ReturnType<typeof fileOf> | string) {
+export async function addFile(page: Page, button: string, file: ReturnType<typeof fileOf> | string) {
   await page.getByLabel(button, { exact: true }).setInputFiles(file);
   await expect(page.getByRole("status").filter({ hasText: /^Added/ }).or(uploadError(page)).first()).toBeVisible();
 }

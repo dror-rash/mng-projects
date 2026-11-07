@@ -15,7 +15,7 @@ Feature: The POC flow, from a customer to a report
   # deployments never turn the limit off (rule 13).
   #
   # People: "I" am the admin (my own new workspace); the worker and the partner user join with invite links.
-  @poc @task:069 @wip @timeout:240000
+  @poc @task:069 @timeout:240000
   Scenario: An admin sets up the work, a worker does it on site, the admin adds the report, and a partner sees only their own
     # The admin: a customer with a sub-company, a site with the person to meet there, a project with two tasks
     Given I am signed in with an existing account
