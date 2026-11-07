@@ -1,6 +1,6 @@
 # Task 076: Demo data on the deployed app
 
-- **Status:** todo (ready: all four open questions answered, 2026-11-07)
+- **Status:** in-review
 - **Milestone:** POC (2026-11-13)
 - **Zone / package:** `apps/dashboard` (`scripts/seed-demo.ts`, `features/demo/`), `.github/workflows/deploy.yml`, `infra/README.md` (docs only). No Terraform change, no migration.
 - **Feature file:** none (no visible behavior of the app; the seed's own tests and a check by hand on the deployed app)
@@ -44,10 +44,10 @@ The POC is shown on the deployed app, and a viewer should find a customer's whol
 - Signing up the demo account from CI: the owner signs up through the app.
 
 ## Acceptance criteria
-- [ ] Locally, `seed:demo` gives every demo project except the "not started" ones 1–4 past visits with notes and the seeding user as attendee, and at least one visit per demo customer a reading of the published `Site inspection (demo)` form whose values pass `reading-values.ts`. → unit tests on `buildDemoPlan`; local run by hand (output in the PR).
-- [ ] A local rerun replaces the demo visits and readings with the demo customers, reuses the form, and changes nothing outside the demo customers. → local run by hand: count rows before and after (in the PR).
-- [ ] `--deploy` skips with exit 0 and a notice for: no such account, no workspace, demo data already there (deleted demo customers count). → unit tests on the deploy-mode decision; local runs by hand.
-- [ ] `--deploy` refuses with exit 1, writing nothing, when the account is in more than one workspace, isn't its workspace's admin, shares it with another member, or `--workspace` is given. → unit tests on the decision.
+- [x] Locally, `seed:demo` gives every demo project except the "not started" ones 1–4 past visits with notes and the seeding user as attendee, and at least one visit per demo customer a reading of the published `Site inspection (demo)` form whose values pass `reading-values.ts`. → unit tests on `buildDemoPlan`; local run by hand (output in the PR).
+- [x] A local rerun replaces the demo visits and readings with the demo customers, reuses the form, and changes nothing outside the demo customers. → local run by hand: count rows before and after (in the PR).
+- [x] `--deploy` skips with exit 0 and a notice for: no such account, no workspace, demo data already there (deleted demo customers count). → unit tests on the deploy-mode decision; local runs by hand.
+- [x] `--deploy` refuses with exit 1, writing nothing, when the account is in more than one workspace, isn't its workspace's admin, shares it with another member, or `--workspace` is given. → unit tests on the decision.
 - [ ] `--deploy` output holds no email, workspace name or connection string. → unit test on the messages; the CI run's log.
 - [ ] The `Seed demo data` step runs only on pushes to `main` with `DEMO_EMAIL` set, after the shell is deployed; a seed failure leaves the run's deploy steps green (`continue-on-error`). → review of `deploy.yml`; the first `main` run after merge.
 - [ ] On the deployed app, the demo account shows the whole flow on at least one project: customer → sub-company → site → project with tasks, a visit and a reading from the seed, plus a photo and a report the owner uploaded by hand. → check by hand.
@@ -76,8 +76,41 @@ The POC is shown on the deployed app, and a viewer should find a customer's whol
 - 2026-11-07 – Split from task 069: the demo data on the deployed app needs a decision on how a seed reaches the deployed database through CI, which doesn't belong in 069's e2e change. Three open questions for the owner, each with a recommended default.
 - 2026-11-07 – The owner answered questions 1–3 with the recommended defaults: route (a) (a step in the `main` deploy, no Terraform), no files in the seed, an owner-controlled address in `DEMO_EMAIL`. Scope made concrete: `seed:demo --deploy` (skip when not signed up / no workspace / demo data exists; refuse anything but a single-member workspace the account administers; no personal data in the output), a `continue-on-error` step after the shell deploy with `DB_POOL_MAX=1`. New question 4: a public log would show a `DEMO_EMAIL` variable, so a secret is recommended.
 - 2026-11-07 – The owner answered question 4: `DEMO_EMAIL` is a repository secret (masked in the public Actions logs). Ready.
+- 2026-11-07 – Started in lane 2 (`chore/deployed-demo-data`).
+- 2026-11-07 – Seed code (implementer, lane 2). Red first:
+  - `seed-plan.test.ts` with visits, the demo form and `demoReadingValues`: the suite failed (`TypeError: Cannot read properties of undefined (reading 'fields')`: no `DEMO_FORM`). Green: 22 tests.
+  - `deploy-seed.test.ts` (each skip, each refusal, seed; messages without email, workspace name or connection string; counts-only summary; `failureText`): failed, no `./deploy-seed`. Green: 18 tests.
+  - `scripts/seed-demo-run.db.test.ts` (new `pnpm --filter @repo/dashboard test:db`, `DB_POOL_MAX=1`) against today's seed moved unchanged into `runSeedDemo`: 11 of 13 failed (no visits, readings or form; `--deploy` didn't skip or refuse). Green: 13 tests.
+  - Choices: a **published** form named `Site inspection (demo)` is reused as it is (its own fields filled by type, so a reused form with other fields still gets valid readings); a draft or archived one of that name is left alone and a new form is published. "Not started" = no task in progress or done (4 of the 15 project kinds, empty included): no visits. The deploy mode reads the facts and locks the workspace row inside the seed's one transaction, so skip and refuse write nothing. Skips print to stdout (exit 0) and start `Skipped:`; refusals to stderr (exit 1) and start `Refused:`; a failure in `--deploy` prints `Seeding failed: <message>` only.
+  - By hand on `app_lane2` (throwaway `seed076-…@example.com` accounts signed up through lane 2's dev servers; the two-workspace one made its second workspace through the app's UI; servers stopped afterwards):
+    ```
+    seed:demo (local)       Seeded "Seed Check's workspace": 5 customers (+2 sub-companies), 10 sites, 75 projects, 410 tasks, 139 visits, 20 readings.
+      rows after:           organization 7, project 75, task 410, site 10, site_visit 139, site_visit_member 139, form_template 1, form_field 4, form_submission 20
+    rerun                   Seeded "Seed Check's workspace": … 139 visits, 20 readings (replaced 7 demo customers).
+      rows after:           the same counts; the same form (one, same id)
+    --deploy, fresh         Seeded 5 customers (+2 sub-companies), 10 sites, 75 projects, 410 tasks, 139 visits, 20 readings.   exit 0
+    --deploy, again         Skipped: the demo workspace already has demo data.                                exit 0, no row changed
+    --deploy, unknown email Skipped: the demo account hasn't signed up yet.                                   exit 0
+    --deploy, no workspace  Skipped: the demo account hasn't opened the dashboard yet.                        exit 0
+    --deploy, 2 workspaces  Refused: the demo account is in 2 workspaces; --deploy seeds only an account with one.  exit 1, nothing written
+    --deploy --workspace    Refused: --workspace can't be used with --deploy, which seeds the demo account's only workspace.  exit 1
+    --deploy, local account Skipped: the demo workspace already has demo data.                                exit 0
+    --deploy, no database   Seeding failed: connect ECONNREFUSED 127.0.0.1:5999                              exit 1
+    ```
+    (`--deploy` runs with `DB_POOL_MAX=1`.) Unit 431 (dashboard), `@repo/db` `test:db` 149, dashboard `test:db` 13; lint and typecheck clean. Full e2e not run (another lane was running it); no app behavior changed. Left for the infra agent: the `deploy.yml` step and `infra/README.md`.
+- 2026-11-07 – Workflow and docs (infra agent, lane 2). `deploy.yml`: a `Seed demo data` step after `Check shell URL`, `if:` a push to `main`, `continue-on-error: true`, `timeout-minutes: 10`; `DEMO_EMAIL` from `secrets` and tested in the shell (unset: a notice); email and password masked first; restarts the Cloud SQL proxy binary the migration step downloaded; `app`'s owner login (`DB_MIGRATE_LOGIN` / `DB_MIGRATE_PASSWORD_SECRET`); installs `--filter @repo/dashboard...` itself; `DATABASE_URL` and `DB_POOL_MAX=1` only on the seed command, run as `pnpm --silent` (checked locally: without `--silent` pnpm echoes the command line, email included). A `Skipped:` line becomes a `::notice::`, exit 1 a `::warning::` with stderr's first 500 characters and a failed (non-blocking) step. Its own hunk, separate from task 069's Playwright step. No proxy helper script (Parking lot item stays). `ci.yml`: `pnpm --filter @repo/dashboard test:db` after `@repo/db`'s (closes that Parking lot item), and the new `infra/scripts/test-workflows.sh` (18 text checks on the step: gate, `continue-on-error`, order after the shell, secret not var, masking before use, no `DATABASE_URL` export or echo, no `set -x`) in `verify`. `infra/README.md`: a "Demo data" section and deploy step 5. No Terraform change, so no plan. Checks: actionlint (Docker `rhysd/actionlint`) clean on both files except the existing SC2034 on the migration step's `for i` (also on `main`); YAML parse (js-yaml) of all three workflows; the step's script run with stubbed `gcloud`/`pnpm`/proxy for unset, seeded, skipped, refused; `test-workflows.sh` 18/18 (and fails when `continue-on-error` or the `push` gate is removed); `pnpm test:infra` exit 0; dashboard `test:db` 13/13.
+- 2026-11-07 – Fix loop after the review and the access audit (implementer, lane 2). Red first (`fd218ae`):
+  - `failureText` printed Drizzle's own message (`Failed query: … params: <email, ids>`), which the step turns into a public `::warning::`: 3 tests failed (a `DrizzleQueryError`-shaped error with an email and a uuid in its params, a connection error, an error with neither code nor cause). Now `Seeding failed (<code>): <the driver's cause message>`, or `Seeding failed.`; never the error's own message.
+  - A mixed-case email with spaces around it found no account (2 DB tests failed, local and `--deploy`). The email is now `trim().toLowerCase()`d once, for both modes (Better Auth stores it lowercase).
+  - `--deploy` still listed demo customers to replace (1 DB test failed, which records every statement the seed sends: no `delete`, no demo-customer listing). `--deploy` no longer calls `removeDemoData`, so "never wipes on deploy" doesn't rest on the lock alone.
+  - `test-workflows.sh`: 2 new checks failed (the step fails with the proxy's log when the proxy doesn't start; `oneline` is defined before that check). Fixed in `deploy.yml`; 20/20.
+  - Pinned (green from the start): a second session's `select … for key share` on the demo workspace, a new membership and a new customer each hit `lock_timeout` (55P03) while the seed's transaction holds the row, and go through after it commits; `--deploy` leaves another workspace's demo customers as they are. The lock comment now says why it holds (foreign-key key-share locks wait for `FOR UPDATE`).
+  - Also: `"published" satisfies FormStatus`; `WORKSPACE_FLAG_REFUSED` exported instead of made-up facts; no `as` casts on the counts; a comment on a Choice field without options; `test:infra` runs `test-workflows.sh`; `infra/README.md`'s connection budget counts the demo seed's 1.
+  - Checks: dashboard unit 432, dashboard `test:db` 18, `pnpm test:infra` exit 0 (`test-workflows.sh` 20/20), lint and typecheck clean. A `--deploy` run against a closed port prints `Seeding failed (ECONNREFUSED).`, exit 1. E2E not run (lane 1 is running it).
 
 ## Parking lot
 - Reset the demo account's data from CI (a "reseed" flag), if the owner wants a clean demo before each showing. Until then, a reseed means a new demo account (a new `DEMO_EMAIL`) or a local-style delete that this task doesn't provide.
 - A shared helper for starting the Cloud SQL proxy in `deploy.yml`, if the implementer doesn't do it here.
 - Seeding a photo and a report (needs a grant for main's deployer on the main bucket, a Terraform change).
+- ~~CI doesn't run the dashboard's new `test:db` yet~~ Done (8db2320): `ci.yml` runs `pnpm --filter @repo/dashboard test:db` after `@repo/db`'s.
+- `AGENTS.md` is a stale copy of `CLAUDE.md`, not a symlink (it lacks the storage and `reset:local` lines); only its `seed:demo` line was updated here.

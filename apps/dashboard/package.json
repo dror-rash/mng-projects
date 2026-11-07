@@ -9,6 +9,7 @@
     "lint": "eslint .",
     "typecheck": "next typegen && tsc --noEmit",
     "test": "vitest run",
+    "test:db": "vitest run -c vitest.db.config.ts",
     "seed:demo": "tsx scripts/seed-demo.ts",
     "reset:local": "tsx scripts/reset-local.ts"
   },

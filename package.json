@@ -12,7 +12,7 @@
     "typecheck": "turbo run typecheck",
     "test": "turbo run test",
     "test:e2e": "pnpm --filter @repo/e2e e2e",
-    "test:infra": "bash infra/scripts/test-environment.sh && bash infra/scripts/test-deploy-service.sh && node --experimental-strip-types --test --test-concurrency=1 infra/scripts/check-runtime-role.test.mjs infra/scripts/provision-db-logins.test.mjs infra/scripts/with-db-lock.test.mjs && bash infra/scripts/test-preview-migrate.sh",
+    "test:infra": "bash infra/scripts/test-environment.sh && bash infra/scripts/test-deploy-service.sh && node --experimental-strip-types --test --test-concurrency=1 infra/scripts/check-runtime-role.test.mjs infra/scripts/provision-db-logins.test.mjs infra/scripts/with-db-lock.test.mjs && bash infra/scripts/test-preview-migrate.sh && bash infra/scripts/test-workflows.sh",
     "storybook": "pnpm --filter @repo/ui storybook",
     "build-storybook": "pnpm --filter @repo/ui build-storybook",
     "db:up": "docker compose up -d db storage",

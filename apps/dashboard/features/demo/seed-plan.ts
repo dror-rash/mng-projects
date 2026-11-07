@@ -1,4 +1,7 @@
 import type { OrganizationStatus } from "@/features/organizations/organization-kinds";
+import type { FieldInput } from "@/features/reading-forms/field-input";
+import { parseFieldType } from "@/features/reading-forms/field-type";
+import type { ReadingField, ReadingValues } from "@/features/readings/reading-values";
 import type { CalendarDate } from "@/features/tasks/due-dates";
 import { todayUtc } from "@/features/tasks/due-dates";
 import type { TaskPriority } from "@/features/tasks/task-priority";
@@ -19,6 +22,16 @@ export type DemoTask = {
   linkCustomer: boolean;
 };
 
+/** A visit to the project's site (task 058) by the seeding user, on a past day; some carry a reading (task 076). */
+export type DemoVisit = {
+  visitedOn: CalendarDate;
+  /** On the visit's day; also the visit's creation time. */
+  recordedAt: Date;
+  notes: string;
+  /** Which values the visit's reading of the demo form gets (`demoReadingValues`); null for no reading. */
+  reading: number | null;
+};
+
 export type DemoProject = {
   name: string;
   description: string;
@@ -28,6 +41,8 @@ export type DemoProject = {
   subCompany: string | null;
   /** Where the work is (task 055): one of the sites of the project's customer (or sub-company), by name. */
   site: string;
+  /** Oldest first; none until a task has started. */
+  visits: DemoVisit[];
 };
 
 /** A site with the people to meet there (task 054). Coordinates are decimal strings, both or neither. */
@@ -216,13 +231,90 @@ function demoSite(index: number, label?: string): DemoSite {
   };
 }
 
+/**
+ * The demo's reading form (task 076): published in the workspace by the seed, or reused when a published form of
+ * this name is already there. Readings in the plan fill it in with `demoReadingValues`.
+ */
+export const DEMO_FORM: { name: string; description: string; fields: FieldInput[] } = {
+  name: "Site inspection (demo)",
+  description: "A quick check of the site's electrical setup, made by the demo data.",
+  fields: [
+    { label: "Voltage", type: "number", required: true, unit: "V", options: null },
+    { label: "Breaker panel OK", type: "yes_no", required: true, unit: null, options: null },
+    { label: "Condition", type: "choice", required: true, unit: null, options: ["Good", "Fair", "Needs repair"] },
+    { label: "Remarks", type: "text", required: false, unit: null, options: null },
+  ],
+};
+
+const VISIT_NOTES = [
+  "Walked the site with the on-site contact; everything as planned.",
+  "Checked progress against the plan. Two small fixes noted for next time.",
+  "Met the facility manager, reviewed access and safety rules.",
+  "Measured the main panel and photographed the wiring.",
+  "Follow-up visit: the open items from last time are done.",
+  "Short stop to drop off parts and check the schedule.",
+];
+
+const READING_NUMBERS = [230, 228.5, 231.2, 229.8];
+const READING_REMARKS = ["All fine.", "Panel door sticks; reported to maintenance.", "Labels missing on two breakers.", "Clean and dry."];
+
+/**
+ * The values of a demo reading for a form's `fields`, as the reading form stores them (`reading-values.ts`):
+ * every field filled in, by its type, chosen by `variant`; a Date field gets the visit's day.
+ */
+export function demoReadingValues(fields: ReadingField[], variant: number, visitedOn: CalendarDate): ReadingValues {
+  const values: ReadingValues = {};
+  for (const field of fields) {
+    switch (parseFieldType(field.type)) {
+      case "number":
+        values[field.id] = READING_NUMBERS[variant % READING_NUMBERS.length]!;
+        break;
+      case "yes_no":
+        values[field.id] = variant % 3 !== 0;
+        break;
+      case "choice":
+        // The database requires two or more options on a Choice field. Without any (it can't happen), the field
+        // stays empty, and the reading form would refuse a required one: the seed's insert doesn't check.
+        if (field.options && field.options.length > 0) values[field.id] = field.options[variant % field.options.length]!;
+        break;
+      case "date":
+        values[field.id] = visitedOn;
+        break;
+      default:
+        // Text, and a type this app doesn't know, which the reading form takes as text.
+        values[field.id] = READING_REMARKS[variant % READING_REMARKS.length]!;
+    }
+  }
+  return values;
+}
+
+/**
+ * 1–4 visits on past days after the project started (none until a task has started); the most recent visit
+ * of every other project carries a reading.
+ */
+function demoVisits(ci: number, pi: number, startedDaysAgo: number, started: boolean, today: CalendarDate): DemoVisit[] {
+  if (!started) return [];
+  const count = 1 + ((pi + ci) % 4);
+  return Array.from({ length: count }, (_, k) => {
+    // Spread over the days between the start and yesterday, oldest first.
+    const daysAgo = 1 + Math.floor(((startedDaysAgo - 2) * (count - k)) / (count + 1));
+    const visitedOn = plusDays(today, -daysAgo);
+    return {
+      visitedOn,
+      recordedAt: new Date(Date.parse(`${visitedOn}T09:00:00Z`) + (pi % 8) * HOUR),
+      notes: VISIT_NOTES[(ci + pi + k) % VISIT_NOTES.length]!,
+      reading: k === count - 1 && pi % 2 === 1 ? ci * ARCHETYPES.length + pi : null,
+    };
+  });
+}
+
 function plusDays(date: CalendarDate, days: number): CalendarDate {
   return new Date(Date.parse(`${date}T00:00:00Z`) + days * DAY).toISOString().slice(0, 10);
 }
 
 /**
- * Demo customers, projects and tasks for local development, with dates relative to `now` (UTC calendar
- * days, like the app). Pure and deterministic: the same day gives the same plan.
+ * Demo customers, projects, tasks and visits (some with a reading of `DEMO_FORM`), with dates relative to `now`
+ * (UTC calendar days, like the app). Pure and deterministic: the same day gives the same plan.
  */
 export function buildDemoPlan(now: Date): DemoCustomer[] {
   const today = todayUtc(now);
@@ -280,6 +372,7 @@ export function buildDemoPlan(now: Date): DemoCustomer[] {
             assignedToMe: mine ?? false,
             linkCustomer: ti % 2 === 0,
           })),
+          visits: demoVisits(ci, pi, archetype.startedDaysAgo, archetype.tasks.some(([status]) => status !== "todo"), today),
         };
       }),
     };
