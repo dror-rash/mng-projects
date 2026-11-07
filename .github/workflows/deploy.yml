@@ -166,6 +166,47 @@ jobs:
         run: |
           case "$SHELL_URL" in https://?*) ;; *) echo "::error::The shell URL is missing (got '$SHELL_URL')"; exit 1 ;; esac
 
+      # Demo data (task 076): main only, once the new revision serves. Seeds the DEMO_EMAIL account's workspace
+      # once: `seed:demo --deploy` skips while the account hasn't signed up or opened the dashboard, or once its
+      # workspace has demo data. Runs as `app`'s owner, with the password the migration step reads (no new
+      # identity). Never blocks main: a skip is a notice, a refusal or failure a warning. The log is public: the
+      # password and email are masked first, DATABASE_URL lives only in the seed command's environment, and
+      # `pnpm --silent` keeps the command line (with the email) out of the log.
+      - name: Seed demo data
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        continue-on-error: true
+        timeout-minutes: 10
+        env:
+          DEMO_EMAIL: ${{ secrets.DEMO_EMAIL }}
+        run: |
+          if [ -z "$DEMO_EMAIL" ]; then
+            echo "::notice title=Demo data::Skipped: the DEMO_EMAIL repository secret isn't set."
+            exit 0
+          fi
+          echo "::add-mask::$DEMO_EMAIL"
+          fail() { echo "::warning title=Demo data::$1"; exit 1; }
+          . infra/scripts/environment.sh
+          PASSWORD="$(gcloud secrets versions access latest --secret="$DB_MIGRATE_PASSWORD_SECRET")" ||
+            fail "Couldn't read the database password."
+          echo "::add-mask::$PASSWORD"
+          pnpm install --frozen-lockfile --filter @repo/dashboard... || fail "Installing the dashboard failed."
+          # The binary the migration step downloaded; its proxy was stopped there.
+          ./cloud-sql-proxy --port 5432 "$CLOUDSQL_CONNECTION" > proxy-seed.log 2>&1 &
+          trap 'kill %1 2>/dev/null || true' EXIT
+          for _ in $(seq 1 20); do (echo > /dev/tcp/127.0.0.1/5432) 2>/dev/null && break; sleep 1; done
+
+          oneline() { tr '\n' ' ' | cut -c1-500; }
+          set +e
+          OUT="$(DATABASE_URL="postgres://${DB_MIGRATE_LOGIN}:${PASSWORD}@127.0.0.1:5432/${DB_NAME}" DB_POOL_MAX=1 \
+            pnpm --silent --filter @repo/dashboard seed:demo --deploy --email "$DEMO_EMAIL" 2> "$RUNNER_TEMP/seed.err")"
+          CODE=$?
+          set -e
+          [ "$CODE" -eq 0 ] || fail "$(oneline < "$RUNNER_TEMP/seed.err") (exit $CODE)"
+          case "$OUT" in
+            Skipped:*) echo "::notice title=Demo data::$(echo "$OUT" | oneline)" ;;
+            *) echo "$OUT" ;;
+          esac
+
       # 3) Acceptance tests against the deployed preview: the @smoke set only. The full suite needs
       #    AUTH_DISABLE_RATE_LIMIT, which a deployment never sets (rule 13). One worker: the set signs up and
       #    logs in from one runner IP, against production rate limits. The report and traces stay on the
