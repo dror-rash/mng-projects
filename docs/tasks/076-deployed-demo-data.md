@@ -1,6 +1,6 @@
 # Task 076: Demo data on the deployed app
 
-- **Status:** todo (ready: all four open questions answered, 2026-11-07)
+- **Status:** in-progress
 - **Milestone:** POC (2026-11-13)
 - **Zone / package:** `apps/dashboard` (`scripts/seed-demo.ts`, `features/demo/`), `.github/workflows/deploy.yml`, `infra/README.md` (docs only). No Terraform change, no migration.
 - **Feature file:** none (no visible behavior of the app; the seed's own tests and a check by hand on the deployed app)
@@ -76,6 +76,7 @@ The POC is shown on the deployed app, and a viewer should find a customer's whol
 - 2026-11-07 – Split from task 069: the demo data on the deployed app needs a decision on how a seed reaches the deployed database through CI, which doesn't belong in 069's e2e change. Three open questions for the owner, each with a recommended default.
 - 2026-11-07 – The owner answered questions 1–3 with the recommended defaults: route (a) (a step in the `main` deploy, no Terraform), no files in the seed, an owner-controlled address in `DEMO_EMAIL`. Scope made concrete: `seed:demo --deploy` (skip when not signed up / no workspace / demo data exists; refuse anything but a single-member workspace the account administers; no personal data in the output), a `continue-on-error` step after the shell deploy with `DB_POOL_MAX=1`. New question 4: a public log would show a `DEMO_EMAIL` variable, so a secret is recommended.
 - 2026-11-07 – The owner answered question 4: `DEMO_EMAIL` is a repository secret (masked in the public Actions logs). Ready.
+- 2026-11-07 – Started in lane 2 (`chore/deployed-demo-data`).
 
 ## Parking lot
 - Reset the demo account's data from CI (a "reseed" flag), if the owner wants a clean demo before each showing. Until then, a reseed means a new demo account (a new `DEMO_EMAIL`) or a local-style delete that this task doesn't provide.
