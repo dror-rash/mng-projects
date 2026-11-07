@@ -44,10 +44,10 @@ The POC is shown on the deployed app, and a viewer should find a customer's whol
 - Signing up the demo account from CI: the owner signs up through the app.
 
 ## Acceptance criteria
-- [ ] Locally, `seed:demo` gives every demo project except the "not started" ones 1–4 past visits with notes and the seeding user as attendee, and at least one visit per demo customer a reading of the published `Site inspection (demo)` form whose values pass `reading-values.ts`. → unit tests on `buildDemoPlan`; local run by hand (output in the PR).
-- [ ] A local rerun replaces the demo visits and readings with the demo customers, reuses the form, and changes nothing outside the demo customers. → local run by hand: count rows before and after (in the PR).
-- [ ] `--deploy` skips with exit 0 and a notice for: no such account, no workspace, demo data already there (deleted demo customers count). → unit tests on the deploy-mode decision; local runs by hand.
-- [ ] `--deploy` refuses with exit 1, writing nothing, when the account is in more than one workspace, isn't its workspace's admin, shares it with another member, or `--workspace` is given. → unit tests on the decision.
+- [x] Locally, `seed:demo` gives every demo project except the "not started" ones 1–4 past visits with notes and the seeding user as attendee, and at least one visit per demo customer a reading of the published `Site inspection (demo)` form whose values pass `reading-values.ts`. → unit tests on `buildDemoPlan`; local run by hand (output in the PR).
+- [x] A local rerun replaces the demo visits and readings with the demo customers, reuses the form, and changes nothing outside the demo customers. → local run by hand: count rows before and after (in the PR).
+- [x] `--deploy` skips with exit 0 and a notice for: no such account, no workspace, demo data already there (deleted demo customers count). → unit tests on the deploy-mode decision; local runs by hand.
+- [x] `--deploy` refuses with exit 1, writing nothing, when the account is in more than one workspace, isn't its workspace's admin, shares it with another member, or `--workspace` is given. → unit tests on the decision.
 - [ ] `--deploy` output holds no email, workspace name or connection string. → unit test on the messages; the CI run's log.
 - [ ] The `Seed demo data` step runs only on pushes to `main` with `DEMO_EMAIL` set, after the shell is deployed; a seed failure leaves the run's deploy steps green (`continue-on-error`). → review of `deploy.yml`; the first `main` run after merge.
 - [ ] On the deployed app, the demo account shows the whole flow on at least one project: customer → sub-company → site → project with tasks, a visit and a reading from the seed, plus a photo and a report the owner uploaded by hand. → check by hand.
@@ -77,8 +77,31 @@ The POC is shown on the deployed app, and a viewer should find a customer's whol
 - 2026-11-07 – The owner answered questions 1–3 with the recommended defaults: route (a) (a step in the `main` deploy, no Terraform), no files in the seed, an owner-controlled address in `DEMO_EMAIL`. Scope made concrete: `seed:demo --deploy` (skip when not signed up / no workspace / demo data exists; refuse anything but a single-member workspace the account administers; no personal data in the output), a `continue-on-error` step after the shell deploy with `DB_POOL_MAX=1`. New question 4: a public log would show a `DEMO_EMAIL` variable, so a secret is recommended.
 - 2026-11-07 – The owner answered question 4: `DEMO_EMAIL` is a repository secret (masked in the public Actions logs). Ready.
 - 2026-11-07 – Started in lane 2 (`chore/deployed-demo-data`).
+- 2026-11-07 – Seed code (implementer, lane 2). Red first:
+  - `seed-plan.test.ts` with visits, the demo form and `demoReadingValues`: the suite failed (`TypeError: Cannot read properties of undefined (reading 'fields')`: no `DEMO_FORM`). Green: 22 tests.
+  - `deploy-seed.test.ts` (each skip, each refusal, seed; messages without email, workspace name or connection string; counts-only summary; `failureText`): failed, no `./deploy-seed`. Green: 18 tests.
+  - `scripts/seed-demo-run.db.test.ts` (new `pnpm --filter @repo/dashboard test:db`, `DB_POOL_MAX=1`) against today's seed moved unchanged into `runSeedDemo`: 11 of 13 failed (no visits, readings or form; `--deploy` didn't skip or refuse). Green: 13 tests.
+  - Choices: a **published** form named `Site inspection (demo)` is reused as it is (its own fields filled by type, so a reused form with other fields still gets valid readings); a draft or archived one of that name is left alone and a new form is published. "Not started" = no task in progress or done (4 of the 15 project kinds, empty included): no visits. The deploy mode reads the facts and locks the workspace row inside the seed's one transaction, so skip and refuse write nothing. Skips print to stdout (exit 0) and start `Skipped:`; refusals to stderr (exit 1) and start `Refused:`; a failure in `--deploy` prints `Seeding failed: <message>` only.
+  - By hand on `app_lane2` (throwaway `seed076-…@example.com` accounts signed up through lane 2's dev servers; the two-workspace one made its second workspace through the app's UI; servers stopped afterwards):
+    ```
+    seed:demo (local)       Seeded "Seed Check's workspace": 5 customers (+2 sub-companies), 10 sites, 75 projects, 410 tasks, 139 visits, 20 readings.
+      rows after:           organization 7, project 75, task 410, site 10, site_visit 139, site_visit_member 139, form_template 1, form_field 4, form_submission 20
+    rerun                   Seeded "Seed Check's workspace": … 139 visits, 20 readings (replaced 7 demo customers).
+      rows after:           the same counts; the same form (one, same id)
+    --deploy, fresh         Seeded 5 customers (+2 sub-companies), 10 sites, 75 projects, 410 tasks, 139 visits, 20 readings.   exit 0
+    --deploy, again         Skipped: the demo workspace already has demo data.                                exit 0, no row changed
+    --deploy, unknown email Skipped: the demo account hasn't signed up yet.                                   exit 0
+    --deploy, no workspace  Skipped: the demo account hasn't opened the dashboard yet.                        exit 0
+    --deploy, 2 workspaces  Refused: the demo account is in 2 workspaces; --deploy seeds only an account with one.  exit 1, nothing written
+    --deploy --workspace    Refused: --workspace can't be used with --deploy, which seeds the demo account's only workspace.  exit 1
+    --deploy, local account Skipped: the demo workspace already has demo data.                                exit 0
+    --deploy, no database   Seeding failed: connect ECONNREFUSED 127.0.0.1:5999                              exit 1
+    ```
+    (`--deploy` runs with `DB_POOL_MAX=1`.) Unit 431 (dashboard), `@repo/db` `test:db` 149, dashboard `test:db` 13; lint and typecheck clean. Full e2e not run (another lane was running it); no app behavior changed. Left for the infra agent: the `deploy.yml` step and `infra/README.md`.
 
 ## Parking lot
 - Reset the demo account's data from CI (a "reseed" flag), if the owner wants a clean demo before each showing. Until then, a reseed means a new demo account (a new `DEMO_EMAIL`) or a local-style delete that this task doesn't provide.
 - A shared helper for starting the Cloud SQL proxy in `deploy.yml`, if the implementer doesn't do it here.
 - Seeding a photo and a report (needs a grant for main's deployer on the main bucket, a Terraform change).
+- CI doesn't run the dashboard's new `test:db` yet: `ci.yml` runs only `pnpm --filter @repo/db test:db`. One line after it (`pnpm --filter @repo/dashboard test:db`) belongs with the workflow changes (infra agent).
+- `AGENTS.md` is a stale copy of `CLAUDE.md`, not a symlink (it lacks the storage and `reset:local` lines); only its `seed:demo` line was updated here.

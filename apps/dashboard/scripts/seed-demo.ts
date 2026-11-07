@@ -1,174 +1,53 @@
 /**
- * Local dev only: fills one user's workspace with demo customers, projects and tasks in every state.
+ * Demo data: fills one user's workspace with demo customers (sub-companies, sites), projects, tasks in every
+ * state, visits and readings of a published "Site inspection (demo)" reading form. No photos or files.
+ *
  *   pnpm --filter @repo/dashboard seed:demo --email you@example.com [--workspace "Workspace name"]
- * Reruns replace the previous demo data (customers tagged "demo" and their projects); nothing else is touched.
+ *     Local dev. Reruns replace the previous demo data (customers tagged "demo", with their projects, tasks,
+ *     visits and readings); nothing else is touched, and the form is reused.
+ *
+ *   DB_POOL_MAX=1 pnpm --filter @repo/dashboard seed:demo --deploy --email "$DEMO_EMAIL"
+ *     The deploy of `main` (task 076). Seeds the demo account's workspace once, and never replaces anything:
+ *     skips (exit 0) when the account hasn't signed up or opened the dashboard yet, or its workspace has demo
+ *     data (deleted included); refuses (exit 1, nothing written) unless the account is the admin and only
+ *     member of exactly one workspace, and with --workspace. Prints counts only: no email, no workspace name.
  */
 import path from "node:path";
 import { parseArgs } from "node:util";
 
 import { loadEnvConfig } from "@next/env";
-import { and, asc, eq, inArray, schema, sql } from "@repo/db";
 import { getMaintenanceDb } from "@repo/db/maintenance";
 
-import { buildDemoPlan, DEMO_TAG } from "@/features/demo/seed-plan";
-import { currentWorkspaceId } from "@/features/workspaces/current-workspace";
+import { failureText } from "@/features/demo/deploy-seed";
+
+import { runSeedDemo } from "./seed-demo-run";
 
 // Load the repo-root .env, like next.config.ts (tsx runs this as CommonJS, so __dirname is defined).
 loadEnvConfig(path.join(__dirname, "../../.."));
 
+const USAGE = 'Usage: pnpm --filter @repo/dashboard seed:demo --email you@example.com [--workspace "Name"] [--deploy]';
+
+let deploy = false;
+
 async function main(): Promise<number> {
-  const { values } = parseArgs({ options: { email: { type: "string" }, workspace: { type: "string" } } });
+  const { values } = parseArgs({ options: { email: { type: "string" }, workspace: { type: "string" }, deploy: { type: "boolean" } } });
+  deploy = values.deploy ?? false;
   if (!values.email) {
-    console.error('Usage: pnpm --filter @repo/dashboard seed:demo --email you@example.com [--workspace "Name"]');
+    console.error(USAGE);
     return 1;
   }
-
   // The maintenance connection: seeding writes past row-level security, as the owner.
-  const db = getMaintenanceDb();
-  const [user] = await db.select({ id: schema.user.id }).from(schema.user).where(eq(schema.user.email, values.email));
-  if (!user) {
-    console.error(`No user with email ${values.email}. Sign up first.`);
-    return 1;
-  }
-
-  const memberships = await db
-    .select({ workspaceId: schema.workspaceMember.workspaceId, joinedAt: schema.workspaceMember.joinedAt, name: schema.workspace.name })
-    .from(schema.workspaceMember)
-    .innerJoin(schema.workspace, eq(schema.workspaceMember.workspaceId, schema.workspace.id))
-    .where(eq(schema.workspaceMember.userId, user.id))
-    .orderBy(asc(schema.workspaceMember.joinedAt), asc(schema.workspaceMember.workspaceId));
-  const workspaceId = values.workspace
-    ? memberships.find((m) => m.name === values.workspace)?.workspaceId
-    : currentWorkspaceId(memberships, undefined);
-  if (!workspaceId) {
-    console.error(values.workspace ? `${values.email} isn't in a workspace named "${values.workspace}".` : "Open the dashboard once first, so the user has a workspace.");
-    return 1;
-  }
-
-  const plan = buildDemoPlan(new Date());
-  const id = () => crypto.randomUUID();
-
-  const removed = await db.transaction(async (tx) => {
-    const previous = await tx
-      .select({ id: schema.organization.id })
-      .from(schema.organization)
-      .where(and(eq(schema.organization.workspaceId, workspaceId), sql`${schema.organization.tags} @> array[${DEMO_TAG}]::text[]`));
-    const previousIds = previous.map((o) => o.id);
-    if (previousIds.length > 0) {
-      // A customer or site in use can't be deleted (task 071), so remove the demo projects (and their tasks) first.
-      // Sub-companies' projects too: previousIds has the sub-companies (they carry the demo tag).
-      await tx.delete(schema.project).where(inArray(schema.project.organizationId, previousIds));
-      await tx.delete(schema.organization).where(inArray(schema.organization.id, previousIds));
-    }
-
-    for (const customer of plan) {
-      const organizationId = id();
-      await tx.insert(schema.organization).values({
-        id: organizationId,
-        ownerId: user.id,
-        workspaceId,
-        kind: "customer",
-        name: customer.name,
-        status: customer.status,
-        email: customer.email,
-        phone: customer.phone,
-        website: customer.website,
-        about: customer.about,
-        tags: customer.tags,
-      });
-      const contacts = customer.contacts.map((c) => ({ id: id(), organizationId, name: c.name, role: c.role, email: c.email, phone: c.phone, primary: c.primary }));
-      await tx.insert(schema.organizationContact).values(contacts.map(({ primary: _, ...c }) => c));
-      await tx
-        .update(schema.organization)
-        .set({ primaryContactId: contacts.find((c) => c.primary)!.id })
-        .where(eq(schema.organization.id, organizationId));
-      await tx.insert(schema.organizationNote).values(customer.notes.map((n) => ({ id: id(), organizationId, authorId: user.id, ...n })));
-
-      /** Sites with their on-site contacts (task 054); deleted with their customer on a rerun. */
-      // Read before the helper: narrowing doesn't carry into a nested function.
-      const createdBy = user.id;
-      const siteWorkspaceId = workspaceId;
-      // Site ids by organization and name, for the projects at them (task 055).
-      const siteIds = new Map<string, string>();
-      async function insertSites(siteOrganizationId: string, sites: typeof customer.sites) {
-        for (const site of sites) {
-          const siteId = id();
-          siteIds.set(`${siteOrganizationId}:${site.name}`, siteId);
-          const { contacts: siteContacts, ...fields } = site;
-          await tx.insert(schema.site).values({ id: siteId, workspaceId: siteWorkspaceId, organizationId: siteOrganizationId, createdBy, ...fields });
-          await tx.insert(schema.siteContact).values(siteContacts.map((c) => ({ id: id(), siteId, ...c })));
-        }
-      }
-      await insertSites(organizationId, customer.sites);
-
-      // Sub-companies (task 053) carry the demo tag too, so a rerun replaces them with their parent.
-      const subCompanyIds = new Map<string, string>();
-      for (const sub of customer.subCompanies) {
-        const subId = id();
-        subCompanyIds.set(sub.name, subId);
-        await tx.insert(schema.organization).values({
-          id: subId,
-          ownerId: user.id,
-          workspaceId,
-          kind: "customer",
-          parentId: organizationId,
-          name: sub.name,
-          status: customer.status,
-          phone: sub.phone,
-          about: sub.about,
-          tags: [DEMO_TAG],
-        });
-        await insertSites(subId, sub.sites);
-      }
-
-      for (const project of customer.projects) {
-        const projectOrganizationId = (project.subCompany && subCompanyIds.get(project.subCompany)) || organizationId;
-        const projectId = id();
-        await tx.insert(schema.project).values({
-          id: projectId,
-          name: project.name,
-          description: project.description,
-          ownerId: user.id,
-          workspaceId,
-          organizationId: projectOrganizationId,
-          siteId: siteIds.get(`${projectOrganizationId}:${project.site}`)!,
-          createdAt: project.createdAt,
-          updatedAt: project.createdAt,
-        });
-        if (project.tasks.length > 0) {
-          await tx.insert(schema.task).values(
-            project.tasks.map((t) => ({
-              id: id(),
-              projectId,
-              title: t.title,
-              status: t.status,
-              priority: t.priority,
-              dueDate: t.dueDate,
-              completedAt: t.completedAt,
-              assigneeId: t.assignedToMe ? user.id : null,
-              organizationId: t.linkCustomer ? projectOrganizationId : null,
-              createdAt: t.createdAt,
-              updatedAt: t.completedAt ?? t.createdAt,
-            })),
-          );
-        }
-      }
-    }
-    return previousIds.length;
-  });
-
-  const projects = plan.reduce((n, c) => n + c.projects.length, 0);
-  const tasks = plan.reduce((n, c) => n + c.projects.reduce((m, p) => m + p.tasks.length, 0), 0);
-  const workspaceName = memberships.find((m) => m.workspaceId === workspaceId)!.name;
-  console.log(`Seeded "${workspaceName}": ${plan.length} customers (+${plan.reduce((n, c) => n + c.subCompanies.length, 0)} sub-companies), ${plan.reduce((n, c) => n + c.sites.length + c.subCompanies.reduce((m, s) => m + s.sites.length, 0), 0)} sites, ${projects} projects, ${tasks} tasks${removed ? ` (replaced ${removed} demo customers)` : ""}.`);
-  return 0;
+  const result = await runSeedDemo(getMaintenanceDb(), { email: values.email, workspace: values.workspace, deploy });
+  (result.code === 0 ? console.log : console.error)(result.message);
+  return result.code;
 }
 
 // Exit explicitly: the database pool would otherwise keep this one-shot script alive.
 main().then(
   (code) => process.exit(code),
   (error: unknown) => {
-    console.error(error);
+    // The deploy's log is public: the message only, not the error object with its details.
+    console.error(deploy ? failureText(error) : error);
     process.exit(1);
   },
 );
