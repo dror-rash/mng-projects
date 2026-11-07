@@ -1,8 +1,9 @@
 import { and, asc, desc, eq, inArray, isNotNull, schema, sql } from "@repo/db";
 import type { getMaintenanceDb } from "@repo/db/maintenance";
 
-import { decideDeploySeed, planCounts, seedSummary } from "@/features/demo/deploy-seed";
+import { decideDeploySeed, planCounts, seedSummary, WORKSPACE_FLAG_REFUSED } from "@/features/demo/deploy-seed";
 import { buildDemoPlan, DEMO_FORM, DEMO_TAG, type DemoCustomer, demoReadingValues, type DemoVisit } from "@/features/demo/seed-plan";
+import type { FormStatus } from "@/features/reading-forms/form-status";
 import type { ReadingField } from "@/features/readings/reading-values";
 import { currentWorkspaceId } from "@/features/workspaces/current-workspace";
 
@@ -19,7 +20,7 @@ export type SeedOptions = { email: string; workspace?: string; deploy: boolean }
 export type SeedResult = { code: 0 | 1; message: string };
 
 /** The workspace to seed and the user who seeds it, or why not. */
-type Target = { userId: string; workspaceId: string; workspaceName: string } | { result: SeedResult };
+type Target<T = object> = ({ userId: string; workspaceId: string } & T) | { result: SeedResult };
 
 /** The version of the demo form that readings are filled against, with its fields. */
 type DemoFormVersion = { versionId: string; fields: ReadingField[] };
@@ -30,27 +31,31 @@ const isDemo = sql`${schema.organization.tags} @> array[${DEMO_TAG}]::text[]`;
 /**
  * Seeds `options.email`'s workspace with `buildDemoPlan(now)`. Locally it replaces earlier demo data in the
  * current workspace (or `--workspace`); `--deploy` seeds only a fresh demo account's own workspace and never
- * replaces anything (`decideDeploySeed`).
+ * deletes or replaces anything (`decideDeploySeed`). The email is matched as Better Auth stores it: lowercase.
  */
 export async function runSeedDemo(db: MaintenanceDb, options: SeedOptions, now = new Date()): Promise<SeedResult> {
-  if (options.deploy && options.workspace !== undefined) {
-    const decision = decideDeploySeed({ workspaceFlag: true, userFound: false, memberships: [], members: 0, demoCustomers: 0 });
-    return { code: 1, message: "reason" in decision ? decision.reason : "" };
-  }
+  if (options.deploy && options.workspace !== undefined) return { code: 1, message: WORKSPACE_FLAG_REFUSED };
+  const email = options.email.trim().toLowerCase();
   return db.transaction(async (tx) => {
-    const target = options.deploy ? await deployTarget(tx, options.email) : await localTarget(tx, options);
-    if ("result" in target) return target.result;
     const plan = buildDemoPlan(now);
+    if (options.deploy) {
+      const target = await deployTarget(tx, email);
+      if ("result" in target) return target.result;
+      await seedPlan(tx, plan, target.userId, target.workspaceId);
+      return { code: 0, message: seedSummary(planCounts(plan)) };
+    }
+    const target = await localTarget(tx, email, options.workspace);
+    if ("result" in target) return target.result;
     const replaced = await removeDemoData(tx, target.workspaceId);
     await seedPlan(tx, plan, target.userId, target.workspaceId);
-    return { code: 0, message: seedSummary(planCounts(plan), options.deploy ? undefined : { workspaceName: target.workspaceName, replaced }) };
+    return { code: 0, message: seedSummary(planCounts(plan), { workspaceName: target.workspaceName, replaced }) };
   });
 }
 
 /** Locally: the user's current workspace (their oldest), or the one named by `--workspace`. */
-async function localTarget(tx: Tx, options: SeedOptions): Promise<Target> {
-  const [user] = await tx.select({ id: schema.user.id }).from(schema.user).where(eq(schema.user.email, options.email));
-  if (!user) return { result: { code: 1, message: `No user with email ${options.email}. Sign up first.` } };
+async function localTarget(tx: Tx, email: string, workspace: string | undefined): Promise<Target<{ workspaceName: string }>> {
+  const [user] = await tx.select({ id: schema.user.id }).from(schema.user).where(eq(schema.user.email, email));
+  if (!user) return { result: { code: 1, message: `No user with email ${email}. Sign up first.` } };
 
   const memberships = await tx
     .select({ workspaceId: schema.workspaceMember.workspaceId, joinedAt: schema.workspaceMember.joinedAt, name: schema.workspace.name })
@@ -58,14 +63,14 @@ async function localTarget(tx: Tx, options: SeedOptions): Promise<Target> {
     .innerJoin(schema.workspace, eq(schema.workspaceMember.workspaceId, schema.workspace.id))
     .where(eq(schema.workspaceMember.userId, user.id))
     .orderBy(asc(schema.workspaceMember.joinedAt), asc(schema.workspaceMember.workspaceId));
-  const workspaceId = options.workspace
-    ? memberships.find((m) => m.name === options.workspace)?.workspaceId
+  const workspaceId = workspace
+    ? memberships.find((m) => m.name === workspace)?.workspaceId
     : currentWorkspaceId(memberships, undefined);
   if (!workspaceId) {
     return {
       result: {
         code: 1,
-        message: options.workspace ? `${options.email} isn't in a workspace named "${options.workspace}".` : "Open the dashboard once first, so the user has a workspace.",
+        message: workspace ? `${email} isn't in a workspace named "${workspace}".` : "Open the dashboard once first, so the user has a workspace.",
       },
     };
   }
@@ -74,7 +79,9 @@ async function localTarget(tx: Tx, options: SeedOptions): Promise<Target> {
 
 /**
  * `--deploy`: the demo account's only workspace, if it is its admin and only member and it has no demo data
- * yet. The workspace row is locked first, as membership changes do, so the facts hold until the seed commits.
+ * yet. The workspace row is locked `FOR UPDATE` before the members and demo customers are counted, so those
+ * counts hold until the seed commits: a new membership or customer references the workspace by foreign key,
+ * and the key-share lock that check takes waits for this one (as does `changeMembership`'s own row lock).
  */
 async function deployTarget(tx: Tx, email: string): Promise<Target> {
   const [user] = await tx.select({ id: schema.user.id }).from(schema.user).where(eq(schema.user.email, email));
@@ -89,20 +96,22 @@ async function deployTarget(tx: Tx, email: string): Promise<Target> {
   let demoCustomers = 0;
   if (workspaceId) {
     await tx.select({ id: schema.workspace.id }).from(schema.workspace).where(eq(schema.workspace.id, workspaceId)).for("update");
-    [{ members }] = (await tx
-      .select({ members: sql<number>`count(*)::int` })
+    const [memberCount] = await tx
+      .select({ n: sql<number>`count(*)::int` })
       .from(schema.workspaceMember)
-      .where(eq(schema.workspaceMember.workspaceId, workspaceId))) as [{ members: number }];
+      .where(eq(schema.workspaceMember.workspaceId, workspaceId));
     // Deleted ones too: what the owner removed by hand stays removed.
-    [{ demoCustomers }] = (await tx
-      .select({ demoCustomers: sql<number>`count(*)::int` })
+    const [demoCount] = await tx
+      .select({ n: sql<number>`count(*)::int` })
       .from(schema.organization)
-      .where(and(eq(schema.organization.workspaceId, workspaceId), isDemo))) as [{ demoCustomers: number }];
+      .where(and(eq(schema.organization.workspaceId, workspaceId), isDemo));
+    members = memberCount?.n ?? 0;
+    demoCustomers = demoCount?.n ?? 0;
   }
   const decision = decideDeploySeed({ workspaceFlag: false, userFound: Boolean(user), memberships, members, demoCustomers });
   if (decision.action === "skip") return { result: { code: 0, message: decision.reason } };
   if (decision.action === "refuse") return { result: { code: 1, message: decision.reason } };
-  return { userId: user!.id, workspaceId: workspaceId!, workspaceName: "" };
+  return { userId: user!.id, workspaceId: workspaceId! };
 }
 
 /**
@@ -137,7 +146,7 @@ async function demoFormVersion(tx: Tx, workspaceId: string, userId: string): Pro
       and(
         eq(schema.formTemplate.workspaceId, workspaceId),
         eq(schema.formTemplate.name, DEMO_FORM.name),
-        eq(schema.formTemplate.status, "published"),
+        eq(schema.formTemplate.status, "published" satisfies FormStatus),
         isNotNull(schema.formTemplateVersion.publishedAt),
       ),
     )
@@ -166,7 +175,7 @@ async function demoFormVersion(tx: Tx, workspaceId: string, userId: string): Pro
   await tx.insert(schema.formTemplate).values({ id: formId, workspaceId, name: DEMO_FORM.name, description: DEMO_FORM.description, createdBy: userId });
   await tx.insert(schema.formTemplateVersion).values({ id: versionId, templateId: formId, version: 1 });
   await tx.insert(schema.formField).values(fields.map((f, i) => ({ versionId, position: i + 1, ...f })));
-  await tx.update(schema.formTemplate).set({ status: "published", updatedAt: new Date() }).where(eq(schema.formTemplate.id, formId));
+  await tx.update(schema.formTemplate).set({ status: "published" satisfies FormStatus, updatedAt: new Date() }).where(eq(schema.formTemplate.id, formId));
   return { versionId, fields };
 }
 

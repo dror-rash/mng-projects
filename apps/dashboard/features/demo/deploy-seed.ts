@@ -19,6 +19,9 @@ export type DeploySeedFacts = {
   demoCustomers: number;
 };
 
+/** `--workspace` with `--deploy`: refused before anything is looked up. */
+export const WORKSPACE_FLAG_REFUSED = "Refused: --workspace can't be used with --deploy, which seeds the demo account's only workspace.";
+
 export type DeploySeedDecision = { action: "seed" } | { action: "skip"; reason: string } | { action: "refuse"; reason: string };
 
 /**
@@ -26,9 +29,7 @@ export type DeploySeedDecision = { action: "seed" } | { action: "skip"; reason: 
  * (nothing to do yet, or already done) or refuse (anything else) with a reason that names nobody.
  */
 export function decideDeploySeed(facts: DeploySeedFacts): DeploySeedDecision {
-  if (facts.workspaceFlag) {
-    return { action: "refuse", reason: "Refused: --workspace can't be used with --deploy, which seeds the demo account's only workspace." };
-  }
+  if (facts.workspaceFlag) return { action: "refuse", reason: WORKSPACE_FLAG_REFUSED };
   if (!facts.userFound) return { action: "skip", reason: "Skipped: the demo account hasn't signed up yet." };
   if (facts.memberships.length === 0) return { action: "skip", reason: "Skipped: the demo account hasn't opened the dashboard yet." };
   if (facts.memberships.length > 1) {
@@ -69,7 +70,19 @@ export function seedSummary(counts: SeedCounts, local?: { workspaceName: string;
   return `Seeded${where} ${counts.customers} customers (+${counts.subCompanies} sub-companies), ${counts.sites} sites, ${counts.projects} projects, ${counts.tasks} tasks, ${counts.visits} visits, ${counts.readings} readings${replaced}.`;
 }
 
-/** A failure as the deploy mode prints it: the error's message only, not its details or connection settings. */
+/**
+ * A failure as the deploy mode prints it: a fixed text with the database's or driver's error code and the
+ * driver's message (the error's `cause`). Never the error's own message: Drizzle's ("Failed query: …
+ * params: …") holds the query's parameters, the email and ids among them.
+ */
 export function failureText(error: unknown): string {
-  return `Seeding failed: ${error instanceof Error ? error.message : String(error)}`;
+  const cause = typeof error === "object" && error !== null && "cause" in error ? error.cause : undefined;
+  const code = codeOf(cause) ?? codeOf(error);
+  const message = cause instanceof Error ? cause.message : undefined;
+  return `Seeding failed${code ? ` (${code})` : ""}${message ? `: ${message}` : "."}`;
+}
+
+function codeOf(value: unknown): string | undefined {
+  const code = typeof value === "object" && value !== null && "code" in value ? value.code : undefined;
+  return typeof code === "string" && code ? code : undefined;
 }

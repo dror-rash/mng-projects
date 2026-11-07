@@ -273,6 +273,8 @@ export function demoReadingValues(fields: ReadingField[], variant: number, visit
         values[field.id] = variant % 3 !== 0;
         break;
       case "choice":
+        // The database requires two or more options on a Choice field. Without any (it can't happen), the field
+        // stays empty, and the reading form would refuse a required one: the seed's insert doesn't check.
         if (field.options && field.options.length > 0) values[field.id] = field.options[variant % field.options.length]!;
         break;
       case "date":
