@@ -1,5 +1,7 @@
-import { type Browser, type BrowserContext, expect, type Page } from "@playwright/test";
+import { type APIRequestContext, type Browser, type BrowserContext, expect, type Page } from "@playwright/test";
 import { test as base, createBdd } from "playwright-bdd";
+
+import { createPacer, limitedPath } from "../support/pacing";
 
 export type Account = { email: string; password: string };
 
@@ -28,6 +30,8 @@ export type ScenarioState = {
   lastPost?: { url: string; headers: Record<string, string>; body: Buffer | null };
   /** Reading forms (task 060): the hidden fields of a form's buttons ("<form>:<button>"), to post them from another form. */
   hiddenFields?: Record<string, Record<string, string>>;
+  /** The POC flow (task 069): the other people by role ("worker", "partner user"), each in their own browser. */
+  roles?: Record<string, { page: Page; projectPath?: string; visitPath?: string }>;
 };
 
 /** Opens extra browser contexts (other people) and closes them when the scenario ends. */
@@ -35,11 +39,36 @@ export type People = { newPerson: () => Promise<Page> };
 
 export const origin = process.env.BASE_URL ?? `http://localhost:${process.env.SHELL_PORT ?? 3000}`;
 
+export const SIGN_UP_PATH = "/api/auth/sign-up/email";
+export const SIGN_IN_PATH = "/api/auth/sign-in/email";
+
+/**
+ * Sign-up and sign-in pacing (task 069): against a deployment (BASE_URL), no request to one of those paths goes
+ * out within 10 seconds plus a margin of the previous one to the same path, so the run stays under Better Auth's
+ * limit (3 per 10 seconds per IP). Locally the limit is off (AUTH_DISABLE_RATE_LIMIT) and nothing waits.
+ */
+export const pacer = createPacer({ enabled: Boolean(process.env.BASE_URL), gapMs: 11_500 });
+
+/** Posts a sign-up or sign-in through the pacing; returns the response. */
+export function authPost(request: APIRequestContext, path: typeof SIGN_UP_PATH | typeof SIGN_IN_PATH, data: Record<string, string>) {
+  return pacer.send(path, () => request.post(path, { data, headers: { origin } }));
+}
+
+/** Records the sign-ups and sign-ins a browser sends by itself (the sign-up and log-in pages) on the pacing's timeline. */
+function watchAuthRequests(context: BrowserContext) {
+  const record = (url: string) => {
+    const path = limitedPath(url);
+    if (path) pacer.record(path);
+  };
+  context.on("response", (response) => record(response.url()));
+  context.on("requestfailed", (request) => record(request.url()));
+}
+
 /** Signs up and signs in a new person (in their own browser context) with a unique email; returns the account. */
 export async function signUp(page: Page, name: string): Promise<Account> {
   const credentials = { email: `${name.toLowerCase().replace(/\W+/g, "-")}-${crypto.randomUUID()}@example.com`, password: "correct-horse-battery" };
-  expect((await page.request.post("/api/auth/sign-up/email", { data: { name, ...credentials }, headers: { origin } })).ok()).toBeTruthy();
-  expect((await page.request.post("/api/auth/sign-in/email", { data: credentials, headers: { origin } })).ok()).toBeTruthy();
+  expect((await authPost(page.request, SIGN_UP_PATH, { name, ...credentials })).ok()).toBeTruthy();
+  expect((await authPost(page.request, SIGN_IN_PATH, credentials)).ok()).toBeTruthy();
   return credentials;
 }
 
@@ -51,7 +80,14 @@ export async function userId(page: Page): Promise<string> {
 }
 
 /** Every scenario gets its own unique account, so runs never collide in a persistent database. */
-export const test = base.extend<{ account: Account; state: ScenarioState; people: People }>({
+export const test = base.extend<{ account: Account; state: ScenarioState; people: People; authTimeline: void }>({
+  authTimeline: [
+    async ({ context }, use) => {
+      watchAuthRequests(context);
+      await use();
+    },
+    { auto: true },
+  ],
   // eslint-disable-next-line no-empty-pattern
   account: async ({}, use) => {
     await use({ email: `user-${crypto.randomUUID()}@example.com`, password: "correct-horse-battery" });
@@ -66,6 +102,7 @@ export const test = base.extend<{ account: Account; state: ScenarioState; people
       newPerson: async () => {
         const context = await browser.newContext({ baseURL: origin });
         contexts.push(context);
+        watchAuthRequests(context);
         return context.newPage();
       },
     });

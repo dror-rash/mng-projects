@@ -166,22 +166,24 @@ jobs:
         run: |
           case "$SHELL_URL" in https://?*) ;; *) echo "::error::The shell URL is missing (got '$SHELL_URL')"; exit 1 ;; esac
 
-      # 3) Acceptance tests against the deployed preview: the @smoke set only. The full suite needs
-      #    AUTH_DISABLE_RATE_LIMIT, which a deployment never sets (rule 13). One worker: the set signs up and
-      #    logs in from one runner IP, against production rate limits. The report and traces stay on the
-      #    runner: the repository is public, and failed traces hold the throwaway accounts' passwords and
-      #    cookies.
+      # 3) Acceptance tests against the deployed preview: the @smoke set and the @poc flow (task 069). The full
+      #    suite needs AUTH_DISABLE_RATE_LIMIT, which a deployment never sets (rule 13). One worker: the set signs
+      #    up and logs in from one runner IP, against production rate limits, and the e2e helpers space sign-ups
+      #    and sign-ins on one timeline in the process (e2e/steps/fixtures.ts). Every step these scenarios use
+      #    goes through the app only (the runner has BASE_URL, no database or storage settings). The report and
+      #    traces stay on the runner: the repository is public, and failed traces hold the throwaway accounts'
+      #    passwords and cookies.
       - if: env.IS_PR == 'true'
         run: pnpm exec playwright install --with-deps chromium
         working-directory: e2e
         timeout-minutes: 10
-      - name: Run Playwright @smoke against preview
+      - name: Run Playwright @smoke and @poc against preview
         if: env.IS_PR == 'true'
         working-directory: e2e
         run: pnpm exec bddgen && pnpm exec playwright test --workers=1 --trace=off
         env:
           BASE_URL: ${{ steps.shell.outputs.url }}
-          E2E_TAGS: "@smoke"
+          E2E_TAGS: "@smoke or @poc"
       - name: Comment preview URL
         if: env.IS_PR == 'true'
         env:

@@ -1,30 +1,20 @@
 import { expect } from "@playwright/test";
 
-import { Given, Then, When } from "./fixtures";
-
-const origin = process.env.BASE_URL ?? `http://localhost:${process.env.SHELL_PORT ?? 3000}`;
+import { authPost, Given, origin, pacer, SIGN_IN_PATH, SIGN_UP_PATH, Then, When } from "./fixtures";
 
 // `request` is a separate cookie jar from `page`, so registering doesn't sign the browser in.
+// Sign-ups and sign-ins are paced against a deployment (task 069, fixtures.ts).
 Given("an existing account", async ({ request, account }) => {
-  const response = await request.post("/api/auth/sign-up/email", {
-    data: { name: "Test User", email: account.email, password: account.password },
-    headers: { origin },
-  });
+  const response = await authPost(request, SIGN_UP_PATH, { name: "Test User", email: account.email, password: account.password });
   expect(response.ok()).toBeTruthy();
 });
 
 Given("I am signed in with an existing account", async ({ request, page, account }) => {
-  const signUp = await request.post("/api/auth/sign-up/email", {
-    data: { name: "Test User", email: account.email, password: account.password },
-    headers: { origin },
-  });
+  const signUp = await authPost(request, SIGN_UP_PATH, { name: "Test User", email: account.email, password: account.password });
   expect(signUp.ok()).toBeTruthy();
 
   // page.request shares cookies with the browser context.
-  const signIn = await page.request.post("/api/auth/sign-in/email", {
-    data: { email: account.email, password: account.password },
-    headers: { origin },
-  });
+  const signIn = await authPost(page.request, SIGN_IN_PATH, { email: account.email, password: account.password });
   expect(signIn.ok()).toBeTruthy();
 });
 
@@ -40,18 +30,21 @@ When("I sign up with a new account", async ({ page, account }) => {
   await page.getByLabel("Name").fill("Test User");
   await page.getByLabel("Email").fill(account.email);
   await page.getByLabel("Password").fill(account.password);
+  await pacer.wait(SIGN_UP_PATH);
   await page.getByRole("button", { name: "Create account" }).click();
 });
 
 When("I log in with my email and password", async ({ page, account }) => {
   await page.getByLabel("Email").fill(account.email);
   await page.getByLabel("Password").fill(account.password);
+  await pacer.wait(SIGN_IN_PATH);
   await page.getByRole("button", { name: "Log in" }).click();
 });
 
 When("I log in with the wrong password", async ({ page, account }) => {
   await page.getByLabel("Email").fill(account.email);
   await page.getByLabel("Password").fill("not-the-password-123");
+  await pacer.wait(SIGN_IN_PATH);
   await page.getByRole("button", { name: "Log in" }).click();
 });
 

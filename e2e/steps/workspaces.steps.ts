@@ -1,6 +1,6 @@
 import { expect, type Page, type Request } from "@playwright/test";
 
-import { Given, origin, signUp, Then, userId, When } from "./fixtures";
+import { authPost, Given, origin, pacer, SIGN_IN_PATH, SIGN_UP_PATH, signUp, Then, userId, When } from "./fixtures";
 
 export async function pressAndWait(page: Page, name: string) {
   await Promise.all([
@@ -92,9 +92,10 @@ Then("the login page's address doesn't contain the invite token", async ({ state
 When("the teammate logs in", async ({ request, state }) => {
   const teammate = state.teammate!;
   const credentials = { email: `teammate-${crypto.randomUUID()}@example.com`, password: "correct-horse-battery" };
-  expect((await request.post("/api/auth/sign-up/email", { data: { name: "Teammate", ...credentials }, headers: { origin } })).ok()).toBeTruthy();
+  expect((await authPost(request, SIGN_UP_PATH, { name: "Teammate", ...credentials })).ok()).toBeTruthy();
   await teammate.getByLabel("Email").fill(credentials.email);
   await teammate.getByLabel("Password").fill(credentials.password);
+  await pacer.wait(SIGN_IN_PATH);
   await teammate.getByRole("button", { name: "Log in" }).click();
   // Wait for "load" like `goto` does: a form submitted before hydration fails on the dev server.
   await teammate.waitForURL((url) => url.pathname === "/dashboard/invite", { waitUntil: "load" });
