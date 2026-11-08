@@ -5,15 +5,48 @@ on:
   push:
     branches: [main]
 
+# Jobs that need more permissions declare them on the job (task 082).
+permissions:
+  contents: read
+
 concurrency:
-  group: ci-${{ github.ref }}
-  cancel-in-progress: true
+  # A PR's runs share a group and a newer push cancels the older run. Each push to main gets its own group (its sha):
+  # GitHub cancels a pending run when a newer one joins the group, and every push's commits must be scanned.
+  group: ci-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
+  # Vulnerable runtime dependencies and committed secrets (task 082). Accepted advisories are in package.json's
+  # pnpm.auditConfig.ignoreGhsas, each with a register line. A registry outage fails the audit; rerun it by hand.
+  security:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          # The whole history: a PR's base..head (or a push's before..after) must be in the clone.
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version-file: .nvmrc
+      # Reads the lockfile; no install needed.
+      - run: pnpm audit --prod --audit-level=high
+      - run: bash infra/scripts/get-gitleaks.sh "$RUNNER_TEMP"
+      - run: GITLEAKS="$RUNNER_TEMP/gitleaks" bash infra/scripts/test-secret-scan.sh
+      - name: Scan the new commits for secrets
+        env:
+          SCAN_BASE: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.sha || github.event.before }}
+          SCAN_HEAD: ${{ github.event_name == 'pull_request' && github.event.pull_request.head.sha || github.sha }}
+        run: GITLEAKS="$RUNNER_TEMP/gitleaks" bash infra/scripts/scan-secrets.sh "$SCAN_BASE" "$SCAN_HEAD"
+
   verify:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
       - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
@@ -64,6 +97,8 @@ jobs:
       STORAGE_LOCAL_URL: http://localhost:4443
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
       - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
