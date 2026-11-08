@@ -1,6 +1,6 @@
 # Task 082: CI security checks (dependency audit, secret scan, Dependabot, workflow permissions)
 
-- **Status:** todo (safe before the POC)
+- **Status:** in-progress
 - **Milestone:** cross-cutting (security)
 - **Zone / package:** `.github/workflows/ci.yml`, a new `.github/dependabot.yml`, `infra/scripts/test-workflows.sh`, root `package.json` (`pnpm.auditConfig` only), `docs/SECURITY.md` (the CI checks table). Commit type `ci:`.
 - **Feature file:** none (no app behavior; the checks are the tests)
@@ -50,6 +50,7 @@ Red: extend `test-workflows.sh` with the `permissions:` check; run it. Then add 
 
 ## Progress log
 - 2026-11-08 – Drafted from the first full security review (SEC-11, SEC-15); owner: "start fixing the P1 gaps".
+- 2026-11-08 – Started in lane 2 (based on `docs/security-p1-tasks`, PR #59). Open questions take their defaults.
 
 ## Parking lot
 - CodeQL default setup (an owner setting) or a workflow.
