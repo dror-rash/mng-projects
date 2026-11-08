@@ -209,11 +209,12 @@ database, e.g. `scripts/lane.sh exec <n> -- pnpm test:infra`).
 
 CI runs the tests of all these scripts against the migrated database, and `test-preview-migrate.sh`.
 `bash infra/scripts/test-workflows.sh` checks the deploy's demo-seed step stays `main`-only, non-blocking and masked,
-and the build hygiene of task 078: the image builds use the action's Git context (tracked files of the commit
-only) and cache final layers only (`mode=min`); every `uses:` is a commit SHA with its version in a comment; both
+and the build hygiene of task 078: the image builds use `BUILD_CONTEXT`, the Git URL of `github.sha` (tracked
+files of the checked-out commit only), no other image build runs, and the cache keeps final layers only (`mode=min`); every `uses:` is a commit SHA with its version in a comment; both
 `node:22-alpine` stages are pinned by digest (refresh: `docker buildx imagetools inspect node:22-alpine`); the
 Dockerfile runs the lockfile's `turbo`; and `infra/scripts/get-cloud-sql-proxy.sh` holds the proxy's version and
-sha256 together (upgrade both from the release notes) and fails on a mismatch.
+sha256 together (upgrade both from the release notes) and fails on a mismatch. Probes run each check on a copy with
+one change and expect it to fail.
 
 ## Files (GCS)
 - `<PROJECT_ID>-files` for `main` (no lifecycle rule: attachments are soft-deleted in the database and stay
