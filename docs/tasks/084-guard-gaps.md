@@ -1,6 +1,6 @@
 # Task 084: Guard hook gaps and commit checks in lane worktrees
 
-- **Status:** todo (safe before the POC)
+- **Status:** in-progress
 - **Milestone:** cross-cutting (security, agent team)
 - **Zone / package:** `.claude/hooks/guard.sh`, `scripts/test-hooks.sh`, `.github/workflows/ci.yml` (one step), `docs/AGENT-TEAM.md` (guard section), `docs/SECURITY.md` (CI checks table). Commit type `fix(tooling)` / `test(tooling)`.
 - **Feature file:** none (tooling; `scripts/test-hooks.sh` is the test)
@@ -50,6 +50,7 @@ Red: add the failing cases to `test-hooks.sh`. Then factor a `commit_repo()` res
 
 ## Progress log
 - 2026-11-08 – Drafted from the first full security review (SEC-12) and task 061's parking lot; owner: "start fixing the P1 gaps".
+- 2026-11-08 – Started in lane 3 (based on `docs/security-p1-tasks`, PR #59). Open questions take their defaults.
 
 ## Parking lot
 - A real git `pre-commit` hook via `core.hooksPath` (question 2).
