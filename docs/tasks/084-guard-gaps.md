@@ -1,6 +1,6 @@
 # Task 084: Guard hook gaps and commit checks in lane worktrees
 
-- **Status:** in-progress
+- **Status:** in-review
 - **Milestone:** cross-cutting (security, agent team)
 - **Zone / package:** `.claude/hooks/guard.sh`, `scripts/test-hooks.sh`, `.github/workflows/ci.yml` (one step), `docs/AGENT-TEAM.md` (guard section), `docs/SECURITY.md` (CI checks table). Commit type `fix(tooling)` / `test(tooling)`.
 - **Feature file:** none (tooling; `scripts/test-hooks.sh` is the test)
