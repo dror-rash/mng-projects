@@ -30,7 +30,7 @@
     "@next/env": "^15.5.0",
     "@repo/config": "workspace:*",
     "@storybook/react-vite": "^9.1.21",
-    "@tailwindcss/postcss": "^4.1.0",
+    "@tailwindcss/postcss": "^4.3.4",
     "@testing-library/jest-dom": "^6.10.0",
     "@testing-library/react": "^16.3.3",
     "@testing-library/user-event": "^14.6.8",
@@ -41,7 +41,7 @@
     "eslint": "^9.0.0",
     "jsdom": "^26.1.0",
     "storybook": "^9.1.21",
-    "tailwindcss": "^4.1.0",
+    "tailwindcss": "^4.3.4",
     "tsx": "^4.23.15",
     "typescript": "^5.9.0",
     "vitest": "^3.2.7"
