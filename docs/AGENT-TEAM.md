@@ -52,12 +52,20 @@ The zones' `dev`/`start` scripts and the Playwright config read `SHELL_PORT`, `E
 - edits to applied migrations (any file in `packages/db/migrations/` already in `origin/main`, except `meta/_journal.json`);
 - edits to `.env*` (except `.env.example`), `*.tfvars`, `backend.hcl` and Terraform state;
 - a `drizzle-orm` import under `apps/`;
-- `terraform apply/destroy`, `gcloud run deploy`, force pushes, and `git commit --no-verify`;
+- `terraform apply/destroy`;
+- Cloud Run changes by hand on any release track (`gcloud [alpha|beta] run deploy`, `run services replace|update|update-traffic|delete`), and reading a Secret Manager value (`gcloud secrets versions access`);
+- force pushes in every spelling (`-f` alone or combined like `-uf`, `--force`, `--force-with-lease`, `--force-if-includes`, a `+refspec`);
+- `git add -f` / `--force` (ignored files stay out; ask the owner);
+- `git commit --no-verify` / `-n`;
 - a `feat:` / `fix:` / `refactor:` commit that changes a `.feature` file;
 - a commit that changes an applied migration;
 - any commit when `pnpm lint` or `pnpm typecheck` fails.
 
-Tests: `bash scripts/test-hooks.sh` and `bash scripts/test-lane.sh` (the second needs the local Postgres).
+Commits behind git global options (`git -c k=v commit`, `git --no-pager commit`, `git -C <dir> commit`) get the same checks. They run in the repository the commit is made in, resolved from the command in this order: the session cwd, a leading `cd <dir> &&` (or `;`), `scripts/lane.sh exec <n> --` (the lane's worktree), then `git -C <dir>`. So a commit in a lane worktree is checked there, not in the main checkout (task 084).
+
+The guard is a seatbelt, not a boundary: it pattern-matches the command, so it catches honest mistakes and obvious shortcuts, not a determined bypass (`bash -c`, `eval`, variables, a script file). The real limits are the owner's credentials and settings (SEC-13) and branch protection (SEC-02).
+
+Tests: `bash scripts/test-hooks.sh` (also in CI's `verify` job) and `bash scripts/test-lane.sh` (the second needs the local Postgres).
 
 ## Working with the owner
 Only the owner answers product questions. Agents put them in the task's "Open questions", and the orchestrator asks the owner. The owner also does the one-time GCP steps (`infra/README.md`) and anything the guard refuses.

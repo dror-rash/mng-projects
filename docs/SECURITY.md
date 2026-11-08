@@ -52,7 +52,7 @@ Each check is added by the gap that needs it; until then it's listed here as pla
 |---|---|---|---|
 | RLS coverage DB tests (`hardening.db.test.ts`), `rls-pins.mjs`, runtime role check | Tables without RLS, unpinned policies, views or definer functions | — | in place |
 | `infra/scripts/test-workflows.sh`, `test-deploy-service.sh` | Deploy steps that leak or mis-set env | — | in place; extend for `.dockerignore`, SHA pins, no `AUTH_DISABLE_RATE_LIMIT`/`ALLOW_PREVIEW_ORIGINS=true` on main | 
-| `bash scripts/test-hooks.sh` in CI | Guard regressions | SEC-12 | planned |
+| `bash scripts/test-hooks.sh` in CI | Guard regressions (refusals, look-alikes, commits in a second worktree) | SEC-12 | in place (task 084, `verify` job) |
 | `pnpm audit --prod --audit-level=high` with a reviewed allowlist | Vulnerable runtime dependencies | SEC-11 | planned |
 | gitleaks on the PR's commits | Committed secrets | SEC-11 | planned |
 | `actionlint` + `zizmor` on `.github/workflows` | Unpinned actions, missing `permissions:`, injection, cache poisoning | SEC-05, SEC-15 | planned |
