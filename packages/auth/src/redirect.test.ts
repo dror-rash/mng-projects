@@ -87,7 +87,7 @@ describe("safeNext", () => {
   });
 
   it.each(["/%09/evil.example", "/%5cevil.example", "/%2f%2fevil.example", "/%2e%2e//evil.example"])(
-    "keeps the percent-encoded %j on the site",
+    "stays on the site for the percent-encoded %j",
     (value) => {
       expect(originOf(safeNext(value))).toBe(BASE);
     },

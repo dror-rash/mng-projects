@@ -23,6 +23,7 @@ export function resolvePublicOrigin({ configured, forwardedHost, forwardedProto,
   }
   return fallbackOrigin;
 }
+
 const SAFE_NEXT_ORIGIN = "https://safe-next.invalid";
 
 const hasUnsafeChar = (value: string) =>
