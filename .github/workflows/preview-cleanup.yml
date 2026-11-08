@@ -10,7 +10,8 @@ permissions:
 
 jobs:
   cleanup:
-    if: github.event.pull_request.head.repo.full_name == github.repository
+    # Dependabot's runs get no OIDC token (task 082); its PRs have no preview to clean up (deploy.yml skips them).
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
     env:
       PROJECT: ${{ vars.GCP_PROJECT_ID }}

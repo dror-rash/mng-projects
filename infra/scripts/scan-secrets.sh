@@ -4,7 +4,8 @@
 # the clone), the head's whole history is scanned. Findings are redacted: the log names the rule, file, line and commit,
 # never the value.
 # Refuses a shallow clone (it can't show the range) and an in-repo .gitleaks.toml or .gitleaksignore (either could
-# switch rules off without touching this script). Inline `gitleaks:allow` comments are ignored.
+# switch rules off without touching this script). Inline `gitleaks:allow` comments are ignored. A merge commit is
+# scanned as its diff against its first parent, so a secret added while resolving a merge is seen.
 # Usage: GITLEAKS=/path/to/gitleaks infra/scripts/scan-secrets.sh <base> <head>   (run from the repository root)
 # Tested by infra/scripts/test-secret-scan.sh.
 set -euo pipefail
@@ -26,4 +27,6 @@ else
   range="$base..$head"
 fi
 echo "Scanning $range ($(git rev-list --count "$range") commits)."
-"$GITLEAKS" git --no-banner --redact --verbose --ignore-gitleaks-allow --log-opts="$range" .
+if ! "$GITLEAKS" git --no-banner --redact --verbose --ignore-gitleaks-allow --log-opts="--diff-merges=first-parent $range" .; then
+  fail "gitleaks found a secret in $range (or couldn't scan; see above). If it's a real secret, rotate the secret; deleting the commit isn't enough (forks, clones and PR refs keep it)."
+fi
