@@ -1,6 +1,6 @@
 # Task 093: postcss advisories in `next` (pnpm override)
 
-- **Status:** todo
+- **Status:** in-progress
 - **Milestone:** cross-cutting (security)
 - **Zone / package:** root `package.json` (`pnpm.overrides`), `pnpm-lock.yaml`. No app code, no schema change, no migration. Commit type `fix(deps)` (or `build(deps)`).
 - **Feature file:** none (no visible behavior; the existing unit, Storybook and e2e suites, and the preview's `@smoke` run, are the check)
@@ -50,6 +50,7 @@ Red: run `pnpm audit --prod --audit-level=high` and paste the two postcss lines.
 
 ## Progress log
 - 2026-11-08 – Drafted from task 082's audit run; owner decision: fix postcss with a `pnpm.overrides` entry in a new task, tinypool accepted in task 082.
+- 2026-11-08 – Started in lane 1.
 
 ## Parking lot
 - Drop the override once a `next` release depends on `postcss` ≥ 8.5.18 itself.
