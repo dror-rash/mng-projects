@@ -1,6 +1,6 @@
 # Task 079: Post-login redirects stay on the site
 
-- **Status:** in-review
+- **Status:** done (PR #55)
 - **Milestone:** cross-cutting (security)
 - **Zone / package:** `packages/auth` (`src/redirect.ts`, `src/redirect.test.ts`); callers `apps/shell/features/auth/login-form.tsx` and `signup-form.tsx` keep their call as is. No migration. Commit type `fix(auth)`.
 - **Feature file:** `docs/features/authentication.feature` (one new `@wip @task:079` scenario)
@@ -53,6 +53,7 @@ Touches authentication (`packages/auth`), a security-sensitive path per `docs/SE
 - 2026-11-08 – Implementer, red: unit cases for control characters, backslashes, dot segments and decoded percent forms, a same-origin path with query and hash, and two seeded property tests (5000 generated inputs each: the result resolves to the base origin; it has no control characters or backslashes). `pnpm --filter @repo/auth test`: 18 of 38 fail (the 16 new rejection cases and both property tests); the existing cases pass.
 - 2026-11-08 – Implementer, green: `safeNext` rejects control characters and backslashes, resolves the input against a fixed dummy origin, accepts it only on that origin, and returns the normalized path + query + hash (checked once more to stay a same-origin path). Callers unchanged (login and sign-up forms; middleware and the invite flow use `loginUrl` with same-origin paths). `@repo/auth` 41/41; `pnpm test`, lint, typecheck green; e2e `@task:079` 1/1, `@zone:shell` 18/18 (`--workers=2`).
 - 2026-11-08 – Review: no blockers or should-fix; Node (300k) and Chromium (200k) fuzzing found no off-site result. Nits done by the orchestrator: a test name that says what it checks, a blank line.
+- 2026-11-08 – Merged (PR #55): CI `verify`, `e2e` and the preview `deploy` passed.
 
 ## Parking lot
 - The same scenario for the sign-up page (`/signup?next=…`), if the owner wants both covered end to end.

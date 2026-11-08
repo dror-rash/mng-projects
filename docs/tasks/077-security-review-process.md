@@ -1,6 +1,6 @@
 # Task 077: Security review process and first full review
 
-- **Status:** in-review
+- **Status:** done (PR #53)
 - **Milestone:** cross-cutting
 - **Zone / package:** `docs/`, `.claude/`
 - **Feature file:** none (process and docs only)
@@ -25,6 +25,7 @@ The owner asked (2026-11-08) for a full security review, a prioritized list of t
 
 ## Progress log
 - 2026-11-08 – Lane 1. Five reviewers (AUTH, ACC, WEB, INF, SUP) on `main` at 76d6e83, read only. 1 High (SEC-01, PLAUSIBLE; details held back until fixed), 12 Medium, the rest Low and Info. No access leak between workspaces found through the app.
+- 2026-11-08 – Merged (PR #53): CI `verify`, `e2e` and the preview `deploy` passed.
 
 ## Parking lot
 - Turn the P0 gaps (SEC-01 to SEC-05) into tasks.

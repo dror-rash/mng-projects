@@ -1,6 +1,6 @@
 # Task 080: `reset:local` refuses any Cloud SQL database
 
-- **Status:** in-review
+- **Status:** done (PR #54)
 - **Milestone:** cross-cutting (security)
 - **Zone / package:** `apps/dashboard` (`features/demo/local-reset.ts`, `features/demo/local-reset.test.ts`, `scripts/reset-local.ts`, a new `scripts/reset-local.db.test.ts`). No migration. Commit type `fix(dashboard)`.
 - **Feature file:** none (a local dev command, no app behavior; unit and DB tests)
@@ -53,6 +53,7 @@ Touches a maintenance script that deletes every workspace and test account past 
 - 2026-11-08 – Red: `isLocalServer` unit tests (3 of 4 fail: the stub allows every server; the no-markers case passes) and `scripts/reset-local.db.test.ts` (fails: `readServerFacts is not implemented yet.`). Type-only stubs keep lint and typecheck green.
 - 2026-11-08 – Green: `isLocalServer` refuses when any marker is present; `scripts/server-facts.ts` reads them in one read-only query (roles `cloudsqlsuperuser` / `cloudsqladmin` in `pg_roles`, any `cloudsql.*` setting in `pg_settings`). `reset-local.ts` runs it right after the env guard, before the account listing; a failed facts query refuses too and prints only the underlying reason (`failureMessage`, unit tested; red first: 3 failing). Comments of `isLocalDatabase` and the script header describe the checks as coded. Dry run on `app_lane4`: unchanged output; with an unreachable localhost port: `Refusing to reset: ECONNREFUSED`, exit 1. Unit 15 + 3 new in `local-reset.test.ts`, dashboard 439, `test:db` 19, lint and typecheck pass.
 - 2026-11-08 – Review: no blockers or should-fix. Nits done by the orchestrator: a clearer message when the server check itself fails, neutral comment wording, CLAUDE.md's `reset:local` line. Full e2e left to CI (the change is a local-only script, no app code).
+- 2026-11-08 – Merged (PR #54): CI `verify`, `e2e` and the preview `deploy` passed.
 
 ## Parking lot
 - Renaming the production database so its name never matches the local one.
