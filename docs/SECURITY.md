@@ -52,7 +52,7 @@ Each check is added by the gap that needs it; until then it's listed here as pla
 |---|---|---|---|
 | RLS coverage DB tests (`hardening.db.test.ts`), `rls-pins.mjs`, runtime role check | Tables without RLS, unpinned policies, views or definer functions | — | in place |
 | `infra/scripts/test-workflows.sh`, `test-deploy-service.sh` | Deploy steps that leak or mis-set env; a workflow without top-level `permissions:` (task 082); Dependabot PRs reaching the deploy | — | in place; extend for `.dockerignore`, SHA pins, no `AUTH_DISABLE_RATE_LIMIT`/`ALLOW_PREVIEW_ORIGINS=true` on main | 
-| `bash scripts/test-hooks.sh` in CI | Guard regressions | SEC-12 | planned |
+| `bash scripts/test-hooks.sh` in CI | Guard regressions (refusals, look-alikes, commits in a second worktree) | SEC-12 | in place (task 084, `verify` job) |
 | `pnpm audit --prod --audit-level=high` with a reviewed allowlist (`pnpm.auditConfig.ignoreGhsas` in the root `package.json`, each entry with a register line), in CI's `security` job | Vulnerable runtime dependencies | SEC-11 | in place (task 082) |
 | gitleaks (pinned by version and sha256, `infra/scripts/get-gitleaks.sh`) on the PR's commits (base..head) and on pushes to `main`, in CI's `security` job; `test-secret-scan.sh` plants a fake secret each run | Committed secrets | SEC-11 | in place (task 082) |
 | `actionlint` + `zizmor` on `.github/workflows` | Unpinned actions, missing `permissions:`, injection, cache poisoning | SEC-05, SEC-15 | planned (SHA pins and top-level `permissions:` already checked by `test-workflows.sh`, tasks 078 and 082) |

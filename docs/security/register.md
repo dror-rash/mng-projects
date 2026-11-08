@@ -9,7 +9,7 @@ The one list of known security gaps and their status. The process that feeds it 
 | Priority | Open | Planned | Fixed | Accepted |
 |---|---|---|---|---|
 | P0 – fix now | 1 | 0 | 4 | 0 |
-| P1 – before real customer data on `main` | 2 | 10 | 2 | 0 |
+| P1 – before real customer data on `main` | 2 | 9 | 3 | 0 |
 | P2 – hardening | 15 | 0 | 0 | 1 |
 | P3 – info / decide | 8 | 0 | 0 | 0 |
 
@@ -42,7 +42,7 @@ No Critical findings. One High (SEC-01). Nothing in the review showed one worksp
 | SEC-09 | Med | No email verification and no password reset: anyone can register any address, and the real owner can't recover it; sign-up also reveals which emails have accounts | Auth | M | open (**owner decision:** email provider, or accept for the POC) | AUTH-2, AUTH-4 |
 | SEC-10 | Med | Sign-in brute force is limited only by the in-memory, per-instance rate limiter (up to 5× the budget); no account lockout | Auth | M | planned (tasks 089, 090; the shared-bucket worry is partly answered: task 068 saw a client IP on the first preview) | AUTH-3 |
 | SEC-11 | Med | No Dependabot alerts or updates, no `pnpm audit`, gitleaks or CodeQL in CI | Supply chain | S | fixed in CI (PR #62, task 082); **owner:** turn on Dependabot alerts and security updates, require `security` in the SEC-02 ruleset | SUP-5 |
-| SEC-12 | Med | Agent guard gaps: `gcloud secrets versions access`, `gcloud beta run deploy`, `git push origin +main`, `git add -f .env` and `git -c … commit` all pass; commits in lane worktrees skip the commit checks | Tooling | M | planned (task 084, which folds in task 061's parked lane item) | SUP-2, SUP-3 |
+| SEC-12 | Med | Agent guard gaps: `gcloud secrets versions access`, `gcloud beta run deploy`, `git push origin +main`, `git add -f .env` and `git -c … commit` all pass; commits in lane worktrees skip the commit checks | Tooling | M | fixed (PR #61, task 084; owner limits stay with SEC-02 and SEC-13) | SUP-2, SUP-3 |
 | SEC-13 | Med | The auto-mode environment in `~/.claude/settings.json` describes another, private repo; agent sessions hold the owner's `gcloud` and `gh` (`gist`, `repo`) credentials | Tooling | S | open (**owner:** project-level auto-mode context and deny rules; a less-privileged gcloud config for agents) | SUP-2 |
 | SEC-14 | Low | `main` can scale to 5 instances × 3 zones × 4 connections against a 12-connection database; unauthenticated traffic can cause "too many connections" outages | Infra | S | planned (task 091) | INF-8 |
 | SEC-15 | Low | Fork PRs from anyone with one merged PR run edited workflows without approval; `ci.yml` has no `permissions:`; WIF doesn't check which workflow asks for a token | CI/CD | S | `ci.yml` part fixed (PR #62, task 082); planned (task 083, WIF); **owner:** fork approval for all outside contributors | INF-11, INF-12 |
@@ -94,3 +94,4 @@ No Critical findings. One High (SEC-01). Nothing in the review showed one worksp
 - 2026-11-08 – SEC-42 fixed (PR #60, task 093): `next`'s postcss overridden to 8.5.30.
 - 2026-11-08 – Task 082's audit: SEC-43 (`tinypool` via `better-auth`'s `vitest` peer, test runner only) accepted by the owner until a vitest upgrade; its two advisories and SEC-16's go in `pnpm.auditConfig.ignoreGhsas`. The `postcss` advisories in `next` are task 093.
 - 2026-11-08 – SEC-11 fixed in CI (PR #62, task 082: audit, gitleaks, Dependabot config); the owner's alert settings stay open. SEC-15's `ci.yml` part fixed in the same PR.
+- 2026-11-08 – SEC-12 fixed (PR #61, task 084): the guard refuses the listed commands and checks lane commits in their worktree, failing closed.
