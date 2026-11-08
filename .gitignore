@@ -20,3 +20,8 @@ e2e/screenshots
 next-env.d.ts
 *.tsbuildinfo
 .claude/settings.local.json
+
+# Deploy job leftovers (task 078): credentials file, proxy binary, proxy logs
+gha-creds-*.json
+cloud-sql-proxy
+*.log
