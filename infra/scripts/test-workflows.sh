@@ -1,8 +1,12 @@
 #!/usr/bin/env bash
-# Invariants of .github/workflows/deploy.yml's "Seed demo data" step (task 076) that a review could miss:
-# main pushes only, never blocks the deploy, after the shell is deployed, the secret tested in the shell, the
-# email and password masked before use, DATABASE_URL only in the seed's environment, one connection.
-# Text checks on the step's block (no YAML parser needed). Run: bash infra/scripts/test-workflows.sh
+# Invariants of the workflows and the image build that a review could miss.
+# 1) deploy.yml's "Seed demo data" step (task 076): main pushes only, never blocks the deploy, after the shell is
+#    deployed, the secret tested in the shell, the email and password masked before use, DATABASE_URL only in the
+#    seed's environment, one connection.
+# 2) Build hygiene (task 078): the image build gets tracked files only and no intermediate layers are cached;
+#    every action is pinned to a commit SHA, the Node image to a digest, turbo to the lockfile, and the
+#    cloud-sql-proxy download is checked against its sha256.
+# Text checks on the repository files (no YAML parser needed). Run: bash infra/scripts/test-workflows.sh
 set -u
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 WF="$ROOT/.github/workflows/deploy.yml"
@@ -50,6 +54,51 @@ check "fails with the proxy's log when the proxy doesn't start" \
 check "defines oneline before the proxy check uses it" before '^ +oneline\(\) ' 'proxy didn.t start'
 check "a skip is a notice" has '::notice title=Demo data::'
 check "a refusal or failure is a warning" has '::warning title=Demo data::'
+
+# --- Build hygiene (task 078) ---
+WORKFLOWS=("$ROOT"/.github/workflows/*.yml)
+DOCKERFILE="$ROOT/Dockerfile"
+ignores() { grep -qxF -- "$2" "$ROOT/$1"; }   # file, exact line
+for pattern in 'gha-creds-*.json' 'cloud-sql-proxy' '*.log'; do
+  check ".dockerignore ignores $pattern" ignores .dockerignore "$pattern"
+  check ".gitignore ignores $pattern" ignores .gitignore "$pattern"
+done
+# Every `uses:` names a full commit SHA (a trailing comment with the version is allowed).
+all_uses_pinned() {
+  ! grep -hE '^[[:space:]]*(- )?uses:' "${WORKFLOWS[@]}" |
+    grep -vqE 'uses: [^@[:space:]]+@[0-9a-f]{40}([[:space:]]+#.*)?$'
+}
+none_in() { ! grep -qE -- "$1" "${@:2}"; }   # pattern, files...
+cache_to_min() { ! grep -hE '^[[:space:]]+cache-to:' "${WORKFLOWS[@]}" | grep -vq 'mode=min'; }
+node_by_digest() {
+  grep -qE '^FROM node:' "$DOCKERFILE" && ! grep -E '^FROM node:' "$DOCKERFILE" | grep -vqE '@sha256:[0-9a-f]{64}( |$)'
+}
+check "every uses: in the workflows is pinned to a 40-hex commit SHA" all_uses_pinned
+check "no pnpm dlx in the Dockerfile or the workflows" none_in 'pnpm dlx' "$DOCKERFILE" "${WORKFLOWS[@]}"
+# Build steps use the action's Git context (the commit's tracked files), never the workspace.
+check "no build step uses the workspace as its context (context: .)" \
+  none_in '^[[:space:]]+context: \./?[[:space:]]*$' "${WORKFLOWS[@]}"
+check "no build cache exports intermediate layers (mode=max)" none_in 'mode=max' "${WORKFLOWS[@]}"
+check "every cache-to uses mode=min" cache_to_min
+check "every node: image in the Dockerfile is pinned by digest" node_by_digest
+# Each file that downloads cloud-sql-proxy checks its sha256 after the download and before chmod +x.
+proxy_verified() { # file
+  local dl sum mode
+  dl="$(grep -nE 'curl .*cloud-sql-proxy|cloud-sql-connectors/cloud-sql-proxy/' "$1" | head -1 | cut -d: -f1)"
+  sum="$(grep -nE 'sha256sum (-c|--check)' "$1" | head -1 | cut -d: -f1)"
+  mode="$(grep -nE 'chmod \+x .*cloud-sql-proxy|chmod \+x "?\$' "$1" | head -1 | cut -d: -f1)"
+  [ -n "$dl" ] && [ -n "$sum" ] && [ -n "$mode" ] && [ "$dl" -lt "$sum" ] && [ "$sum" -lt "$mode" ]
+}
+downloads=0
+for f in "${WORKFLOWS[@]}" "$ROOT"/infra/scripts/*.sh; do
+  [ "$(basename "$f")" = test-workflows.sh ] && continue
+  grep -qE 'cloud-sql-connectors/cloud-sql-proxy/' "$f" || continue
+  downloads=$((downloads+1))
+  check "${f#"$ROOT"/} checks the cloud-sql-proxy sha256 before chmod +x" proxy_verified "$f"
+done
+check "the cloud-sql-proxy download is found (somewhere to check)" test "$downloads" -gt 0
+check "the expected cloud-sql-proxy sha256 is a full 64-hex value" \
+  grep -rqE '^CLOUD_SQL_PROXY_SHA256="[0-9a-f]{64}"' "$ROOT/infra/scripts"
 
 echo "# $pass passed, $fail failed"
 [ "$fail" -eq 0 ]
