@@ -25,9 +25,9 @@ Task 082's new `pnpm audit --prod --audit-level=high` reports two High advisorie
 - Changes to the `security` job or its `ignoreGhsas` list (task 082).
 
 ## Acceptance criteria
-- [ ] `pnpm audit --prod --audit-level=high` no longer lists GHSA-6g55-p6wh-862q or GHSA-r28c-9q8g-f849 (before/after output in the PR).
-- [ ] `pnpm why postcss` shows no `postcss` below 8.5.18; the override is in root `package.json` and scoped to `next` unless the PR explains why not.
-- [ ] `pnpm lint && pnpm typecheck`, `pnpm build`, `pnpm build-storybook`, `pnpm test` and the full `pnpm test:e2e` pass.
+- [x] `pnpm audit --prod --audit-level=high` no longer lists GHSA-6g55-p6wh-862q or GHSA-r28c-9q8g-f849 (before/after output in the PR).
+- [x] `pnpm why postcss` shows no `postcss` below 8.5.18; the override is in root `package.json` and scoped to `next` unless the PR explains why not.
+- [x] `pnpm lint && pnpm typecheck`, `pnpm build`, `pnpm build-storybook`, `pnpm test` and the full `pnpm test:e2e` pass.
 - [ ] The PR's preview deploy succeeds and its `@smoke` / `@poc` run passes.
 
 No new scenarios: no behavior changes. Each criterion maps to a command or CI check above.
@@ -51,6 +51,9 @@ Red: run `pnpm audit --prod --audit-level=high` and paste the two postcss lines.
 ## Progress log
 - 2026-11-08 – Drafted from task 082's audit run; owner decision: fix postcss with a `pnpm.overrides` entry in a new task, tinypool accepted in task 082.
 - 2026-11-08 – Started in lane 1.
+- 2026-11-08 – Red (before): `pnpm audit --prod --audit-level=high` lists `postcss` twice, both at path `apps__dashboard>next>postcss`: high GHSA-6g55-p6wh-862q (vulnerable <=8.5.11, patched >=8.5.12) and high GHSA-r28c-9q8g-f849 (vulnerable <=8.5.17, patched >=8.5.18); 12 vulnerabilities (7 moderate, 3 high, 2 critical). `pnpm why postcss -r`: `next 15.5.28 └── postcss 8.4.31` (in every zone and under `better-auth`'s `next` peer); everything else (Tailwind, Vite) on `postcss 8.5.30`.
+- 2026-11-08 – Added `"pnpm": { "overrides": { "next>postcss": "^8.5.18" } }` to root `package.json`; the scoped override took, no global one needed. `pnpm install`: the lockfile drops `postcss@8.4.31` and points `next`'s `postcss` at the existing `8.5.30` (no new package downloaded, nothing else moved). After: the audit lists no `postcss` (8 vulnerabilities: 5 moderate, 1 high `drizzle-orm` (task 081), 2 critical `tinypool` (task 082)); `pnpm why postcss -r` shows only `postcss 8.5.30`, including `next 15.5.28 └── postcss 8.5.30`.
+- 2026-11-08 – Checks in lane 1, all green: `pnpm lint && pnpm typecheck`; `pnpm test` (568 unit/component tests: dashboard 439, auth 41, ui 51, db 22, e2e 10, storage 5); `pnpm build --force` (shell, example-zone, dashboard compile; CSS through Tailwind/postcss unchanged); `pnpm build-storybook`; full `CI=1 pnpm test:e2e --workers=2` 323 passed, none flaky. postcss 8.4 → 8.5 has no breaking API change that affects us (8.5 adds `Input#document`; `next` only uses postcss to process CSS at build/dev time). Left: the PR's preview deploy and `@smoke` / `@poc` run.
 
 ## Parking lot
 - Drop the override once a `next` release depends on `postcss` ≥ 8.5.18 itself.
