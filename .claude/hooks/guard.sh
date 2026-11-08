@@ -68,8 +68,8 @@ WORD="(\"[^\"]*\"|'[^']*'|\\$\\([^)]*\\)|[^[:space:];&|]+)"
 # git <global options> <sub>: -C <dir>, -c <k=v>, --git-dir/--work-tree <path>, and flags (--no-pager, --git-dir=x).
 GITOPT="(-[Cc][[:space:]]+$WORD|--(git-dir|work-tree|namespace|exec-path|config-env)[[:space:]]+$WORD|-[^[:space:];&|]+)"
 git_sub() { echo "(^|[^[:alnum:]_-])git([[:space:]]+$GITOPT)*[[:space:]]+$1"; }
-# The arguments of every `git … <sub>` in the command, one line each.
-git_args() { grep -Eo "$(git_sub "$1")([[:space:]][^;&|]*)?" <<<"$cmd" | sed -E "s#^$(git_sub "$1")##"; }
+# The arguments of every `git … <sub>` in the command (or in $2), one line each.
+git_args() { grep -Eo "$(git_sub "$1")([[:space:]][^;&|]*)?" <<<"${2-$cmd}" | sed -E "s#^$(git_sub "$1")##"; }
 # gcloud [alpha|beta] [global flags, with or without a value] <group>
 GCLOUD="(^|[^[:alnum:]_-])gcloud([[:space:]]+(alpha|beta|-[^[:space:];&|]+([[:space:]]+[^-[:space:];&|][^[:space:];&|]*)?))*[[:space:]]+"
 
@@ -79,25 +79,57 @@ grep -Eq "${GCLOUD}run[[:space:]]+(deploy|services[[:space:]]+(replace|update|up
   && deny "Cloud Run changes go through .github/workflows/deploy.yml and infra/ Terraform, never by hand, on any release track (CLAUDE.md rule 10)."
 grep -Eq "${GCLOUD}secrets[[:space:]]+versions[[:space:]]+access([[:space:]]|$)" <<<"$cmd" \
   && deny "Secret Manager values are never read by agents (CLAUDE.md rule 7). Ask the owner, or use the local .env."
-# Force: -f alone or in combined short flags (-uf), --force, --force-with-lease[=…], --force-if-includes, a +refspec.
-grep -Eq "(^|[[:space:]])(-[[:alnum:]]*f[[:alnum:]]*|--force(-with-lease|-if-includes)?(=[^[:space:]]*)?|[\"']?\\+[^[:space:]]+)([[:space:]]|$)" <<<"$(git_args push)" \
-  && deny "No force pushes (--force, -f, --force-with-lease, --force-if-includes or a +refspec). Add a commit instead, or ask the owner."
+# Git takes unambiguous prefixes of long options, so --for… (--force, --force-with-lease, --force-if-includes),
+# --mi… (--mirror), --d… (--delete), --pru… (--prune) and --no-ve… (--no-verify) count as the full option.
+# Force: -f alone or in combined short flags (-uf), --for…[=…], a +refspec.
 push_args="$(git_args push)"
+grep -Eq "(^|[[:space:]])(-[[:alnum:]]*f[[:alnum:]]*|--for[-a-z]*(=[^[:space:]]*)?|[\"']?\\+[^[:space:]]+)([[:space:]]|$)" <<<"$push_args" \
+  && deny "No force pushes (--force, -f, --force-with-lease, --force-if-includes or a +refspec). Add a commit instead, or ask the owner."
 MAIN="[\"']?(refs/heads/)?(main|master)[\"']?"
-if grep -Eq '(^|[[:space:]])--mirror([[:space:]]|$)' <<<"$push_args" \
+if grep -Eq '(^|[[:space:]])(--mi[a-z]*|--pru[a-z]*)([[:space:]]|$)' <<<"$push_args" \
   || grep -Eq "(^|[[:space:]])[\"']?:(refs/heads/)?(main|master)[\"']?([[:space:]]|$)" <<<"$push_args" \
-  || { grep -Eq '(^|[[:space:]])(--delete|-[[:alnum:]]*d[[:alnum:]]*)([[:space:]]|$)' <<<"$push_args" \
+  || { grep -Eq '(^|[[:space:]])(--d[a-z]*|-[[:alnum:]]*d[[:alnum:]]*)([[:space:]]|$)' <<<"$push_args" \
        && grep -Eq "(^|[[:space:]])$MAIN([[:space:]]|$)" <<<"$push_args"; } \
-  || grep -Eo "$(git_sub push)" <<<"$cmd" | grep -Eq "remote\.[^=[:space:]]+\.(push=[\"']?\+|mirror=)"; then
-  deny "No destructive pushes (--mirror, deleting main, a forced push refspec from git -c remote.*.push). Ask the owner."
+  || grep -Eo "$(git_sub push)" <<<"$cmd" | grep -Eq "remote\.[^=[:space:]]+\.(push=[\"']?\+|mirror=)" \
+  || { grep -Eq "$(git_sub push)([[:space:]]|$)" <<<"$cmd" \
+       && grep -Eq '(^|[^[:alnum:]_])GIT_CONFIG_(COUNT|PARAMETERS|KEY_[0-9]+|VALUE_[0-9]+)=|--config-env' <<<"$cmd"; }; then
+  deny "No destructive pushes (--mirror, --prune, deleting main, push config from git -c, --config-env or GIT_CONFIG_*). Ask the owner."
 fi
+grep -Eq "remote\.[^[:space:]]+\.(push|mirror)" <<<"$(git_args config)" \
+  && deny "No git config remote.*.push / remote.*.mirror: it turns a later git push into a forced or mirror push. Ask the owner."
 grep -Eq '(^|[[:space:]])(-[[:alnum:]]*f[[:alnum:]]*|--force)([[:space:]]|$)' <<<"$(git_args add)" \
   && deny "No git add -f/--force: ignored files (.env, *.tfvars, keys) stay out of the repo (CLAUDE.md rule 7). Ask the owner if a file really belongs in git."
 
 grep -Eq "$(git_sub commit)([[:space:]]|$)" <<<"$cmd" || exit 0
 
-commit_args="$(git_args commit)"
-grep -Eq '(^|[[:space:]])(--no-verify|-[[:alnum:]]*n[[:alnum:]]*)([[:space:]]|$)' <<<"$commit_args" \
+# What the shell runs: the command without heredoc bodies (h), and h with the insides of quotes blanked (m, the
+# same length), so a message or a quoted argument can't pass for a command.
+strip_heredocs() {
+  local line delim="" tabs=0 t tab=$'\t' re="<<(-?)[[:space:]]*[\"']?([A-Za-z_][A-Za-z0-9_]*)"
+  while IFS= read -r line || [ -n "$line" ]; do
+    if [ -n "$delim" ]; then
+      t="$line"; [ "$tabs" = 1 ] && t="${t#"${t%%[!$tab]*}"}"
+      [ "$t" = "$delim" ] && delim=""
+      continue
+    fi
+    printf '%s\n' "$line"
+    if [[ "$line" =~ $re ]]; then delim="${BASH_REMATCH[2]}"; tabs=0; [ -n "${BASH_REMATCH[1]}" ] && tabs=1; fi
+  done <<<"$1"
+}
+h="$(strip_heredocs "$cmd")"
+m="$(perl -0777 -pe 's/"[^"]*"|\x27[^\x27]*\x27/my $q = $&; substr($q, 1, -1) =~ s|.|_|gs; $q/ge' <<<"$h")"
+
+B='(^|[[:space:];&|(/])' SH='(bash|sh|zsh|dash|ksh)([[:space:]]+-[[:alnum:]]+)*'
+if grep -Eq "$B$SH[[:space:]]+-[[:alnum:]]*c[[:alnum:]]*([[:space:]]|$)|$B$SH[[:space:]]*(<|$|[;&|)])|${B}eval([[:space:]]|$)|${B}env([[:space:]]+(-[^[:space:]]*|[A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*))*[[:space:]]+(-C|--chdir)" <<<"$m"; then
+  deny "a git commit in a command that also runs a shell (bash/sh -c, a heredoc or pipe into a shell), eval or env -C can't be checked. Run the commit as its own command."
+fi
+commits="$(grep -Eo "$(git_sub commit)([[:space:]]|$)" <<<"$m" | wc -l | tr -d ' ')"
+[ "$commits" = 0 ] && exit 0 # git commit only inside quotes or a heredoc, and nothing runs it
+[ "$commits" = 1 ] || deny "one git commit per command, so the guard can tell which repository each is in."
+
+commit_args="$(git_args commit "$m")"
+# --no-ve… or -n on its own or in a short-option cluster (-nm, -anm); message text is blanked in m.
+grep -Eq "(^|[[:space:]])(--no-ve[a-z]*|-[aqsvuen]*n[aqsvuen]*[mFC]?)([[:space:]=\"']|$)" <<<"$commit_args" \
   && deny "Commits never skip checks (--no-verify, -n)."
 
 # Which repository the commit is made in: the session cwd, then a leading `cd <dir> &&` (or `;`),
@@ -127,21 +159,24 @@ resolve_dir() { # base, dir as written (quoted, ~, relative, or "$(scripts/lane.
   (cd "$d" 2>/dev/null && pwd -P)
 }
 commit_repo() { # sets root, or refuses
-  local dir="$cwd" rest="$cmd" seg prefix
+  # rest walks h; mrest walks m in step (same length), and finds the real commit and what precedes it.
+  local dir="$cwd" rest="$h" mrest="$m" seg mseg prefix k
   local cd_re="^[[:space:]]*cd[[:space:]]+$WORD[[:space:]]*(&&|;)"
   while [[ "$rest" =~ $cd_re ]]; do
     dir="$(resolve_dir "$dir" "${BASH_REMATCH[1]}")" || unresolved "cd ${BASH_REMATCH[1]}"
-    rest="${rest:${#BASH_REMATCH[0]}}"
+    k=${#BASH_REMATCH[0]}; rest="${rest:k}"; mrest="${mrest:k}"
   done
   local lane_re="^[[:space:]]*((bash|sh)[[:space:]]+)?([^[:space:]]*/)?scripts/lane\.sh[[:space:]]+exec[[:space:]]+([1-9])[[:space:]]+--[[:space:]]"
   if [[ "$rest" =~ $lane_re ]]; then
     local n="${BASH_REMATCH[4]}"
+    k=${#BASH_REMATCH[0]}
     { dir="$(resolve_dir "$dir" "${BASH_REMATCH[3]:-.}")" && dir="$(lane_dir "$dir" "$n")" && [ -d "$dir" ]; } \
       || unresolved "lane $n has no worktree"
-    rest="${rest:${#BASH_REMATCH[0]}}"
+    rest="${rest:k}"; mrest="${mrest:k}"
   fi
-  seg="$(grep -Eo "$(git_sub commit)" <<<"$rest" | head -1)"
-  prefix="${rest%%"$seg"*}"
+  mseg="$(grep -Eo "$(git_sub commit)" <<<"$mrest" | head -1)"
+  prefix="${mrest%%"$mseg"*}"
+  seg="${rest:${#prefix}:${#mseg}}"
   if grep -Eq '(^|[[:space:];&|(`{])(cd|pushd|popd)([[:space:];&|)]|$)|(^|[^[:alnum:]_])GIT_(DIR|WORK_TREE)=|lane\.sh[[:space:]]+exec' <<<"$prefix"; then
     unresolved "a cd, pushd, GIT_DIR or lane.sh exec that isn't at the start of the command"
   fi
