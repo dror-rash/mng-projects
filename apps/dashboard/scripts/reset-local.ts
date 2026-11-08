@@ -40,12 +40,12 @@ async function main(): Promise<number> {
   // The maintenance connection: the reset deletes past row-level security, as the owner.
   const db = getMaintenanceDb();
 
-  // The server check, before any other query: a localhost proxy or tunnel to Cloud SQL passes the env guard.
+  // The server check runs before any other query; see `isLocalServer`.
   let server: ReturnType<typeof isLocalServer>;
   try {
     server = isLocalServer(await readServerFacts(db));
   } catch (error) {
-    console.error(`Refusing to reset: ${failureMessage(error)}`);
+    console.error(`Refusing to reset: could not check the connected server (${failureMessage(error)}).`);
     return 1;
   }
   if (!server.local) {

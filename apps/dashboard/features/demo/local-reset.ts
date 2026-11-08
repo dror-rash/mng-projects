@@ -14,8 +14,7 @@ const LOCAL_DATABASE = /^app(_lane\d+)?$/;
  * `host` or `hostaddr` in the query string (read as `pg` reads them, with pg-connection-string), is
  * localhost, 127.0.0.1 or ::1; its database is `app` or a lane's `app_lane<n>`, so other databases on the
  * local server are refused; Cloud SQL isn't configured and this isn't production. Otherwise says why.
- * This reads the environment only: a proxy or tunnel on localhost to a database named `app` passes it.
- * The server check (`isLocalServer`, task 080) is what refuses a tunnel to Cloud SQL.
+ * This reads the environment only; the server check (`isLocalServer`, task 080) also refuses Cloud SQL.
  */
 export function isLocalDatabase(env: ResetEnv): { local: true } | { local: false; reason: string } {
   if (env.NODE_ENV === "production") return { local: false, reason: "NODE_ENV is production." };
