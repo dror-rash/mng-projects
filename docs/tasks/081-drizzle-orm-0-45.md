@@ -13,6 +13,7 @@
 - `packages/db/package.json`: `drizzle-orm` to the latest `0.45.x` (at least `0.45.2`), and `drizzle-kit` to the version that matches it (the one drizzle documents for that ORM line).
 - `pnpm-lock.yaml` regenerated; one `drizzle-orm` version in the tree (`pnpm why drizzle-orm`), and no peer warning from `better-auth` for it on `pnpm install`.
 - Anything the bump breaks (types, query builder changes) is fixed in the same change, without changing behavior.
+- Remove `GHSA-gpj5-g38j-94v9` from `pnpm.auditConfig.ignoreGhsas` in the root `package.json` (added by task 082) and from SEC-16's register row; `pnpm audit --prod --audit-level=high` must still pass without it.
 - `pnpm db:generate` after the bump produces **no new migration** (the schema and the generated SQL agree); if the new `drizzle-kit` rewrites the snapshot format under `migrations/meta/`, that is committed, applied migrations are never edited (rule 12).
 
 ## Out of scope

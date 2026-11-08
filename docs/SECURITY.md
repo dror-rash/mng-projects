@@ -55,7 +55,7 @@ Each check is added by the gap that needs it; until then it's listed here as pla
 | `bash scripts/test-hooks.sh` in CI | Guard regressions | SEC-12 | planned |
 | `pnpm audit --prod --audit-level=high` with a reviewed allowlist (`pnpm.auditConfig.ignoreGhsas` in the root `package.json`, each entry with a register line), in CI's `security` job | Vulnerable runtime dependencies | SEC-11 | in place (task 082) |
 | gitleaks (pinned by version and sha256, `infra/scripts/get-gitleaks.sh`) on the PR's commits (base..head) and on pushes to `main`, in CI's `security` job; `test-secret-scan.sh` plants a fake secret each run | Committed secrets | SEC-11 | in place (task 082) |
-| `actionlint` + `zizmor` on `.github/workflows` | Unpinned actions, missing `permissions:`, injection, cache poisoning | SEC-05, SEC-15 | planned |
+| `actionlint` + `zizmor` on `.github/workflows` | Unpinned actions, missing `permissions:`, injection, cache poisoning | SEC-05, SEC-15 | planned (SHA pins and top-level `permissions:` already checked by `test-workflows.sh`, tasks 078 and 082) |
 | Grants matrix DB test (no DELETE on soft-delete tables, no UPDATE/DELETE on append-only, every granted command has a policy) | Grants that undo the second lock | SEC-21 | planned |
 | Trigger-defers-to-RLS DB test | Cross-workspace error oracles | SEC-36 | planned |
 | Auth-gate script: every `page.tsx`/`route.ts` and every `"use server"` export reaches a session check; no unjoined `from(schema.user)` | A page or action without a server check | SEC-38 | planned |
