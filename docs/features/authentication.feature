@@ -38,7 +38,7 @@ Feature: Authentication
     When I log out
     Then I am sent to the login page
 
-  @wip @task:079
+  @task:079
   Scenario: A next address on another site goes to the dashboard after logging in
     Given an existing account
     And I am on the login page to return to "https://other-site.example/"

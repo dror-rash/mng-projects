@@ -49,6 +49,7 @@ Touches authentication (`packages/auth`), a security-sensitive path per `docs/SE
 ## Progress log
 - 2026-11-08 – Drafted from the first full security review (SEC-03); owner: "start fixing P0".
 - 2026-11-08 – Started in lane 3. Open questions answered by defaults (orchestrator): a seeded hand-written generator, no new dependency.
+- 2026-11-08 – Spec-writer: un-wipped the scenario, added steps `I am on the login page to return to {string}` and `I am on the dashboard` (auth.steps.ts). It passes on today's code (plain absolute URL already rejected), as planned; the red comes from the unit tests.
 
 ## Parking lot
 - The same scenario for the sign-up page (`/signup?next=…`), if the owner wants both covered end to end.
