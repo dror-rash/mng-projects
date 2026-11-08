@@ -1,6 +1,6 @@
 # Task 082: CI security checks (dependency audit, secret scan, Dependabot, workflow permissions)
 
-- **Status:** in-progress
+- **Status:** in-review
 - **Milestone:** cross-cutting (security)
 - **Zone / package:** `.github/workflows/ci.yml`, a new `.github/dependabot.yml`, `infra/scripts/test-workflows.sh`, root `package.json` (`pnpm.auditConfig` only), `docs/SECURITY.md` (the CI checks table). Commit type `ci:`.
 - **Feature file:** none (no app behavior; the checks are the tests)
