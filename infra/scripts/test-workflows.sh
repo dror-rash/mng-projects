@@ -9,7 +9,8 @@
 # 3) CI security checks (task 082): every workflow has a top-level permissions: (ci.yml: contents: read), the
 #    security job runs the dependency audit and the gitleaks scan of the PR's commits (base..head) or the pushed
 #    commits on main, gitleaks is pinned by version and sha256, and deploy.yml skips Dependabot pull requests
-#    (no secrets or OIDC token there) but never a push to main.
+#    (no secrets or OIDC token there) but never a push to main, and so does preview-cleanup.yml; ci.yml cancels
+#    only PR runs and drops checkout credentials; every Dependabot ecosystem has a cooldown.
 # Text checks on the repository files (no YAML parser needed). Probes at the end run the checks on a copy with
 # one change each and expect the matching check to fail. Run: bash infra/scripts/test-workflows.sh
 set -u
@@ -221,6 +222,34 @@ check "the security job scans base..head with the pinned gitleaks" \
 # main still deploys (the condition's first branch).
 DEPLOY_IF="    if: github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]')"
 check "deploy.yml runs on every push to main and skips fork and Dependabot pull requests" grep -qxF -- "$DEPLOY_IF" "$WF"
+# preview-cleanup.yml: Dependabot's runs get no OIDC token either (it only runs on closed same-repo PRs).
+CLEANUP="$ROOT/.github/workflows/preview-cleanup.yml"
+CLEANUP_IF="    if: github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]'"
+check "preview-cleanup.yml skips fork PRs and Dependabot runs" grep -qxF -- "$CLEANUP_IF" "$CLEANUP"
+# A newer PR push cancels the older run; pushes to main are never cancelled (each push's commits get scanned).
+ci_cancels_prs_only() { top_block concurrency "$CI" | grep -qxF '  cancel-in-progress: ${{ github.event_name == '"'"'pull_request'"'"' }}'; }
+check "ci.yml cancels in-progress runs on pull requests only" ci_cancels_prs_only
+# No job in ci.yml needs git credentials after checkout.
+ci_checkouts_drop_credentials() {
+  awk '
+    function flush() { if (co) { n++; if (!pc) bad++ } co = 0; pc = 0 }
+    /^      - / { flush() }
+    /^  [[:alnum:]_-]+:/ { flush() }
+    /uses:[[:space:]]*actions\/checkout@/ { co = 1 }
+    /^[[:space:]]+persist-credentials: false$/ { pc = 1 }
+    END { flush(); exit (n == 0 || bad > 0) }
+  ' "$CI"
+}
+check "every checkout in ci.yml has persist-credentials: false" ci_checkouts_drop_credentials
+# Dependabot waits 3 days after a release before proposing it (a compromised release is usually pulled by then).
+DEPENDABOT="$ROOT/.github/dependabot.yml"
+dependabot_cooldown_everywhere() {
+  local n c
+  n="$(grep -cE '^  - package-ecosystem:' "$DEPENDABOT")"
+  c="$(grep -cE '^    cooldown:$' "$DEPENDABOT")"
+  [ "$n" -gt 0 ] && [ "$c" -eq "$n" ] && [ "$(grep -cE '^      default-days: 3$' "$DEPENDABOT")" -eq "$n" ]
+}
+check "every Dependabot ecosystem has a 3-day cooldown" dependabot_cooldown_everywhere
 
 # --- Probes: each check above catches the change it is for ---
 # A copy of the files these checks read, with one change, must fail the named check. A clean copy passes.
@@ -230,6 +259,7 @@ if [ -z "${TEST_WORKFLOWS_PROBE:-}" ]; then
     local dir="$PROBE_DIR/p$((pass + fail))" out
     mkdir -p "$dir/.github/workflows" "$dir/infra/scripts"
     cp "$ROOT"/.github/workflows/*.yml "$dir/.github/workflows/"
+    [ ! -e "$ROOT/.github/dependabot.yml" ] || cp "$ROOT/.github/dependabot.yml" "$dir/.github/"
     cp "$ROOT"/Dockerfile "$ROOT"/.dockerignore "$ROOT"/.gitignore "$dir/"
     cp "$ROOT"/infra/scripts/*.sh "$dir/infra/scripts/"
     (cd "$dir" && eval "$2") || return 1
@@ -238,7 +268,8 @@ if [ -z "${TEST_WORKFLOWS_PROBE:-}" ]; then
       diff -rq "$ROOT/.github/workflows" "$dir/.github/workflows" >/dev/null &&
         diff -q "$ROOT/Dockerfile" "$dir/Dockerfile" >/dev/null && diff -q "$ROOT/.dockerignore" "$dir/.dockerignore" >/dev/null &&
         diff -q "$ROOT/infra/scripts/get-cloud-sql-proxy.sh" "$dir/infra/scripts/get-cloud-sql-proxy.sh" >/dev/null &&
-        diff -q "$ROOT/infra/scripts/get-gitleaks.sh" "$dir/infra/scripts/get-gitleaks.sh" >/dev/null && return 1
+        diff -q "$ROOT/infra/scripts/get-gitleaks.sh" "$dir/infra/scripts/get-gitleaks.sh" >/dev/null &&
+        diff -q "$ROOT/.github/dependabot.yml" "$dir/.github/dependabot.yml" >/dev/null && return 1
     fi
     out="$(TEST_WORKFLOWS_PROBE=1 bash "$dir/infra/scripts/test-workflows.sh" 2>&1)"
     if [ -z "$1" ]; then grep -q ', 0 failed$' <<<"$out"; else grep -qF -- "FAIL - $1" <<<"$out"; fi
@@ -310,6 +341,15 @@ if [ -z "${TEST_WORKFLOWS_PROBE:-}" ]; then
     "perl -pi -e 's/sha256sum -c --quiet -; then/sha256sum -c --quiet - || true; then/' infra/scripts/get-gitleaks.sh"
   check "probe: extracting gitleaks before its sha256 check is caught" probe "infra/scripts/get-gitleaks.sh checks the gitleaks sha256" \
     "perl -0pi -e 's/^(curl .*\n)/\$1tar -xzf gitleaks.tar.gz gitleaks\n/m' infra/scripts/get-gitleaks.sh"
+  CLEANUPW=.github/workflows/preview-cleanup.yml
+  check "probe: a preview cleanup that runs for Dependabot is caught" probe "preview-cleanup.yml skips fork PRs and Dependabot runs" \
+    "perl -pi -e \"s/ && github\\.actor != 'dependabot\\[bot\\]'//\" $CLEANUPW"
+  check "probe: cancelling main's CI runs is caught" probe "ci.yml cancels in-progress runs on pull requests only" \
+    "perl -pi -e 's/^  cancel-in-progress: .*/  cancel-in-progress: true/' $CIW"
+  check "probe: a checkout that keeps its credentials is caught" probe "every checkout in ci.yml has persist-credentials: false" \
+    "perl -0pi -e 's/\n *persist-credentials: false//' $CIW"
+  check "probe: an ecosystem without a cooldown is caught" probe "every Dependabot ecosystem has a 3-day cooldown" \
+    "perl -0pi -e 's/\n    cooldown:\n      default-days: 3//' .github/dependabot.yml"
   check "probe: a workflow overriding gitleaks' URL is caught" probe "the workflows never override gitleaks" \
     "printf '      - run: GITLEAKS_URL=https://x bash infra/scripts/get-gitleaks.sh\n' >> $CIW"
 fi

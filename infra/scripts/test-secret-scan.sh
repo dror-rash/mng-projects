@@ -1,14 +1,16 @@
 #!/usr/bin/env bash
 # The secret scan (scan-secrets.sh, task 082) against throwaway repositories with a planted fake secret: it fails on
 # a range that adds one (without printing it), passes on a range that doesn't, scans the whole history when there
-# is no base, ignores inline gitleaks:allow, and refuses a shallow clone or an in-repo gitleaks config.
+# is no base, sees a secret added inside a merge commit, ignores inline gitleaks:allow, and refuses a shallow clone or an in-repo gitleaks config.
 # Needs the pinned gitleaks: GITLEAKS=/path/to/gitleaks (CI: infra/scripts/get-gitleaks.sh "$RUNNER_TEMP").
-# Run: GITLEAKS=… bash infra/scripts/test-secret-scan.sh
+# Run: GITLEAKS=… bash infra/scripts/test-secret-scan.sh (GITLEAKS: a path, or a name on PATH, e.g. gitleaks)
 set -u
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 SCAN="$ROOT/infra/scripts/scan-secrets.sh"
 : "${GITLEAKS:?set GITLEAKS to the gitleaks binary (infra/scripts/get-gitleaks.sh)}"
-GITLEAKS="$(cd "$(dirname "$GITLEAKS")" && pwd)/$(basename "$GITLEAKS")"
+# A command name (on PATH) or a path; either way an absolute path, since the scans run in other directories.
+GITLEAKS="$(command -v "$GITLEAKS")" || { echo "no gitleaks at '${GITLEAKS}'" >&2; exit 1; }
+case "$GITLEAKS" in /*) ;; *) GITLEAKS="$PWD/$GITLEAKS" ;; esac
 export GITLEAKS
 
 TMP="$(mktemp -d)"; trap 'rm -rf "$TMP"' EXIT
@@ -40,6 +42,7 @@ check "a range that adds a secret fails" test "$CODE" -ne 0
 check "it says leaks were found" grep -q "leaks found" <<<"$OUT"
 check "it never prints the secret (redacted)" bash -c '! grep -qF -- "$1" <<<"$2"' _ "$FAKE" "$OUT"
 check "it names the range it scanned" grep -qF "$A..$C" <<<"$OUT"
+check "it says to rotate the secret, not just drop the commit" grep -qF "rotate the secret; deleting the commit isn't enough" <<<"$OUT"
 
 scan "$B" "$C"
 check "a range after the secret's commit passes (only base..head is scanned)" test "$CODE" -eq 0
@@ -49,6 +52,7 @@ check "no base (a new branch) scans the head's whole history, and finds the secr
 
 scan "1111111111111111111111111111111111111111" "$C"
 check "a base that isn't in the clone scans the head's whole history" test "$CODE" -ne 0
+check "it says it had no usable base" grep -q "No usable base" <<<"$OUT"
 
 scan "$A" "2222222222222222222222222222222222222222"
 check "a head that isn't in the clone fails" test "$CODE" -ne 0
@@ -59,6 +63,19 @@ commit README.md "hello" "a: clean"; A2="$(g rev-parse HEAD)"
 commit app.env "PLANTED_TEST_API_KEY=\"$FAKE\" # gitleaks:allow" "b: allowed inline"; B2="$(g rev-parse HEAD)"
 scan "$A2" "$B2"
 check "an inline gitleaks:allow doesn't hide a secret" test "$CODE" -ne 0
+
+# An evil merge: the secret is added while resolving a merge (git merge --no-commit), so it's only in the merge
+# commit's own diff.
+REPO="$TMP/merge"; mkdir -p "$REPO"; git -C "$REPO" init -q
+commit README.md "hello" "a: clean"; A4="$(g rev-parse HEAD)"; MAIN="$(g symbolic-ref --short HEAD)"
+g checkout -qb feature; commit feature.txt "feature" "f: clean"
+g checkout -q "$MAIN"; commit other.txt "other" "m: clean"
+g merge -q --no-ff --no-commit feature >/dev/null 2>&1
+printf 'PLANTED_TEST_API_KEY="%s"\n' "$FAKE" > "$REPO/app.env"; g add app.env; g commit -qm "merge feature"
+M4="$(g rev-parse HEAD)"
+scan "$A4" "$M4"
+check "a secret added inside a merge commit is found" test "$CODE" -ne 0
+check "the merge's finding is reported as a leak" grep -q "leaks found" <<<"$OUT"
 
 # An in-repo config or ignore file could switch rules off; the scan refuses to run with one.
 for f in .gitleaks.toml .gitleaksignore; do
