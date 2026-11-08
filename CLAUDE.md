@@ -7,7 +7,8 @@ Read this file first, every session. `AGENTS.md` is a copy/symlink of this file 
 2. `docs/ARCHITECTURE.md` – zone map, package boundaries, conventions
 3. `docs/WORKFLOW.md` – the loop you must follow
 4. The active task in `docs/tasks/` and its linked `.feature` file
-5. `docs/AGENT-TEAM.md` – the agent team, pipeline, lanes and guard hooks (ADR-0010). The main session orchestrates; agents in `.claude/agents/` do the work
+5. `docs/SECURITY.md` and `docs/security/register.md` – the security review process and the known gaps
+6. `docs/AGENT-TEAM.md` – the agent team, pipeline, lanes and guard hooks (ADR-0010). The main session orchestrates; agents in `.claude/agents/` do the work
 
 If the plan, feature file, or task is missing or unclear: **stop and ask**. Do not invent scope.
 

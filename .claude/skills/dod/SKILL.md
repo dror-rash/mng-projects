@@ -19,6 +19,7 @@ Run the commands with `scripts/lane.sh exec <n> -- …` when a lane is given. Re
    - no `drizzle-orm` imports in `apps/`.
 6. **Docs:** `ARCHITECTURE.md`, the ADRs and the feature file are updated where the diff adds modules, tables or decisions. The task's Progress log is current.
 7. **TODOs:** `git diff origin/main...HEAD | grep "^+.*TODO"`: every hit names a task.
-8. **PR:** it links the task and feature file (checked once the PR exists).
+8. **Security:** every Critical, High or Medium finding of the `access-auditor` and `security-reviewer` is fixed; Low and Info ones are in `docs/security/register.md`; a gap the task fixes is marked there.
+9. **PR:** it links the task and feature file (checked once the PR exists).
 
 End with **DONE** or **NOT DONE: <items>**.

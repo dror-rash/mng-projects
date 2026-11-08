@@ -17,6 +17,9 @@
 ## Acceptance criteria
 - [ ] <Maps to a Gherkin scenario>
 
+## Security notes
+<Which data and roles this touches, what could be misused, and whether the diff touches the security-sensitive paths in `docs/SECURITY.md` (then the `security-reviewer` runs). Gaps from `docs/security/register.md` this task fixes: SEC-nn.>
+
 ## Approach (brief)
 <Smallest plan that could work. Note any new ADR needed.>
 
