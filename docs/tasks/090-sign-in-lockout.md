@@ -1,0 +1,55 @@
+# Task 090: Too many wrong passwords lock sign-in to that account for a while
+
+- **Status:** todo (after the POC)
+- **Milestone:** cross-cutting (security)
+- **Zone / package:** `packages/auth` (`server.ts` hooks, a small lockout module), `packages/db` (`schema.ts`: one table, one migration), `apps/shell/features/auth/login-form.tsx` (shows the message), `e2e/steps` (two new steps). Commit types `test` → `feat(auth)` / `feat(db)`.
+- **Feature file:** `docs/features/authentication.feature` (three `@wip @task:090` scenarios)
+- **Depends on:** task 089 (same files; merge after it).
+
+## Why
+The rate limit (task 089) counts per client address, so someone spreading guesses over many addresses can keep trying one person's password. Counting failures per account, and pausing sign-in to that account after several in a row, caps guesses whatever the address. Register **SEC-10** (lockout part).
+
+## Scope
+- **Rule** (questions 1–2): after **5** failed sign-ins to the same email within **15 minutes**, sign-in to that email is refused for **15 minutes** from the last failure, even with the right password. A successful sign-in resets the count.
+- **Message** (question 3): **"Too many failed sign-ins. Try again in 15 minutes."**, shown on the login form like "Invalid email or password".
+- **No account discovery:** an email with no account counts and locks exactly the same way and shows the same messages, so the lock doesn't reveal which emails have accounts (sign-in today gives the same answer for both; keep it that way).
+- **Storage:** a table keyed by a keyed hash of the normalized email (HMAC with the auth secret), never the email itself, with the failure count, the window start and the lock end. No RLS, like Better Auth's own tables (ADR-0006); `hardening.db.test.ts`'s exception list gains it; old rows are removed when they're past their window (on the next write for that key, or a simple delete of expired rows on write; implementer names it).
+- Implemented with Better Auth hooks around `/sign-in/email` (before: refuse when locked; after: count a failure or reset on success). `AUTH_DISABLE_RATE_LIMIT` does **not** turn the lockout off (it is about addresses, not accounts), so the scenarios run with it on.
+
+## Out of scope
+- Unlocking by email (no email provider: SEC-09, owner decision) or by an admin.
+- CAPTCHA or progressive delays.
+- Notifying the account owner of failed sign-ins.
+
+## Acceptance criteria
+- [ ] After 5 wrong passwords, the right password is refused with "Too many failed sign-ins. Try again in 15 minutes." → "Too many wrong passwords lock the account for a while"
+- [ ] A locked account doesn't lock anyone else. → "A locked account doesn't lock other accounts"
+- [ ] An email with no account answers the same way. → "An email without an account answers the same after too many tries"
+- [ ] The lock ends 15 minutes after the last failure, and a success before the limit resets the count. → unit tests with a fake clock.
+- [ ] The table never holds an email: a DB test signs in wrong with a known email and finds no row containing it.
+- [ ] `hardening.db.test.ts` passes with the table in the documented exception list.
+
+## Security notes
+Touches `packages/auth`, the login form and a migration (a new table, default grants), so the `security-reviewer` runs. Trade-off the owner should know: anyone who knows an email can keep that person locked out by failing 5 times every 15 minutes (a nuisance, not a takeover); question 1 lets the owner pick. The table holds only hashes and counts, never shown or logged. Fixes the rest of register gap **SEC-10** (with task 089).
+
+## Approach (brief)
+Red: the three scenarios (today the 6th attempt with the right password succeeds) and the lockout unit tests. Then the table, the module (pure rule + store), the hooks, the form message. No ADR unless the owner picks a different rule.
+
+## Test plan
+- Acceptance: three `@task:090` scenarios in `authentication.feature`.
+- Unit: the lockout rule with a fake clock (5th failure, window expiry, reset on success).
+- DB: no raw email stored; hardening exception.
+- Storybook: the login form's error state already exists; the new message uses it (story arg if the form story lists messages).
+- **New steps:** `I log in with the wrong password {int} times`, `another account was locked by {int} wrong passwords` (a person from the `people` fixture), `I log in with an email that has no account {int} times`, `I log in with that email once more` (the same made-up email, kept in the scenario state). Reused: `an existing account`, `I am on the login page`, `I log in with my email and password`, `I see my email address`, `I see the error {string}`.
+
+## Open questions
+1. **Lockout at all, or only the shared rate limit (task 089)?** Default: lockout as above; the nuisance lockout in "Security notes" is the price.
+2. **Numbers:** default 5 failures in 15 minutes, locked 15 minutes.
+3. **Message:** default "Too many failed sign-ins. Try again in 15 minutes."
+
+## Progress log
+- 2026-11-08 – Drafted from the first full security review (SEC-10); owner: "start fixing the P1 gaps".
+
+## Parking lot
+- Unlock by email once there is an email provider (SEC-09).
+- Show the account owner recent failed sign-ins (with SEC-28's account page).
