@@ -17,7 +17,7 @@
 - `pnpm db:generate` after the bump produces **no new migration** (the schema and the generated SQL agree); if the new `drizzle-kit` rewrites the snapshot format under `migrations/meta/`, that is committed, applied migrations are never edited (rule 12).
 
 ## Out of scope
-- `pnpm.overrides` for the dev-only advisory chain (vitest/tinypool, esbuild via `drizzle-kit`, postcss in `next`, glob/minimatch): parking lot; `pnpm audit --prod` (task 082) doesn't see them.
+- `pnpm.overrides` for the dev-only advisory chain (vitest/tinypool, esbuild via `drizzle-kit`, postcss in `next`, glob/minimatch): parking lot. `pnpm audit --prod` (task 082) does see postcss (fixed in task 093) and tinypool (accepted, SEC-43); the others are dev-only.
 - Any other dependency bump.
 - New uses of `sql.identifier`/`sql.raw`.
 
