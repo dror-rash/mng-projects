@@ -61,9 +61,10 @@ esac
 
 # ---------- shell commands ----------
 cmd="$(jq -r '.tool_input.command // ""' <<<"$input")"
+continuation=$'\\\n'; cmd="${cmd//"$continuation"/ }" # join backslash-newline continuations (bash 3.2-safe)
 
-# Pattern pieces. A word in a command: quoted, or up to a space or a shell separator.
-WORD="(\"[^\"]*\"|'[^']*'|[^[:space:];&|]+)"
+# Pattern pieces. A word in a command: quoted, a $(…), or up to a space or a shell separator.
+WORD="(\"[^\"]*\"|'[^']*'|\\$\\([^)]*\\)|[^[:space:];&|]+)"
 # git <global options> <sub>: -C <dir>, -c <k=v>, --git-dir/--work-tree <path>, and flags (--no-pager, --git-dir=x).
 GITOPT="(-[Cc][[:space:]]+$WORD|--(git-dir|work-tree|namespace|exec-path|config-env)[[:space:]]+$WORD|-[^[:space:];&|]+)"
 git_sub() { echo "(^|[^[:alnum:]_-])git([[:space:]]+$GITOPT)*[[:space:]]+$1"; }
@@ -81,50 +82,80 @@ grep -Eq "${GCLOUD}secrets[[:space:]]+versions[[:space:]]+access([[:space:]]|$)"
 # Force: -f alone or in combined short flags (-uf), --force, --force-with-lease[=…], --force-if-includes, a +refspec.
 grep -Eq "(^|[[:space:]])(-[[:alnum:]]*f[[:alnum:]]*|--force(-with-lease|-if-includes)?(=[^[:space:]]*)?|[\"']?\\+[^[:space:]]+)([[:space:]]|$)" <<<"$(git_args push)" \
   && deny "No force pushes (--force, -f, --force-with-lease, --force-if-includes or a +refspec). Add a commit instead, or ask the owner."
+push_args="$(git_args push)"
+MAIN="[\"']?(refs/heads/)?(main|master)[\"']?"
+if grep -Eq '(^|[[:space:]])--mirror([[:space:]]|$)' <<<"$push_args" \
+  || grep -Eq "(^|[[:space:]])[\"']?:(refs/heads/)?(main|master)[\"']?([[:space:]]|$)" <<<"$push_args" \
+  || { grep -Eq '(^|[[:space:]])(--delete|-[[:alnum:]]*d[[:alnum:]]*)([[:space:]]|$)' <<<"$push_args" \
+       && grep -Eq "(^|[[:space:]])$MAIN([[:space:]]|$)" <<<"$push_args"; } \
+  || grep -Eo "$(git_sub push)" <<<"$cmd" | grep -Eq "remote\.[^=[:space:]]+\.(push=[\"']?\+|mirror=)"; then
+  deny "No destructive pushes (--mirror, deleting main, a forced push refspec from git -c remote.*.push). Ask the owner."
+fi
 grep -Eq '(^|[[:space:]])(-[[:alnum:]]*f[[:alnum:]]*|--force)([[:space:]]|$)' <<<"$(git_args add)" \
   && deny "No git add -f/--force: ignored files (.env, *.tfvars, keys) stay out of the repo (CLAUDE.md rule 7). Ask the owner if a file really belongs in git."
 
 grep -Eq "$(git_sub commit)([[:space:]]|$)" <<<"$cmd" || exit 0
 
 commit_args="$(git_args commit)"
-grep -Eq '(^|[[:space:]])(--no-verify|-n)([[:space:]]|$)' <<<"$commit_args" && deny "Commits never skip checks (--no-verify)."
+grep -Eq '(^|[[:space:]])(--no-verify|-[[:alnum:]]*n[[:alnum:]]*)([[:space:]]|$)' <<<"$commit_args" \
+  && deny "Commits never skip checks (--no-verify, -n)."
 
 # Which repository the commit is made in: the session cwd, then a leading `cd <dir> &&` (or `;`),
 # then `scripts/lane.sh exec <n> --` (the lane's worktree, as lane.sh computes it), then `git -C <dir>`.
-resolve_dir() { # base, dir as written (quoted, ~, relative)
-  local d="$2"; d="${d#\"}"; d="${d%\"}"; d="${d#\'}"; d="${d%\'}"
-  case "$d" in "~") d="$HOME" ;; "~/"*) d="$HOME/${d#"~/"}" ;; esac
-  case "$d" in /*) ;; *) d="$1/$d" ;; esac
-  (cd "$d" 2>/dev/null && pwd -P)
+# Fails closed: a directory it can't resolve to a literal path, or a cd/pushd/GIT_DIR/--git-dir/--work-tree
+# it didn't consume, refuses the commit.
+unresolved() {
+  deny "can't tell which repository this commit is in ($1). Use a literal path (cd /abs/path && git commit, or git -C /abs/path commit) or scripts/lane.sh exec <n> -- git commit."
 }
-lane_dir() { # dir in the repo whose lane.sh runs, lane number
+lane_dir() { # dir in the repo whose lane.sh runs, lane number (the same default as scripts/lane.sh)
   local common main
   common="$(git -C "$1" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" || return 1
   main="$(dirname "$common")"
   echo "${LANES_DIR:-$(dirname "$main")/$(basename "$main")-lanes}/lane-$2"
 }
-commit_repo() {
-  local dir="$cwd" rest="$cmd" seg
+resolve_dir() { # base, dir as written (quoted, ~, relative, or "$(scripts/lane.sh path <n>)")
+  local d="$2" lane_re="^\"?\\$\\(((bash|sh)[[:space:]]+)?([^[:space:])]*/)?scripts/lane\\.sh[[:space:]]+path[[:space:]]+([1-9])[[:space:]]*\\)\"?$"
+  if [[ "$d" =~ $lane_re ]]; then
+    local n="${BASH_REMATCH[4]}" sd
+    sd="$(resolve_dir "$1" "${BASH_REMATCH[3]:-.}")" && sd="$(lane_dir "$sd" "$n")" && resolve_dir / "$sd"
+    return
+  fi
+  case "$d" in \"*\") d="${d:1:${#d}-2}" ;; \'*\') d="${d:1:${#d}-2}" ;; esac
+  case "$d" in *'$'* | *'`'* | *'\'* | - | "") return 1 ;; esac
+  case "$d" in "~") d="$HOME" ;; "~/"*) d="$HOME/${d#"~/"}" ;; "~"*) return 1 ;; esac
+  case "$d" in /*) ;; *) d="$1/$d" ;; esac
+  (cd "$d" 2>/dev/null && pwd -P)
+}
+commit_repo() { # sets root, or refuses
+  local dir="$cwd" rest="$cmd" seg prefix
   local cd_re="^[[:space:]]*cd[[:space:]]+$WORD[[:space:]]*(&&|;)"
   while [[ "$rest" =~ $cd_re ]]; do
-    dir="$(resolve_dir "$dir" "${BASH_REMATCH[1]}")"; [ -n "$dir" ] || return 1
+    dir="$(resolve_dir "$dir" "${BASH_REMATCH[1]}")" || unresolved "cd ${BASH_REMATCH[1]}"
     rest="${rest:${#BASH_REMATCH[0]}}"
   done
-  local lane_re="^[[:space:]]*((bash|sh)[[:space:]]+)?([^[:space:]]*/)?scripts/lane\.sh[[:space:]]+exec[[:space:]]+([1-9])[[:space:]]"
+  local lane_re="^[[:space:]]*((bash|sh)[[:space:]]+)?([^[:space:]]*/)?scripts/lane\.sh[[:space:]]+exec[[:space:]]+([1-9])[[:space:]]+--[[:space:]]"
   if [[ "$rest" =~ $lane_re ]]; then
     local n="${BASH_REMATCH[4]}"
-    dir="$(resolve_dir "$dir" "${BASH_REMATCH[3]:-.}")" && dir="$(lane_dir "$dir" "$n")" || return 1
+    { dir="$(resolve_dir "$dir" "${BASH_REMATCH[3]:-.}")" && dir="$(lane_dir "$dir" "$n")" && [ -d "$dir" ]; } \
+      || unresolved "lane $n has no worktree"
+    rest="${rest:${#BASH_REMATCH[0]}}"
   fi
   seg="$(grep -Eo "$(git_sub commit)" <<<"$rest" | head -1)"
+  prefix="${rest%%"$seg"*}"
+  if grep -Eq '(^|[[:space:];&|(`{])(cd|pushd|popd)([[:space:];&|)]|$)|(^|[^[:alnum:]_])GIT_(DIR|WORK_TREE)=|lane\.sh[[:space:]]+exec' <<<"$prefix"; then
+    unresolved "a cd, pushd, GIT_DIR or lane.sh exec that isn't at the start of the command"
+  fi
+  grep -Eq -- '--(git-dir|work-tree)' <<<"$seg" && unresolved "--git-dir/--work-tree"
   local c_re="(^|[[:space:]])-C[[:space:]]+$WORD(.*)$"
   while [[ "$seg" =~ $c_re ]]; do
-    dir="$(resolve_dir "$dir" "${BASH_REMATCH[2]}")"; [ -n "$dir" ] || return 1
+    dir="$(resolve_dir "$dir" "${BASH_REMATCH[2]}")" || unresolved "git -C ${BASH_REMATCH[2]}"
     seg="${BASH_REMATCH[3]}"
   done
-  git -C "$dir" rev-parse --show-toplevel 2>/dev/null
+  root="$(git -C "$dir" rev-parse --show-toplevel 2>/dev/null)"
 }
 
-root="$(commit_repo)" || exit 0
+root=""; commit_repo
+[ -n "$root" ] || exit 0 # not a repository: git commit fails on its own
 type="$(grep -Eo '(feat|fix|refactor|test|docs|chore|perf|build|ci|style)(\([^)]*\))?!?:' <<<"$cmd" | head -1 | sed -E 's/[(!:].*//')"
 
 # What the commit will contain: the index, plus the working tree when the same command stages (git add / commit -a).

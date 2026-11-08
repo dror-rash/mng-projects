@@ -31,6 +31,7 @@ jobs:
       - run: bash infra/scripts/test-workflows.sh
       # The agents' guard hook (tasks 067, 084): refusals, look-alikes, commits in a second worktree.
       - run: bash scripts/test-hooks.sh
+        # The script sets it per case too; kept here so no case can ever run lint/typecheck.
         env:
           GUARD_SKIP_CHECKS: "1"
 
