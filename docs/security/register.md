@@ -8,7 +8,7 @@ The one list of known security gaps and their status. The process that feeds it 
 
 | Priority | Open | Planned | Fixed | Accepted |
 |---|---|---|---|---|
-| P0 – fix now | 5 | 0 | 0 | 0 |
+| P0 – fix now | 3 (2 in progress) | 0 | 2 | 0 |
 | P1 – before real customer data on `main` | 12 | 1 | 0 | 0 |
 | P2 – hardening | 15 | 0 | 0 | 0 |
 | P3 – info / decide | 8 | 0 | 0 | 0 |
@@ -26,11 +26,11 @@ No Critical findings. One High (SEC-01). Nothing in the review showed one worksp
 
 | ID | Sev | Gap | Area | Effort | Status | Source |
 |---|---|---|---|---|---|---|
-| SEC-01 | High | Deploy credentials can reach a place PR runs can read | CI/CD | S | open (task 078; **owner:** purge `main`'s build caches after the fix) | INF-1, SUP-7 |
+| SEC-01 | High | Deploy credentials can reach a place PR runs can read | CI/CD | S | in-progress (task 078, PR #56; old build caches on `main` deleted 2026-11-08) | INF-1, SUP-7 |
 | SEC-02 | Med | `main` has no branch protection, and deploys don't wait for CI | GitHub | S | open (**owner:** ruleset requiring `verify` and `e2e`, no force push; a `production` environment) | SUP-1, INF-2 |
-| SEC-03 | Med | Post-login redirect check can be bypassed | Auth | S | open (task 079) | AUTH-1 |
-| SEC-04 | Med | A local-only maintenance script's safety check is too narrow | Tooling | S | open (task 080) | SUP-4 |
-| SEC-05 | Med | Parts of the deploy build chain aren't pinned | CI/CD | S | open (task 078) | INF-4, SUP-8 |
+| SEC-03 | Med | Open redirect after login and sign-up: `safeNext` let some paths through that a browser reads as another site | Auth | S | fixed (PR #55, task 079) | AUTH-1 |
+| SEC-04 | Med | `reset:local --yes` accepted a localhost tunnel to the production database (also named `app`) | Tooling | S | fixed (PR #54, task 080) | SUP-4 |
+| SEC-05 | Med | Parts of the deploy build chain aren't pinned | CI/CD | S | in-progress (task 078, PR #56) | INF-4, SUP-8 |
 
 ## P1 – before real customer data on `main`
 
@@ -85,3 +85,4 @@ No Critical findings. One High (SEC-01). Nothing in the review showed one worksp
 
 ## Change log
 - 2026-11-08 – Register created from the first full review (41 gaps: 1 High, 12 Medium, rest Low/Info).
+- 2026-11-08 – SEC-03 fixed (PR #55) and SEC-04 fixed (PR #54); SEC-01 and SEC-05 in progress (PR #56); `main`'s old image build caches deleted. SEC-02 waits on the owner.
