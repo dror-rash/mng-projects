@@ -10,3 +10,8 @@ infra
 docs
 *.md
 .env*
+
+# Deploy job leftovers (task 078): credentials file, proxy binary, proxy logs
+gha-creds-*.json
+cloud-sql-proxy
+*.log

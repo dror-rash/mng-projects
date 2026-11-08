@@ -2,15 +2,22 @@
 #   docker build --build-arg APP=shell --build-arg EXAMPLE_ZONE_URL=https://... --build-arg DASHBOARD_ZONE_URL=https://... -t shell .
 #   docker build --build-arg APP=example-zone -t example-zone .
 #   docker build --build-arg APP=dashboard -t dashboard .
-FROM node:22-alpine AS base
+# node:22-alpine is pinned by digest (both FROM lines; task 078). To refresh, take the index digest from
+#   docker buildx imagetools inspect node:22-alpine
+# and replace it in both places.
+FROM node:22-alpine@sha256:0e1754758c2df4cfa3e68d59e2e1b7374bb7fd9ea6328eaaacf15cc934af8202 AS base
 RUN corepack enable
 WORKDIR /app
 
 # 1) Prune the monorepo down to just this app and its workspace dependencies
 FROM base AS pruner
 ARG APP
+ENV TURBO_TELEMETRY_DISABLED=1
+# turbo is the root devDependency at the lockfile's version (no download outside the lockfile).
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+RUN pnpm install --frozen-lockfile --ignore-scripts --filter mng-projects
 COPY . .
-RUN pnpm dlx turbo@^2 prune @repo/${APP} --docker
+RUN pnpm turbo prune @repo/${APP} --docker
 
 # 2) Install (cached unless lockfile/package.json change) and build
 FROM base AS builder
@@ -29,7 +36,7 @@ COPY --from=pruner /app/out/full/ .
 RUN pnpm turbo run build --filter=@repo/${APP}
 
 # 3) Minimal runtime image (Next standalone output)
-FROM node:22-alpine AS runner
+FROM node:22-alpine@sha256:0e1754758c2df4cfa3e68d59e2e1b7374bb7fd9ea6328eaaacf15cc934af8202 AS runner
 ARG APP
 ENV NODE_ENV=production \
     NEXT_TELEMETRY_DISABLED=1 \
