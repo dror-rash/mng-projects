@@ -229,6 +229,10 @@ check "preview-cleanup.yml skips fork PRs and Dependabot runs" grep -qxF -- "$CL
 # A newer PR push cancels the older run; pushes to main are never cancelled (each push's commits get scanned).
 ci_cancels_prs_only() { top_block concurrency "$CI" | grep -qxF '  cancel-in-progress: ${{ github.event_name == '"'"'pull_request'"'"' }}'; }
 check "ci.yml cancels in-progress runs on pull requests only" ci_cancels_prs_only
+# GitHub also cancels a *pending* run when a newer one joins its group, whatever cancel-in-progress says; so each push
+# to main gets its own group (its sha), and a PR's runs share one (its ref).
+ci_group_per_main_push() { top_block concurrency "$CI" | grep -qxF '  group: ci-${{ github.event_name == '"'"'pull_request'"'"' && github.ref || github.sha }}'; }
+check "ci.yml gives each push to main its own concurrency group" ci_group_per_main_push
 # No job in ci.yml needs git credentials after checkout.
 ci_checkouts_drop_credentials() {
   awk '
@@ -346,6 +350,8 @@ if [ -z "${TEST_WORKFLOWS_PROBE:-}" ]; then
     "perl -pi -e \"s/ && github\\.actor != 'dependabot\\[bot\\]'//\" $CLEANUPW"
   check "probe: cancelling main's CI runs is caught" probe "ci.yml cancels in-progress runs on pull requests only" \
     "perl -pi -e 's/^  cancel-in-progress: .*/  cancel-in-progress: true/' $CIW"
+  check "probe: one concurrency group for all of main's pushes is caught" probe "ci.yml gives each push to main its own concurrency group" \
+    "perl -pi -e 's/^  group: ci-.*/  group: ci-\\\${{ github.ref }}/' $CIW"
   check "probe: a checkout that keeps its credentials is caught" probe "every checkout in ci.yml has persist-credentials: false" \
     "perl -0pi -e 's/\n *persist-credentials: false//' $CIW"
   check "probe: an ecosystem without a cooldown is caught" probe "every Dependabot ecosystem has a 3-day cooldown" \

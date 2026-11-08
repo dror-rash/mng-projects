@@ -73,6 +73,7 @@ g checkout -q "$MAIN"; commit other.txt "other" "m: clean"
 g merge -q --no-ff --no-commit feature >/dev/null 2>&1
 printf 'PLANTED_TEST_API_KEY="%s"\n' "$FAKE" > "$REPO/app.env"; g add app.env; g commit -qm "merge feature"
 M4="$(g rev-parse HEAD)"
+check "the evil-merge commit really is a merge (two parents)" test "$(g rev-list --parents -1 "$M4" | wc -w)" -eq 3
 scan "$A4" "$M4"
 check "a secret added inside a merge commit is found" test "$CODE" -ne 0
 check "the merge's finding is reported as a leak" grep -q "leaks found" <<<"$OUT"
