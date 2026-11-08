@@ -37,3 +37,10 @@ Feature: Authentication
     And I am on the home page
     When I log out
     Then I am sent to the login page
+
+  @task:079
+  Scenario: A next address on another site goes to the dashboard after logging in
+    Given an existing account
+    And I am on the login page to return to "https://other-site.example/"
+    When I log in with my email and password
+    Then I am on the dashboard
