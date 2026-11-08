@@ -22,6 +22,8 @@ env:
   APP_URL: ${{ vars.APP_URL }}
   IS_PR: ${{ github.event_name == 'pull_request' }}
   PR_NUMBER: ${{ github.event.pull_request.number }}
+  # The image builds' context: the tracked files of the commit this run checked out and migrated (task 078).
+  BUILD_CONTEXT: ${{ github.server_url }}/${{ github.repository }}.git#${{ github.sha }}
 
 jobs:
   deploy:
@@ -98,13 +100,13 @@ jobs:
 
       # 1) example-zone and dashboard first: the shell needs their URLs at build time. Each deploy pins the
       #    digest its build pushed (a tag could be moved in between). PRs deploy to the <zone>-preview services.
-      #    The builds use the action's Git context: the tree of the commit being built (the merge ref on PRs, as
-      #    actions/checkout), so untracked workspace files never reach the builder. The cache keeps the final
-      #    layers only (mode=min).
+      #    The builds fetch BUILD_CONTEXT, the Git tree of github.sha (the commit checked out above), so the
+      #    image holds tracked files only. The cache keeps final layers only (mode=min).
       - name: Build & push example-zone
         id: build_example
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
         with:
+          context: ${{ env.BUILD_CONTEXT }}
           push: true
           build-args: APP=example-zone
           tags: ${{ steps.env.outputs.registry }}/example-zone:${{ github.sha }}
@@ -120,6 +122,7 @@ jobs:
         id: build_dashboard
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
         with:
+          context: ${{ env.BUILD_CONTEXT }}
           push: true
           build-args: APP=dashboard
           tags: ${{ steps.env.outputs.registry }}/dashboard:${{ github.sha }}
@@ -144,6 +147,7 @@ jobs:
         id: build_shell
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
         with:
+          context: ${{ env.BUILD_CONTEXT }}
           push: true
           build-args: |
             APP=shell
