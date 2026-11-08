@@ -29,6 +29,10 @@ jobs:
       - run: bash infra/scripts/test-deploy-service.sh
       # The deploy's demo-seed step stays main-only and non-blocking (task 076).
       - run: bash infra/scripts/test-workflows.sh
+      # The agents' guard hook (tasks 067, 084): refusals, look-alikes, commits in a second worktree.
+      - run: bash scripts/test-hooks.sh
+        env:
+          GUARD_SKIP_CHECKS: "1"
 
   e2e:
     needs: verify

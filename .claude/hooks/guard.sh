@@ -62,25 +62,75 @@ esac
 # ---------- shell commands ----------
 cmd="$(jq -r '.tool_input.command // ""' <<<"$input")"
 
+# Pattern pieces. A word in a command: quoted, or up to a space or a shell separator.
+WORD="(\"[^\"]*\"|'[^']*'|[^[:space:];&|]+)"
+# git <global options> <sub>: -C <dir>, -c <k=v>, --git-dir/--work-tree <path>, and flags (--no-pager, --git-dir=x).
+GITOPT="(-[Cc][[:space:]]+$WORD|--(git-dir|work-tree|namespace|exec-path|config-env)[[:space:]]+$WORD|-[^[:space:];&|]+)"
+git_sub() { echo "(^|[^[:alnum:]_-])git([[:space:]]+$GITOPT)*[[:space:]]+$1"; }
+# The arguments of every `git … <sub>` in the command, one line each.
+git_args() { grep -Eo "$(git_sub "$1")([[:space:]][^;&|]*)?" <<<"$cmd" | sed -E "s#^$(git_sub "$1")##"; }
+# gcloud [alpha|beta] [global flags, with or without a value] <group>
+GCLOUD="(^|[^[:alnum:]_-])gcloud([[:space:]]+(alpha|beta|-[^[:space:];&|]+([[:space:]]+[^-[:space:];&|][^[:space:];&|]*)?))*[[:space:]]+"
+
 grep -Eq '(^|[^[:alnum:]_-])terraform[[:space:]]+(.*[[:space:]])?(apply|destroy)([[:space:]]|$)' <<<"$cmd" \
   && deny "terraform apply/destroy runs only in CI or by the owner (CLAUDE.md rule 10). Run terraform plan and put its output in the PR."
-grep -Eq 'gcloud[[:space:]]+run[[:space:]]+(deploy|services[[:space:]]+(update|update-traffic|delete))' <<<"$cmd" \
-  && deny "Deploys go through .github/workflows/deploy.yml, never by hand (CLAUDE.md rule 10)."
-grep -Eq 'git[[:space:]]+push([[:space:]].*)?[[:space:]](--force|--force-with-lease|-f)([[:space:]=]|$)' <<<"$cmd" \
-  && deny "No force pushes. Add a commit instead, or ask the owner."
+grep -Eq "${GCLOUD}run[[:space:]]+(deploy|services[[:space:]]+(replace|update|update-traffic|delete))([[:space:]]|$)" <<<"$cmd" \
+  && deny "Cloud Run changes go through .github/workflows/deploy.yml and infra/ Terraform, never by hand, on any release track (CLAUDE.md rule 10)."
+grep -Eq "${GCLOUD}secrets[[:space:]]+versions[[:space:]]+access([[:space:]]|$)" <<<"$cmd" \
+  && deny "Secret Manager values are never read by agents (CLAUDE.md rule 7). Ask the owner, or use the local .env."
+# Force: -f alone or in combined short flags (-uf), --force, --force-with-lease[=…], --force-if-includes, a +refspec.
+grep -Eq "(^|[[:space:]])(-[[:alnum:]]*f[[:alnum:]]*|--force(-with-lease|-if-includes)?(=[^[:space:]]*)?|[\"']?\\+[^[:space:]]+)([[:space:]]|$)" <<<"$(git_args push)" \
+  && deny "No force pushes (--force, -f, --force-with-lease, --force-if-includes or a +refspec). Add a commit instead, or ask the owner."
+grep -Eq '(^|[[:space:]])(-[[:alnum:]]*f[[:alnum:]]*|--force)([[:space:]]|$)' <<<"$(git_args add)" \
+  && deny "No git add -f/--force: ignored files (.env, *.tfvars, keys) stay out of the repo (CLAUDE.md rule 7). Ask the owner if a file really belongs in git."
 
-grep -Eq 'git[[:space:]]+(-C[[:space:]]+[^[:space:]]+[[:space:]]+)?commit([[:space:]]|$)' <<<"$cmd" || exit 0
+grep -Eq "$(git_sub commit)([[:space:]]|$)" <<<"$cmd" || exit 0
 
-commit_part="$(grep -Eo 'commit([[:space:]][^;&|]*)?' <<<"$cmd" | head -1)"
-grep -Eq '[[:space:]](--no-verify|-n)([[:space:]]|$)' <<<"$commit_part" && deny "Commits never skip checks (--no-verify)."
+commit_args="$(git_args commit)"
+grep -Eq '(^|[[:space:]])(--no-verify|-n)([[:space:]]|$)' <<<"$commit_args" && deny "Commits never skip checks (--no-verify)."
 
-root="$(git -C "$cwd" rev-parse --show-toplevel 2>/dev/null)" || exit 0
+# Which repository the commit is made in: the session cwd, then a leading `cd <dir> &&` (or `;`),
+# then `scripts/lane.sh exec <n> --` (the lane's worktree, as lane.sh computes it), then `git -C <dir>`.
+resolve_dir() { # base, dir as written (quoted, ~, relative)
+  local d="$2"; d="${d#\"}"; d="${d%\"}"; d="${d#\'}"; d="${d%\'}"
+  case "$d" in "~") d="$HOME" ;; "~/"*) d="$HOME/${d#"~/"}" ;; esac
+  case "$d" in /*) ;; *) d="$1/$d" ;; esac
+  (cd "$d" 2>/dev/null && pwd -P)
+}
+lane_dir() { # dir in the repo whose lane.sh runs, lane number
+  local common main
+  common="$(git -C "$1" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" || return 1
+  main="$(dirname "$common")"
+  echo "${LANES_DIR:-$(dirname "$main")/$(basename "$main")-lanes}/lane-$2"
+}
+commit_repo() {
+  local dir="$cwd" rest="$cmd" seg
+  local cd_re="^[[:space:]]*cd[[:space:]]+$WORD[[:space:]]*(&&|;)"
+  while [[ "$rest" =~ $cd_re ]]; do
+    dir="$(resolve_dir "$dir" "${BASH_REMATCH[1]}")"; [ -n "$dir" ] || return 1
+    rest="${rest:${#BASH_REMATCH[0]}}"
+  done
+  local lane_re="^[[:space:]]*((bash|sh)[[:space:]]+)?([^[:space:]]*/)?scripts/lane\.sh[[:space:]]+exec[[:space:]]+([1-9])[[:space:]]"
+  if [[ "$rest" =~ $lane_re ]]; then
+    local n="${BASH_REMATCH[4]}"
+    dir="$(resolve_dir "$dir" "${BASH_REMATCH[3]:-.}")" && dir="$(lane_dir "$dir" "$n")" || return 1
+  fi
+  seg="$(grep -Eo "$(git_sub commit)" <<<"$rest" | head -1)"
+  local c_re="(^|[[:space:]])-C[[:space:]]+$WORD(.*)$"
+  while [[ "$seg" =~ $c_re ]]; do
+    dir="$(resolve_dir "$dir" "${BASH_REMATCH[2]}")"; [ -n "$dir" ] || return 1
+    seg="${BASH_REMATCH[3]}"
+  done
+  git -C "$dir" rev-parse --show-toplevel 2>/dev/null
+}
+
+root="$(commit_repo)" || exit 0
 type="$(grep -Eo '(feat|fix|refactor|test|docs|chore|perf|build|ci|style)(\([^)]*\))?!?:' <<<"$cmd" | head -1 | sed -E 's/[(!:].*//')"
 
 # What the commit will contain: the index, plus the working tree when the same command stages (git add / commit -a).
 changes="$(git -C "$root" diff --cached --name-status)"
 staging=0
-if grep -Eq 'git[[:space:]]+add|commit[[:space:]]+(.*[[:space:]])?-[[:alnum:]]*a' <<<"$cmd"; then
+if grep -Eq "$(git_sub add)([[:space:]]|$)" <<<"$cmd" || grep -Eq '(^|[[:space:]])(-[[:alnum:]]*a[[:alnum:]]*|--all)([[:space:]]|$)' <<<"$commit_args"; then
   staging=1
   changes="$changes"$'\n'"$(git -C "$root" diff --name-status)"
 fi
