@@ -1,0 +1,29 @@
+# Weekly version updates (task 082). Security updates come from the repository's Dependabot settings (owner step).
+# Dependabot PRs run CI (verify, security, e2e); deploy.yml skips them (no secrets or OIDC token there).
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      # Majors stay one PR each.
+      runtime:
+        dependency-type: production
+        update-types: [minor, patch]
+      dev:
+        dependency-type: development
+        update-types: [minor, patch]
+
+  # Keeps the SHA pins of task 078 current (Dependabot updates the SHA and its # vX.Y.Z comment).
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: ci

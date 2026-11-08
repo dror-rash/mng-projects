@@ -27,8 +27,9 @@ env:
 
 jobs:
   deploy:
-    # Fork PRs can't get OIDC tokens; skip them.
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    # Fork PRs can't get OIDC tokens, and Dependabot's PRs get no secrets or OIDC token either; skip both. Every
+    # push to main deploys, whoever pushed (task 082).
+    if: github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]')
     runs-on: ubuntu-latest
     # Also bounds the wait for another PR's migration (with-db-lock.mjs).
     timeout-minutes: 45

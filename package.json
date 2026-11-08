@@ -24,6 +24,13 @@
     "scaffold": "bash scripts/create-project.sh",
     "test:scaffold": "bash scripts/test-scaffold.sh"
   },
+  "pnpm": {
+    "auditConfig": {
+      "ignoreGhsas": [
+        "GHSA-gpj5-g38j-94v9"
+      ]
+    }
+  },
   "devDependencies": {
     "turbo": "^2.5.0",
     "typescript": "^5.9.0"
