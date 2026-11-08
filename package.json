@@ -31,6 +31,9 @@
         "GHSA-5gmw-xhrv-c9v3",
         "GHSA-85c8-ppgw-ccpr"
       ]
+    },
+    "overrides": {
+      "next>postcss": "^8.5.18"
     }
   },
   "devDependencies": {
