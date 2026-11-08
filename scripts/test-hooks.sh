@@ -92,6 +92,26 @@ expect 0 "allows deleting a feature branch"             Bash "$(bash_ "git push 
 expect 0 "allows deleting a feature branch with :"      Bash "$(bash_ "git push origin :feat/x")"
 expect 0 "allows deleting a branch named like main"     Bash "$(bash_ "git push origin --delete feat/main")"
 
+# Unambiguous long-option prefixes, --prune, and push config from the environment or git config (re-review)
+expect 2 "refuses a --mirror prefix --mirr"             Bash "$(bash_ "git push --mirr origin")"
+expect 2 "refuses a --mirror prefix --mi"               Bash "$(bash_ "git push --mi origin")"
+expect 2 "refuses deleting main with --del"             Bash "$(bash_ "git push origin --del main")"
+expect 2 "refuses deleting main with --d"               Bash "$(bash_ "git push origin --d main")"
+expect 2 "refuses a --force-with-lease prefix"          Bash "$(bash_ "git push --force-w origin feat/x")"
+expect 2 "refuses a --force-if-includes prefix"         Bash "$(bash_ "git push --force-i origin feat/x")"
+expect 2 "refuses a --force prefix"                     Bash "$(bash_ "git push --forc origin feat/x")"
+expect 2 "refuses git push --prune"                     Bash "$(bash_ "git push --prune origin")"
+expect 2 "refuses a --prune prefix"                     Bash "$(bash_ "git push --pru origin")"
+expect 2 "refuses a push with GIT_CONFIG_COUNT"         Bash "$(bash_ "GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=remote.origin.push GIT_CONFIG_VALUE_0=+x git push")"
+expect 2 "refuses a push with GIT_CONFIG_PARAMETERS"    Bash "$(bash_ "GIT_CONFIG_PARAMETERS=\"'remote.origin.push'='+x'\" git push")"
+expect 2 "refuses a push with --config-env"             Bash "$(bash_ "git --config-env=remote.origin.push=V push")"
+expect 2 "refuses git config remote.*.push"             Bash "$(bash_ "git config remote.origin.push '+refs/heads/*:refs/heads/*'")"
+expect 2 "refuses git config remote.*.mirror"           Bash "$(bash_ "git config --add remote.origin.mirror true")"
+expect 0 "allows deleting a feature branch with --del"  Bash "$(bash_ "git push origin --del feat/x")"
+expect 0 "allows git push --dry-run"                    Bash "$(bash_ "git push --dry-run origin feat/x")"
+expect 0 "allows git config user.name"                  Bash "$(bash_ "git config user.name x")"
+expect 0 "allows reading remote.origin.url"             Bash "$(bash_ "git config --get remote.origin.url")"
+
 # Backslash-newline continuations
 expect 2 "refuses a force push split over lines"        Bash "$(bash_ $'git push origin \\\n  --force')"
 expect 2 "refuses gcloud run services update split over lines" Bash "$(bash_ $'gcloud run services \\\n  update shell')"
@@ -110,6 +130,9 @@ expect 0 "allows git -c with another command"           Bash "$(bash_ "git -c co
 expect 2 "refuses -n in combined short flags"           Bash "$(bash_ "git commit -nm 'docs: x'")"
 expect 2 "refuses -n in combined short flags -anm"      Bash "$(bash_ "git commit -anm 'docs: x'")"
 expect 0 "allows -n after a ; inside a message"         Bash "$(bash_ "git commit -m 'docs: a; b -n c'")"
+expect 2 "refuses a --no-verify prefix"                 Bash "$(bash_ "git commit --no-ve -m 'docs: x'")"
+expect 0 "allows -main in a message"                    Bash "$(bash_ "git commit -m \"docs: the -main flag\"")"
+expect 0 "allows -only and -config in a message"        Bash "$(bash_ "git commit -m 'docs: -only and -config'")"
 
 # Commits, in a throwaway repo where "main" plays origin/main
 # Laid out like a real checkout: lanes in <repo>-lanes/lane-<n>, where lane.sh puts them without LANES_DIR.
@@ -180,6 +203,25 @@ stage "$REPO" true; guard_cmd 2 "refuses GIT_DIR="                              
 stage "$REPO" true; guard_cmd 2 "refuses git --git-dir"                            "git --git-dir='$REPO/.git' commit -m 'docs: x'" "$REPO"
 stage "$REPO" true; guard_cmd 2 "refuses git --work-tree"                          "git --work-tree '$WT' commit -m 'docs: x'" "$REPO"
 stage "$REPO" true; guard_cmd 2 "refuses a lane.sh exec that isn't leading"        "pnpm lint && scripts/lane.sh exec 7 -- $DOCS" "$REPO"
+
+# One commit per command, never behind a shell, eval or env -C (re-review)
+stage "$REPO" true; guard_cmd 2 "refuses a cd after a quoted git commit"           "echo \"git commit\" && cd '$WT' && $DOCS" "$REPO"
+stage "$REPO" true; guard_cmd 2 "refuses two commits in one command"               "git commit -m 'docs: a' && git commit -m 'docs: b'" "$REPO"
+stage "$REPO" true; guard_cmd 2 "refuses a commit behind bash -c"                  "bash -c \"git commit -m 'docs: x'\"" "$REPO"
+stage "$REPO" true; guard_cmd 2 "refuses a commit behind sh -c"                    "sh -c 'cd $WT && git commit -m docs:x'" "$REPO"
+stage "$REPO" true; guard_cmd 2 "refuses a commit behind eval"                     "eval \"git commit -m 'docs: x'\"" "$REPO"
+stage "$REPO" true; guard_cmd 2 "refuses a commit behind env -C"                   "env -C '$WT' $DOCS" "$REPO"
+stage "$REPO" true; guard_cmd 2 "refuses a commit in a heredoc fed to bash"        "bash <<'EOF'
+$DOCS
+EOF" "$REPO"
+stage "$REPO" true; guard_cmd 0 "allows git commit and cd quoted in another command" "gh pr create --title x --body \"cd x and git commit\"" "$REPO"
+stage "$REPO" true; guard_cmd 0 "allows git commit and cd quoted in the message"   "git commit -m 'docs: git commit after cd x'" "$REPO"
+stage "$REPO" true; guard_cmd 0 "allows env with variables before git commit"      "env FOO=1 $DOCS" "$REPO"
+stage "$WT" "$FEATURE"; guard_cmd 0 "allows a heredoc message mentioning git commit, bash -c and eval" "git -C '$WT' commit -q -F - <<'EOF'
+docs: x
+
+git commit; bash -c y; eval z; cd w
+EOF" "$REPO"
 
 # ... and the normal flows still pass, including the agents' "$(scripts/lane.sh path <n>)"
 stage "$WT" "$FEATURE";   guard_cmd 2 "resolves git -C \"\$(scripts/lane.sh path n)\" to the lane" "git -C \"\$(scripts/lane.sh path 7)\" commit -m 'feat: x'" "$REPO"
