@@ -216,6 +216,14 @@ Dockerfile runs the lockfile's `turbo`; and `infra/scripts/get-cloud-sql-proxy.s
 sha256 together (upgrade both from the release notes) and fails on a mismatch. Probes run each check on a copy with
 one change and expect it to fail.
 
+CI's `security` job (task 082) runs `pnpm audit --prod --audit-level=high` (accepted advisories in the root
+`package.json`'s `pnpm.auditConfig.ignoreGhsas`, each with a register line) and gitleaks
+(`infra/scripts/get-gitleaks.sh`: version and sha256 together, like the proxy) through `scan-secrets.sh` on the PR's
+`base..head` or a push's `before..after`. `test-workflows.sh` also checks every workflow's top-level `permissions:`
+and that Dependabot's runs skip the deploy and the preview cleanup. To test the scan locally (not part of
+`pnpm test:infra`, it needs the binary): `GITLEAKS=gitleaks bash infra/scripts/test-secret-scan.sh` (a gitleaks on
+`PATH`, or `GITLEAKS=/path/to/gitleaks`).
+
 ## Files (GCS)
 - `<PROJECT_ID>-files` for `main` (no lifecycle rule: attachments are soft-deleted in the database and stay
   restorable) and `<PROJECT_ID>-files-preview` for all PRs (objects deleted 14 days after upload, no soft-delete
