@@ -54,14 +54,14 @@ The zones' `dev`/`start` scripts and the Playwright config read `SHELL_PORT`, `E
 - a `drizzle-orm` import under `apps/`;
 - `terraform apply/destroy`;
 - Cloud Run changes by hand on any release track (`gcloud [alpha|beta] run deploy`, `run services replace|update|update-traffic|delete`), and reading a Secret Manager value (`gcloud secrets versions access`);
-- force pushes in every spelling (`-f` alone or combined like `-uf`, `--force`, `--force-with-lease`, `--force-if-includes`, a `+refspec`);
+- force pushes in every spelling (`-f` alone or combined like `-uf`, `--force`, `--force-with-lease`, `--force-if-includes`, a `+refspec`) and destructive pushes (`--mirror`, deleting `main`/`master` with `:main` or `--delete`/`-d`, a `remote.*.push=+…` or `remote.*.mirror` from `git -c`); deleting a feature branch is fine;
 - `git add -f` / `--force` (ignored files stay out; ask the owner);
-- `git commit --no-verify` / `-n`;
+- `git commit --no-verify` / `-n`, also inside combined short flags (`-nm`);
 - a `feat:` / `fix:` / `refactor:` commit that changes a `.feature` file;
 - a commit that changes an applied migration;
 - any commit when `pnpm lint` or `pnpm typecheck` fails.
 
-Commits behind git global options (`git -c k=v commit`, `git --no-pager commit`, `git -C <dir> commit`) get the same checks. They run in the repository the commit is made in, resolved from the command in this order: the session cwd, a leading `cd <dir> &&` (or `;`), `scripts/lane.sh exec <n> --` (the lane's worktree), then `git -C <dir>`. So a commit in a lane worktree is checked there, not in the main checkout (task 084).
+Commits behind git global options (`git -c k=v commit`, `git --no-pager commit`, `git -C <dir> commit`) get the same checks. They run in the repository the commit is made in, resolved from the command in this order: the session cwd, a leading `cd <dir> &&` (or `;`), `scripts/lane.sh exec <n> --` (the lane's worktree), then `git -C <dir>`. `-C "$(scripts/lane.sh path <n>)"` resolves to the lane too. So a commit in a lane worktree is checked there, not in the main checkout (task 084). The commit is **refused when the directory can't be resolved**: a `cd`/`-C` target that is dynamic (`$…`, backticks, `\`, `~user`), `-`, or doesn't exist; a lane without a worktree; or a `cd`, `pushd`, `GIT_DIR=`, `--git-dir`, `--work-tree` or `lane.sh exec` the resolver didn't consume (a subshell `(cd x && git commit)`, a `cd` that isn't leading, `cd x || exit; git commit`). Use a literal path or `scripts/lane.sh exec <n> -- git commit`. Backslash-newline continuations are joined before matching.
 
 The guard is a seatbelt, not a boundary: it pattern-matches the command, so it catches honest mistakes and obvious shortcuts, not a determined bypass (`bash -c`, `eval`, variables, a script file). The real limits are the owner's credentials and settings (SEC-13) and branch protection (SEC-02).
 
