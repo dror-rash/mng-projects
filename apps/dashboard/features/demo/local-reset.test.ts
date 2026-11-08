@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { isLocalDatabase, isTestAccount } from "./local-reset";
+import { failureMessage, isLocalDatabase, isLocalServer, isTestAccount } from "./local-reset";
 
 const local = { DATABASE_URL: "postgres://app:app@localhost:5432/app" };
 
@@ -83,5 +83,42 @@ describe("isTestAccount", () => {
     expect(isTestAccount("me@notexample.com")).toBe(false);
     expect(isTestAccount("me@example.com.evil.io")).toBe(false);
     expect(isTestAccount("me@sub.example.com")).toBe(false);
+  });
+});
+
+describe("isLocalServer", () => {
+  const cloudSql = { local: false, reason: "the connected server is Cloud SQL." };
+
+  it("allows a server with no Cloud SQL markers", () => {
+    expect(isLocalServer({ cloudSqlRole: false, cloudSqlSettings: false })).toEqual({ local: true });
+  });
+
+  it("refuses a server with the Cloud SQL role", () => {
+    expect(isLocalServer({ cloudSqlRole: true, cloudSqlSettings: false })).toEqual(cloudSql);
+  });
+
+  it("refuses a server with cloudsql settings", () => {
+    expect(isLocalServer({ cloudSqlRole: false, cloudSqlSettings: true })).toEqual(cloudSql);
+  });
+
+  it("refuses a server with both", () => {
+    expect(isLocalServer({ cloudSqlRole: true, cloudSqlSettings: true })).toEqual(cloudSql);
+  });
+});
+
+describe("failureMessage", () => {
+  it("is the message of the error that caused a failed query", () => {
+    const cause = new Error("connect ECONNREFUSED 127.0.0.1:5432");
+    expect(failureMessage(new Error("Failed query: select 1", { cause }))).toBe("connect ECONNREFUSED 127.0.0.1:5432");
+  });
+
+  it("is the error's code when its message is empty", () => {
+    const cause = Object.assign(new AggregateError([], ""), { code: "ECONNREFUSED" });
+    expect(failureMessage(new Error("Failed query: select 1", { cause }))).toBe("ECONNREFUSED");
+  });
+
+  it("is the error's own message without a cause", () => {
+    expect(failureMessage(new Error("password authentication failed"))).toBe("password authentication failed");
+    expect(failureMessage("boom")).toBe("boom");
   });
 });

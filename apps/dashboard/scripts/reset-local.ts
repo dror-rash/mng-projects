@@ -1,8 +1,10 @@
 /**
  * Local dev only (task 071): wipes every workspace (with its customers, sites, projects and everything in
  * them) and every e2e test account (email at example.com) from the LOCAL database. Other accounts stay,
- * with their sessions. Refuses to run unless DATABASE_URL is on localhost, Cloud SQL isn't configured and
- * NODE_ENV isn't production. Without --yes it only prints what it would delete.
+ * with their sessions. Refuses to run unless DATABASE_URL is on localhost and names `app` or `app_lane<n>`,
+ * Cloud SQL isn't configured and NODE_ENV isn't production (`isLocalDatabase`), and then, before any other
+ * query, unless the connected server shows no Cloud SQL markers (`isLocalServer`, task 080). Without --yes
+ * it only prints what it would delete.
  *   pnpm --filter @repo/dashboard reset:local [--yes]
  * Files in local storage are left alone.
  */
@@ -13,7 +15,9 @@ import { loadEnvConfig } from "@next/env";
 import { asc, inArray, schema, sql } from "@repo/db";
 import { getMaintenanceDb } from "@repo/db/maintenance";
 
-import { isLocalDatabase, isTestAccount } from "@/features/demo/local-reset";
+import { failureMessage, isLocalDatabase, isLocalServer, isTestAccount } from "@/features/demo/local-reset";
+
+import { readServerFacts } from "./server-facts";
 
 // Load the repo-root .env, like seed-demo.ts (tsx runs this as CommonJS, so __dirname is defined).
 loadEnvConfig(path.join(__dirname, "../../.."));
@@ -35,6 +39,20 @@ async function main(): Promise<number> {
 
   // The maintenance connection: the reset deletes past row-level security, as the owner.
   const db = getMaintenanceDb();
+
+  // The server check runs before any other query; see `isLocalServer`.
+  let server: ReturnType<typeof isLocalServer>;
+  try {
+    server = isLocalServer(await readServerFacts(db));
+  } catch (error) {
+    console.error(`Refusing to reset: could not check the connected server (${failureMessage(error)}).`);
+    return 1;
+  }
+  if (!server.local) {
+    console.error(`Refusing to reset: ${server.reason} reset:local only runs against a local database.`);
+    return 1;
+  }
+
   const users = await db
     .select({ id: schema.user.id, email: schema.user.email })
     .from(schema.user)
