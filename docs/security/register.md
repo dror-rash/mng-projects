@@ -9,7 +9,7 @@ The one list of known security gaps and their status. The process that feeds it 
 | Priority | Open | Planned | Fixed | Accepted |
 |---|---|---|---|---|
 | P0 – fix now | 1 | 0 | 4 | 0 |
-| P1 – before real customer data on `main` | 2 | 11 | 0 | 0 |
+| P1 – before real customer data on `main` | 2 | 11 | 1 | 0 |
 | P2 – hardening | 15 | 0 | 0 | 0 |
 | P3 – info / decide | 8 | 0 | 0 | 0 |
 
@@ -47,6 +47,7 @@ No Critical findings. One High (SEC-01). Nothing in the review showed one worksp
 | SEC-14 | Low | `main` can scale to 5 instances × 3 zones × 4 connections against a 12-connection database; unauthenticated traffic can cause "too many connections" outages | Infra | S | planned (task 091) | INF-8 |
 | SEC-15 | Low | Fork PRs from anyone with one merged PR run edited workflows without approval; `ci.yml` has no `permissions:`; WIF doesn't check which workflow asks for a token | CI/CD | S | planned (tasks 082, 083; **owner:** fork approval for all outside contributors) | INF-11, INF-12 |
 | SEC-16 | Low | `drizzle-orm` 0.44.7 has a High SQL-injection advisory (identifiers); not reachable today, and Better Auth expects ≥0.45.2 | Supply chain | S | planned (task 081) | WEB-5, SUP-6 |
+| SEC-42 | Low | `postcss` 8.4.31, pinned by `next`, has two High advisories (GHSA-6g55-p6wh-862q, GHSA-r28c-9q8g-f849; fixed in ≥ 8.5.18); build-time only, but `pnpm audit --prod` (task 082) fails on them | Supply chain | S | fixed (PR #60, task 093) | task 082 audit |
 | SEC-17 | Low | No alerting at all (IAM changes, deploys outside CI, 5xx, DB connections) and no budget alert | Infra | M | planned (task 092) | INF-5 |
 | SEC-18 | Low | Deleting a user who uploaded a file or recorded a visit fails (`attachment_check`, `site_visit_keep_project`), so an erasure request or a compromised account can't be deleted | DB | S | planned (task 088; the visit half was noted in task 061) | ACC-3 |
 
@@ -88,3 +89,5 @@ No Critical findings. One High (SEC-01). Nothing in the review showed one worksp
 - 2026-11-08 – SEC-03 fixed (PR #55) and SEC-04 fixed (PR #54); SEC-01 and SEC-05 in progress (PR #56); `main`'s old image build caches deleted. SEC-02 waits on the owner.
 - 2026-11-08 – SEC-01 and SEC-05 fixed (PR #56); the first `main` deploy after it built from the commit's Git URL with the pinned Node image and the checked proxy. Only SEC-02 (owner setting) is open in P0.
 - 2026-11-08 – P1 tasks planned: SEC-16 → 081, SEC-11 and SEC-15 → 082 (CI checks) and 083 (WIF), SEC-12 → 084, SEC-07 → 085 (size cap) and 087 (abandoned uploads), SEC-08 → 086, SEC-18 → 088, SEC-10 → 089 (shared rate limit) and 090 (lockout), SEC-14 → 091, SEC-17 → 092. Not planned: SEC-06 (task 074, after the POC), SEC-09 and SEC-13 (owner). Owner steps stay in the rows (SEC-11, SEC-15).
+- 2026-11-08 – SEC-42 added from task 082's first `pnpm audit --prod` run: `next>postcss` 8.4.31 (two High advisories). Owner: fix with a `pnpm.overrides` entry → task 093.
+- 2026-11-08 – SEC-42 fixed (PR #60, task 093): `next`'s postcss overridden to 8.5.30.
