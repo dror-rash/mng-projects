@@ -26,7 +26,7 @@ bash_() { jq -nc --arg c "$1" '{command:$c}'; }
 # Files
 expect 2 "refuses editing an applied migration"        Edit  "$(edit "$ROOT/packages/db/migrations/0001_modern_blindfold.sql")"
 expect 2 "refuses editing an applied migration snapshot" Write "$(write "$ROOT/packages/db/migrations/meta/0001_snapshot.json")"
-LINK_DIR="$(mktemp -d)"; ln -s "$ROOT" "$LINK_DIR/repo"
+LINK_DIR="$(mktemp -d)"; trap 'rm -rf "$LINK_DIR" "${BASE:-}"' EXIT; ln -s "$ROOT" "$LINK_DIR/repo"
 expect 2 "refuses editing an applied migration through a symlinked path" Edit "$(edit "$LINK_DIR/repo/packages/db/migrations/0001_modern_blindfold.sql")"
 expect 0 "allows writing a new migration"               Write "$(write "$ROOT/packages/db/migrations/9999_new.sql")"
 expect 0 "allows editing the migration journal"         Edit  "$(edit "$ROOT/packages/db/migrations/meta/_journal.json")"
@@ -81,6 +81,21 @@ expect 0 "allows git log --format=%f"                   Bash "$(bash_ "git log -
 expect 0 "allows -f in a later command than the push"   Bash "$(bash_ "git push origin main && git log -f x")"
 expect 0 "allows gh pr merge --merge"                   Bash "$(bash_ "gh pr merge 59 --merge --delete-branch")"
 
+# Destructive pushes (review of task 084)
+expect 2 "refuses git push --mirror"                    Bash "$(bash_ "git push --mirror origin")"
+expect 2 "refuses deleting main with :main"             Bash "$(bash_ "git push origin :main")"
+expect 2 "refuses deleting main with :refs/heads/main"  Bash "$(bash_ "git push origin :refs/heads/main")"
+expect 2 "refuses deleting main with --delete"          Bash "$(bash_ "git push origin --delete main")"
+expect 2 "refuses deleting main with -d"                Bash "$(bash_ "git push -d origin main")"
+expect 2 "refuses a forced push refspec from git -c"    Bash "$(bash_ "git -c 'remote.origin.push=+refs/heads/*:refs/heads/*' push")"
+expect 0 "allows deleting a feature branch"             Bash "$(bash_ "git push origin --delete feat/x")"
+expect 0 "allows deleting a feature branch with :"      Bash "$(bash_ "git push origin :feat/x")"
+expect 0 "allows deleting a branch named like main"     Bash "$(bash_ "git push origin --delete feat/main")"
+
+# Backslash-newline continuations
+expect 2 "refuses a force push split over lines"        Bash "$(bash_ $'git push origin \\\n  --force')"
+expect 2 "refuses gcloud run services update split over lines" Bash "$(bash_ $'gcloud run services \\\n  update shell')"
+
 # git add -f
 expect 2 "refuses git add -f"                           Bash "$(bash_ "git add -f .env")"
 expect 2 "refuses git add --force"                      Bash "$(bash_ "git add --force infra/terraform.tfvars")"
@@ -92,14 +107,18 @@ expect 0 "allows git add -A with a path containing f"   Bash "$(bash_ "git add -
 expect 2 "refuses --no-verify after git -c"             Bash "$(bash_ "git -c x=y commit --no-verify -m 'feat: x'")"
 expect 2 "refuses -n after git --no-pager"              Bash "$(bash_ "git --no-pager commit -n -m 'docs: x'")"
 expect 0 "allows git -c with another command"           Bash "$(bash_ "git -c color.ui=never log -n 1")"
+expect 2 "refuses -n in combined short flags"           Bash "$(bash_ "git commit -nm 'docs: x'")"
+expect 2 "refuses -n in combined short flags -anm"      Bash "$(bash_ "git commit -anm 'docs: x'")"
+expect 0 "allows -n after a ; inside a message"         Bash "$(bash_ "git commit -m 'docs: a; b -n c'")"
 
 # Commits, in a throwaway repo where "main" plays origin/main
-REPO="$(mktemp -d)"; LANES="$(mktemp -d)"; trap 'rm -rf "$REPO" "$LANES" "$LINK_DIR"' EXIT
+# Laid out like a real checkout: lanes in <repo>-lanes/lane-<n>, where lane.sh puts them without LANES_DIR.
+BASE="$(mktemp -d)"; REPO="$BASE/proj"; LANES="$BASE/proj-lanes"; mkdir -p "$REPO"
 git -C "$REPO" init -q -b main && git -C "$REPO" config user.email t@example.com && git -C "$REPO" config user.name t
 mkdir -p "$REPO/packages/db/migrations" "$REPO/docs/features" "$REPO/apps/dashboard"
 echo "select 1;" > "$REPO/packages/db/migrations/0001_init.sql"; echo "Feature: x" > "$REPO/docs/features/x.feature"; touch "$REPO/apps/dashboard/.gitkeep"
 git -C "$REPO" add -A && git -C "$REPO" commit -qm init
-# A second worktree where scripts/lane.sh puts lane 7 (LANES_DIR/lane-<n>).
+# A second worktree where scripts/lane.sh puts lane 7.
 WT="$LANES/lane-7"; git -C "$REPO" worktree add -q -b lane-test "$WT" main
 stage() { # dir, setup: clean both checkouts, then change and stage in dir
   local d; for d in "$REPO" "$WT"; do git -C "$d" reset -q --hard; git -C "$d" clean -qfd; done
@@ -108,7 +127,7 @@ stage() { # dir, setup: clean both checkouts, then change and stage in dir
 guard_cmd() { # want-exit, name, command, cwd
   local want="$1" name="$2" out code
   out="$(jq -nc --arg c "$3" --arg cwd "$4" '{tool_name:"Bash", tool_input:{command:$c}, cwd:$cwd}' \
-    | GUARD_SKIP_CHECKS=1 GUARD_BASE_REF=main LANES_DIR="$LANES" bash "$GUARD" 2>&1)"; code=$?
+    | GUARD_SKIP_CHECKS=1 GUARD_BASE_REF=main bash "$GUARD" 2>&1)"; code=$?
   if [ "$code" = "$want" ]; then pass=$((pass+1)); echo "ok   - $name"
   else fail=$((fail+1)); echo "FAIL - $name (exit $code, want $want) $out"; fi
 }
@@ -142,6 +161,39 @@ stage "$WT" "$MIGRATION"; guard_cmd 2 "refuses a commit changing an applied migr
 stage "$WT" "$FEATURE";   guard_cmd 0 "allows a docs: commit changing a feature file in a worktree" "cd '$WT' && git commit -m 'docs(features): x'" "$REPO"
 stage "$REPO" "$FEATURE"; guard_cmd 0 "checks the worktree, not the session's checkout" "git -C '$WT' commit -m 'feat: x'" "$REPO"
 stage "$REPO" "$FEATURE"; guard_cmd 0 "checks the lane, not the session's checkout" "scripts/lane.sh exec 7 -- git commit -m 'feat: x'" "$REPO"
+
+# The resolver fails closed: a directory it can't resolve to a literal path is refused, not skipped
+DOCS='git commit -m "docs: x"'
+stage "$REPO" true; guard_cmd 2 "refuses a cd to a directory that doesn't exist"   "cd /nonexistent-084; $DOCS" "$REPO"
+stage "$REPO" true; guard_cmd 2 "refuses cd -"                                     "cd - && $DOCS" "$REPO"
+stage "$REPO" true; guard_cmd 2 "refuses a cd to a variable"                       "cd \$PWD && $DOCS" "$REPO"
+stage "$REPO" true; guard_cmd 2 "refuses git -C with a command substitution"       "git -C \"\$(pwd)\" commit -m 'docs: x'" "$REPO"
+stage "$REPO" true; guard_cmd 2 "refuses git -C with backticks"                    "git -C \`pwd\` commit -m 'docs: x'" "$REPO"
+stage "$REPO" true; guard_cmd 2 "refuses a cd to an escaped-space path"            "cd /tmp/a\\ b && $DOCS" "$REPO"
+stage "$REPO" true; guard_cmd 2 "refuses a cd to ~user"                            "cd ~someone && $DOCS" "$REPO"
+stage "$REPO" true; guard_cmd 2 "refuses a git -C that doesn't exist"              "git -C /nonexistent-084 commit -m 'docs: x'" "$REPO"
+stage "$REPO" true; guard_cmd 2 "refuses a cd in a subshell"                       "(cd '$WT' && $DOCS)" "$REPO"
+stage "$REPO" true; guard_cmd 2 "refuses a cd that isn't leading"                  "pnpm lint && cd '$WT' && $DOCS" "$REPO"
+stage "$REPO" true; guard_cmd 2 "refuses cd <dir> || exit; git commit"             "cd '$WT' || exit; $DOCS" "$REPO"
+stage "$REPO" true; guard_cmd 2 "refuses pushd"                                    "pushd '$WT' && $DOCS" "$REPO"
+stage "$REPO" true; guard_cmd 2 "refuses GIT_DIR="                                 "GIT_DIR='$WT/.git' $DOCS" "$REPO"
+stage "$REPO" true; guard_cmd 2 "refuses git --git-dir"                            "git --git-dir='$REPO/.git' commit -m 'docs: x'" "$REPO"
+stage "$REPO" true; guard_cmd 2 "refuses git --work-tree"                          "git --work-tree '$WT' commit -m 'docs: x'" "$REPO"
+stage "$REPO" true; guard_cmd 2 "refuses a lane.sh exec that isn't leading"        "pnpm lint && scripts/lane.sh exec 7 -- $DOCS" "$REPO"
+
+# ... and the normal flows still pass, including the agents' "$(scripts/lane.sh path <n>)"
+stage "$WT" "$FEATURE";   guard_cmd 2 "resolves git -C \"\$(scripts/lane.sh path n)\" to the lane" "git -C \"\$(scripts/lane.sh path 7)\" commit -m 'feat: x'" "$REPO"
+stage "$REPO" "$FEATURE"; guard_cmd 0 "checks \$(scripts/lane.sh path n), not the session's checkout" "git -C \"\$(scripts/lane.sh path 7)\" commit -m 'feat: x'" "$REPO"
+stage "$REPO" "$FEATURE"; guard_cmd 0 "resolves cd \$(./scripts/lane.sh path n)" "cd \$(./scripts/lane.sh path 7) && git commit -m 'feat: x'" "$REPO"
+stage "$WT" "$FEATURE";   guard_cmd 0 "allows a docs: commit via lane.sh exec" "scripts/lane.sh exec 7 -- $DOCS" "$REPO"
+stage "$REPO" "$FEATURE"; guard_cmd 0 "allows a docs: commit in the cwd" "$DOCS" "$REPO"
+stage "$WT" "$FEATURE";   guard_cmd 0 "allows git add and commit after cd <wt>" "cd '$WT' && git add -A && $DOCS" "$REPO"
+stage "$WT" "$FEATURE";   guard_cmd 0 "allows a heredoc message that mentions cd and --git-dir" "git -C '$WT' commit -q -F - <<'EOF'
+docs: x
+
+cd somewhere; pushd there; GIT_DIR=x --git-dir y
+EOF" "$REPO"
+stage "$WT" "$FEATURE";   guard_cmd 0 "allows cd and pushd in the message"  "git -C '$WT' commit -m 'docs: cd and pushd, GIT_DIR=x'" "$REPO"
 
 echo; echo "$pass passed, $fail failed"
 [ "$fail" = 0 ]
