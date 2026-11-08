@@ -10,8 +10,9 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.ref }}
-  # A newer PR push cancels the older run; every push to main runs to the end (its commits get scanned).
+  # A PR's runs share a group and a newer push cancels the older run. Each push to main gets its own group (its sha):
+  # GitHub cancels a pending run when a newer one joins the group, and every push's commits must be scanned.
+  group: ci-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
