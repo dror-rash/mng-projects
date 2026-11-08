@@ -19,6 +19,7 @@
 - [ ] Storybook stories added/updated; a11y addon shows no new violations
 - [ ] No cross-zone imports; boundaries respected
 - [ ] Docs updated (`ARCHITECTURE.md`, ADR, feature file) where relevant
+- [ ] Security findings fixed, or recorded in `docs/security/register.md` (see `docs/SECURITY.md`); no open P0 gap is made worse
 - [ ] No TODOs left without a linked task
 - [ ] PR links task + feature file
 
