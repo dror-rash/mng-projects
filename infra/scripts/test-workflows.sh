@@ -6,6 +6,10 @@
 # 2) Build hygiene (task 078): the image build gets tracked files only and no intermediate layers are cached;
 #    every action is pinned to a commit SHA, the Node image to a digest, turbo to the lockfile, and the
 #    cloud-sql-proxy download is checked against its sha256 (also run against a file with the wrong hash).
+# 3) CI security checks (task 082): every workflow has a top-level permissions: (ci.yml: contents: read), the
+#    security job runs the dependency audit and the gitleaks scan of the PR's commits (base..head) or the pushed
+#    commits on main, gitleaks is pinned by version and sha256, and deploy.yml skips Dependabot pull requests
+#    (no secrets or OIDC token there) but never a push to main.
 # Text checks on the repository files (no YAML parser needed). Probes at the end run the checks on a copy with
 # one change each and expect the matching check to fail. Run: bash infra/scripts/test-workflows.sh
 set -u
@@ -131,14 +135,14 @@ external_images_by_digest() {
 }
 check "every external image in the Dockerfile (FROM, --from=) is pinned by digest" external_images_by_digest
 
-# Each cloud-sql-proxy download (curl or wget, any host) is followed by a sha256 check, with no `||` on that line,
-# before chmod +x. Lines continued with a backslash are joined first.
+# Each download of a pinned tool (curl or wget, any host) is followed by a sha256 check, with no `||` on that line,
+# before the file is used (tar, chmod +x). Lines continued with a backslash are joined first.
 logical() { perl -0pe 's/\\\n[ \t]*/ /g' "$1"; }
-proxy_downloads_verified() { # file
-  logical "$1" | awk '
-    /(curl|wget)[[:space:]]/ && /cloud-sql-proxy/ { d[++nd] = NR }
+downloads_verified() { # file, tool
+  logical "$1" | awk -v tool="$2" '
+    /(curl|wget)[[:space:]]/ && index($0, tool) { d[++nd] = NR }
     /sha256sum[[:space:]].*(-c|--check)/ && !/\|\|/ { s[++ns] = NR }
-    /chmod[[:space:]].*\+x/ { c[++nc] = NR }
+    /chmod[[:space:]].*\+x|(^|[^[:alnum:]_-])tar[[:space:]]/ { c[++nc] = NR }
     END {
       if (nd == 0) exit 1
       for (i = 1; i <= nd; i++) {
@@ -148,18 +152,23 @@ proxy_downloads_verified() { # file
       }
     }'
 }
-downloads=0
-for f in "${WORKFLOWS[@]}" "$ROOT"/infra/scripts/*.sh "$DOCKERFILE"; do
-  [ "$(basename "$f")" = test-workflows.sh ] && continue
-  logical "$f" | grep -E '(curl|wget)[[:space:]]' | grep -q 'cloud-sql-proxy' || continue
-  downloads=$((downloads+1))
-  check "${f#"$ROOT"/} checks the cloud-sql-proxy sha256 (no ||) after each download, before chmod +x" \
-    proxy_downloads_verified "$f"
+for tool in cloud-sql-proxy gitleaks; do
+  downloads=0
+  for f in "${WORKFLOWS[@]}" "$ROOT"/infra/scripts/*.sh "$DOCKERFILE"; do
+    case "$(basename "$f")" in test-*.sh) continue ;; esac
+    logical "$f" | grep -E '(curl|wget)[[:space:]]' | grep -qF "$tool" || continue
+    downloads=$((downloads+1))
+    check "${f#"$ROOT"/} checks the $tool sha256 (no ||) after each download, before chmod +x or tar" \
+      downloads_verified "$f" "$tool"
+  done
+  check "the $tool download is found (somewhere to check)" test "$downloads" -gt 0
 done
-check "the cloud-sql-proxy download is found (somewhere to check)" test "$downloads" -gt 0
 check "the expected cloud-sql-proxy sha256 is a full 64-hex value" \
   grep -rqE '^CLOUD_SQL_PROXY_SHA256="[0-9a-f]{64}"' "$ROOT/infra/scripts"
+check "the expected gitleaks sha256 is a full 64-hex value" \
+  grep -rqE '^GITLEAKS_SHA256="[0-9a-f]{64}"' "$ROOT/infra/scripts"
 check "the workflows never override the proxy's download URL" none_in 'CLOUD_SQL_PROXY_(URL|SHA256)' "${WORKFLOWS[@]}"
+check "the workflows never override gitleaks' download URL or hash" none_in 'GITLEAKS_(URL|SHA256)' "${WORKFLOWS[@]}"
 
 # Behaviour, not text: the helper refuses a file that doesn't match the hash, and leaves nothing behind.
 helper_rejects_wrong_hash() {
@@ -170,9 +179,48 @@ helper_rejects_wrong_hash() {
   rm -rf "$tmp"
   [ "$code" -ne 0 ] && grep -q "match its published sha256" <<<"$out"
 }
+gitleaks_helper_rejects_wrong_hash() {
+  local tmp out code
+  tmp="$(mktemp -d)"; printf 'not gitleaks\n' > "$tmp/fake"
+  out="$(GITLEAKS_URL="file://$tmp/fake" bash "$ROOT/infra/scripts/get-gitleaks.sh" "$tmp" 2>&1)"; code=$?
+  [ ! -e "$tmp/gitleaks" ] && [ ! -e "$tmp/gitleaks.tar.gz" ] || code=0
+  rm -rf "$tmp"
+  [ "$code" -ne 0 ] && grep -q "match its published sha256" <<<"$out"
+}
 if [ -z "${TEST_WORKFLOWS_PROBE:-}" ]; then
   check "get-cloud-sql-proxy.sh refuses a download with the wrong sha256 (and removes it)" helper_rejects_wrong_hash
+  check "get-gitleaks.sh refuses a download with the wrong sha256 (and removes it)" gitleaks_helper_rejects_wrong_hash
 fi
+
+# --- CI security checks (task 082) ---
+CI="$ROOT/.github/workflows/ci.yml"
+for f in "${WORKFLOWS[@]}"; do
+  check "${f#"$ROOT"/} has a top-level permissions:" grep -qE '^permissions:' "$f"
+done
+# The block under a top-level key, without comments and blank lines.
+top_block() { awk -v key="$1:" '$0 == key { inside = 1; next } /^[^ #]/ { inside = 0 } inside && !/^[[:space:]]*(#|$)/' "$2"; }
+ci_permissions_read_only() { [ "$(top_block permissions "$CI")" = "  contents: read" ]; }
+check "ci.yml's top-level permissions are contents: read, nothing else" ci_permissions_read_only
+# The security job: from "  security:" to the next job.
+JOB="$(awk '/^  [[:alnum:]_-]+:/ { inside = ($0 == "  security:") } /^[^ ]/ { inside = 0 } inside' "$CI")"
+job_has() { grep -qE -- "$1" <<<"$JOB"; }
+check "ci.yml has a security job" test -n "$JOB"
+check "the security job runs the audit of runtime dependencies at high" job_has '^      - run: pnpm audit --prod --audit-level=high$'
+check "ci.yml never lets a step fail quietly (no continue-on-error)" none_in 'continue-on-error' "$CI"
+check "the security job checks out the whole history (fetch-depth: 0)" job_has '^          fetch-depth: 0$'
+check "the security job gets the pinned gitleaks" job_has '^      - run: bash infra/scripts/get-gitleaks.sh "\$RUNNER_TEMP"$'
+check "the security job tests the secret scan against a planted fake secret" \
+  job_has '^      - run: GITLEAKS="\$RUNNER_TEMP/gitleaks" bash infra/scripts/test-secret-scan.sh$'
+check "the scan's base is the PR's base, or the commit before a push" \
+  job_has "^          SCAN_BASE: \\$\\{\\{ github.event_name == 'pull_request' && github.event.pull_request.base.sha \\|\\| github.event.before \\}\\}\$"
+check "the scan's head is the PR's head, or the pushed commit" \
+  job_has "^          SCAN_HEAD: \\$\\{\\{ github.event_name == 'pull_request' && github.event.pull_request.head.sha \\|\\| github.sha \\}\\}\$"
+check "the security job scans base..head with the pinned gitleaks" \
+  job_has '^        run: GITLEAKS="\$RUNNER_TEMP/gitleaks" bash infra/scripts/scan-secrets.sh "\$SCAN_BASE" "\$SCAN_HEAD"$'
+# deploy.yml: fork and Dependabot pull requests get no OIDC token or secrets, so the job skips them; every push to
+# main still deploys (the condition's first branch).
+DEPLOY_IF="    if: github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]')"
+check "deploy.yml runs on every push to main and skips fork and Dependabot pull requests" grep -qxF -- "$DEPLOY_IF" "$WF"
 
 # --- Probes: each check above catches the change it is for ---
 # A copy of the files these checks read, with one change, must fail the named check. A clean copy passes.
@@ -189,7 +237,8 @@ if [ -z "${TEST_WORKFLOWS_PROBE:-}" ]; then
     if [ -n "$1" ]; then
       diff -rq "$ROOT/.github/workflows" "$dir/.github/workflows" >/dev/null &&
         diff -q "$ROOT/Dockerfile" "$dir/Dockerfile" >/dev/null && diff -q "$ROOT/.dockerignore" "$dir/.dockerignore" >/dev/null &&
-        diff -q "$ROOT/infra/scripts/get-cloud-sql-proxy.sh" "$dir/infra/scripts/get-cloud-sql-proxy.sh" >/dev/null && return 1
+        diff -q "$ROOT/infra/scripts/get-cloud-sql-proxy.sh" "$dir/infra/scripts/get-cloud-sql-proxy.sh" >/dev/null &&
+        diff -q "$ROOT/infra/scripts/get-gitleaks.sh" "$dir/infra/scripts/get-gitleaks.sh" >/dev/null && return 1
     fi
     out="$(TEST_WORKFLOWS_PROBE=1 bash "$dir/infra/scripts/test-workflows.sh" 2>&1)"
     if [ -z "$1" ]; then grep -q ', 0 failed$' <<<"$out"; else grep -qF -- "FAIL - $1" <<<"$out"; fi
@@ -236,6 +285,33 @@ if [ -z "${TEST_WORKFLOWS_PROBE:-}" ]; then
     "printf '      - run: CLOUD_SQL_PROXY_URL=https://x infra/scripts/get-cloud-sql-proxy.sh\n' >> $DEPLOY"
   check "probe: .dockerignore without gha-creds-*.json is caught" probe ".dockerignore ignores gha-creds-*.json" \
     "grep -vxF 'gha-creds-*.json' .dockerignore > i.tmp; mv i.tmp .dockerignore"
+  CIW=.github/workflows/ci.yml
+  check "probe: a workflow without top-level permissions: is caught" probe "$CIW has a top-level permissions:" \
+    "perl -0pi -e 's/^permissions:\n(  .*\n)+//m' $CIW"
+  check "probe: contents: write in ci.yml is caught" probe "ci.yml's top-level permissions are contents: read" \
+    "perl -0pi -e 's/^permissions:\n  contents: read/permissions:\n  contents: write/m' $CIW"
+  check "probe: an extra top-level permission in ci.yml is caught" probe "ci.yml's top-level permissions are contents: read" \
+    "perl -0pi -e 's/^permissions:\n  contents: read\n/permissions:\n  contents: read\n  pull-requests: write\n/m' $CIW"
+  check "probe: an audit at critical is caught" probe "the security job runs the audit" \
+    "perl -pi -e 's/--audit-level=high/--audit-level=critical/' $CIW"
+  check "probe: an audit ending in || true is caught" probe "the security job runs the audit" \
+    "perl -pi -e 's/(pnpm audit --prod --audit-level=high)\$/\$1 || true/' $CIW"
+  check "probe: continue-on-error in ci.yml is caught" probe "ci.yml never lets a step fail quietly" \
+    "perl -pi -e 's/^(      - run: pnpm audit.*)\$/\$1\n        continue-on-error: true/' $CIW"
+  check "probe: a shallow checkout in the security job is caught" probe "the security job checks out the whole history" \
+    "perl -pi -e 's/fetch-depth: 0/fetch-depth: 1/' $CIW"
+  check "probe: scanning only the head commit is caught" probe "the scan's base is the PR's base" \
+    "perl -pi -e 's/github\.event\.pull_request\.base\.sha/github.event.pull_request.head.sha/' $CIW"
+  check "probe: a deploy that also runs on Dependabot PRs is caught" probe "deploy.yml runs on every push to main" \
+    "perl -pi -e \"s/ && github\\.actor != 'dependabot\\[bot\\]'//\" $DEPLOY"
+  check "probe: a deploy that skips every Dependabot run (pushes too) is caught" probe "deploy.yml runs on every push to main" \
+    "perl -pi -e \"s/^    if: github\\.event_name != 'pull_request' \\|\\| \\((.*)\\)\\\$/    if: github.actor != 'dependabot[bot]' && (github.event_name != 'pull_request' || \\\$1)/\" $DEPLOY"
+  check "probe: a gitleaks sha256 check ending in || true is caught" probe "infra/scripts/get-gitleaks.sh checks the gitleaks sha256" \
+    "perl -pi -e 's/sha256sum -c --quiet -; then/sha256sum -c --quiet - || true; then/' infra/scripts/get-gitleaks.sh"
+  check "probe: extracting gitleaks before its sha256 check is caught" probe "infra/scripts/get-gitleaks.sh checks the gitleaks sha256" \
+    "perl -0pi -e 's/^(curl .*\n)/\$1tar -xzf gitleaks.tar.gz gitleaks\n/m' infra/scripts/get-gitleaks.sh"
+  check "probe: a workflow overriding gitleaks' URL is caught" probe "the workflows never override gitleaks" \
+    "printf '      - run: GITLEAKS_URL=https://x bash infra/scripts/get-gitleaks.sh\n' >> $CIW"
 fi
 
 echo "# $pass passed, $fail failed"
