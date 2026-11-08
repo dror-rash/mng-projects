@@ -12,9 +12,10 @@ const LOCAL_DATABASE = /^app(_lane\d+)?$/;
 /**
  * Whether `env` points at a local database the reset may wipe: `DATABASE_URL` is set; its host, after any
  * `host` or `hostaddr` in the query string (read as `pg` reads them, with pg-connection-string), is
- * localhost, 127.0.0.1 or ::1; its database is `app` or a lane's `app_lane<n>`, so a proxy or tunnel on
- * localhost to another database is refused; Cloud SQL isn't configured and this isn't production.
- * Otherwise says why.
+ * localhost, 127.0.0.1 or ::1; its database is `app` or a lane's `app_lane<n>`, so other databases on the
+ * local server are refused; Cloud SQL isn't configured and this isn't production. Otherwise says why.
+ * This reads the environment only: a proxy or tunnel on localhost to a database named `app` passes it.
+ * The server check (`isLocalServer`, task 080) is what refuses a tunnel to Cloud SQL.
  */
 export function isLocalDatabase(env: ResetEnv): { local: true } | { local: false; reason: string } {
   if (env.NODE_ENV === "production") return { local: false, reason: "NODE_ENV is production." };
@@ -46,10 +47,25 @@ export function isTestAccount(email: string) {
   return email.trim().toLowerCase().endsWith("@example.com");
 }
 
-/** Facts about the connected server, read by `scripts/server-facts.ts`. */
+/** Facts about the connected server, read by `scripts/server-facts.ts`: whether it has Cloud SQL's markers. */
 export type ServerFacts = { cloudSqlRole: boolean; cloudSqlSettings: boolean };
 
-/** Not yet implemented (task 080, red). */
-export function isLocalServer(_facts: ServerFacts): { local: true } | { local: false; reason: string } {
+/**
+ * Whether the connected server is one the reset may wipe (task 080): any Cloud SQL marker refuses it, so a
+ * proxy or tunnel on localhost to a Cloud SQL instance is refused even when `isLocalDatabase` passes.
+ */
+export function isLocalServer(facts: ServerFacts): { local: true } | { local: false; reason: string } {
+  if (facts.cloudSqlRole || facts.cloudSqlSettings) return { local: false, reason: "the connected server is Cloud SQL." };
   return { local: true };
+}
+
+/**
+ * Why the server check's query failed, in one line: the cause's message (Drizzle wraps driver errors in
+ * "Failed query: <sql>"), or its code when the message is empty (a refused connection to localhost).
+ */
+export function failureMessage(error: unknown): string {
+  const inner = error instanceof Error && error.cause instanceof Error ? error.cause : error;
+  if (!(inner instanceof Error)) return String(inner);
+  const { code } = inner as { code?: unknown };
+  return inner.message || (typeof code === "string" ? code : inner.name);
 }

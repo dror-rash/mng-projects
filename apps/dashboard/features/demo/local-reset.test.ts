@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { isLocalDatabase, isLocalServer, isTestAccount } from "./local-reset";
+import { failureMessage, isLocalDatabase, isLocalServer, isTestAccount } from "./local-reset";
 
 const local = { DATABASE_URL: "postgres://app:app@localhost:5432/app" };
 
@@ -103,5 +103,22 @@ describe("isLocalServer", () => {
 
   it("refuses a server with both", () => {
     expect(isLocalServer({ cloudSqlRole: true, cloudSqlSettings: true })).toEqual(cloudSql);
+  });
+});
+
+describe("failureMessage", () => {
+  it("is the message of the error that caused a failed query", () => {
+    const cause = new Error("connect ECONNREFUSED 127.0.0.1:5432");
+    expect(failureMessage(new Error("Failed query: select 1", { cause }))).toBe("connect ECONNREFUSED 127.0.0.1:5432");
+  });
+
+  it("is the error's code when its message is empty", () => {
+    const cause = Object.assign(new AggregateError([], ""), { code: "ECONNREFUSED" });
+    expect(failureMessage(new Error("Failed query: select 1", { cause }))).toBe("ECONNREFUSED");
+  });
+
+  it("is the error's own message without a cause", () => {
+    expect(failureMessage(new Error("password authentication failed"))).toBe("password authentication failed");
+    expect(failureMessage("boom")).toBe("boom");
   });
 });
