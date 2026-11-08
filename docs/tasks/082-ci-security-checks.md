@@ -1,6 +1,6 @@
 # Task 082: CI security checks (dependency audit, secret scan, Dependabot, workflow permissions)
 
-- **Status:** in-review
+- **Status:** done (PR #62)
 - **Milestone:** cross-cutting (security)
 - **Zone / package:** `.github/workflows/ci.yml`, a new `.github/dependabot.yml`, `infra/scripts/test-workflows.sh`, root `package.json` (`pnpm.auditConfig` only), `docs/SECURITY.md` (the CI checks table). Commit type `ci:`.
 - **Feature file:** none (no app behavior; the checks are the tests)
@@ -58,6 +58,7 @@ Red: extend `test-workflows.sh` with the `permissions:` check; run it. Then add 
 - 2026-11-08 – Owner decision on the audit: `postcss` (in `next`) is fixed by task 093 (another lane); `tinypool` is accepted until a vitest upgrade (SEC-43, P2): GHSA-5gmw-xhrv-c9v3 and GHSA-85c8-ppgw-ccpr go in `ignoreGhsas`. Audit now: `3 high (1 ignored) | 2 critical (2 ignored)`, exit 1 on the two `postcss` advisories only, expected until 093 merges.
 - 2026-11-08 – Review fixes. Red (`test(ci)`): `test-workflows.sh` `# 93 passed, 8 failed` (preview-cleanup Dependabot skip, PR-only cancel, checkout credentials, Dependabot cooldown, and their probes); `test-secret-scan.sh` `# 17 passed, 2 failed` (a secret added inside a merge commit was not found; no "rotate the secret" message). Green (`ci:`): `scan-secrets.sh` passes `--diff-merges=first-parent` and says to rotate the secret; `ci.yml` cancels PR runs only and every checkout has `persist-credentials: false` (no step in `verify` or `e2e` uses git credentials); `preview-cleanup.yml` skips `dependabot[bot]`; `dependabot.yml` has a 3-day cooldown for both ecosystems. `test-workflows.sh` `# 101 passed, 0 failed`; `test-secret-scan.sh` `# 19 passed, 0 failed` (also with `GITLEAKS=gitleaks` on `PATH`). Register: SEC-43 added, SEC-16 notes the allowlist entry; task 081 removes it.
 - 2026-11-08 – Review round 3. Red (`test(ci)`): `test-workflows.sh` `# 100 passed, 3 failed` (`ci.yml` gives each push to main its own concurrency group, plus the clean-copy and new probe). Green (`ci:`): `group: ci-${{ github.event_name == 'pull_request' && github.ref || github.sha }}` (GitHub cancels a pending run when a newer one joins the group, whatever `cancel-in-progress` says); `test-workflows.sh` `# 103 passed, 0 failed`. `test-secret-scan.sh` asserts the evil-merge commit has two parents (a guard, green from the start): `# 20 passed, 0 failed`. `preview-cleanup.yml` comment on the Dependabot skip's leftover tags (parking lot).
+- 2026-11-08 – Merged (PR #62); CI `verify`, `e2e`, `security` and the preview `deploy` passed. Lane removed.
 
 ## Parking lot
 - `preview-cleanup.yml` skips runs by `dependabot[bot]`: a Dependabot PR that a human pushed to (so it got a preview) and that Dependabot then closed keeps its `pr-<n>` tags; remove them by hand, or key the skip on the PR's last pusher instead.

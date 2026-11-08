@@ -1,6 +1,6 @@
 # Task 084: Guard hook gaps and commit checks in lane worktrees
 
-- **Status:** in-review
+- **Status:** done (PR #61)
 - **Milestone:** cross-cutting (security, agent team)
 - **Zone / package:** `.claude/hooks/guard.sh`, `scripts/test-hooks.sh`, `.github/workflows/ci.yml` (one step), `docs/AGENT-TEAM.md` (guard section), `docs/SECURITY.md` (CI checks table). Commit type `fix(tooling)` / `test(tooling)`.
 - **Feature file:** none (tooling; `scripts/test-hooks.sh` is the test)
@@ -54,6 +54,7 @@ Red: add the failing cases to `test-hooks.sh`. Then factor a `commit_repo()` res
 - 2026-11-08 – Red: 32 new cases in `scripts/test-hooks.sh` (46 passed, 32 failed against the old guard). Green: `commit_repo()` resolves the commit's repository (cwd, leading `cd`, `scripts/lane.sh exec <n>`, `git -C`), `git_sub`/`git_args` match git global options, widened gcloud/push/add patterns; 78 passed, 0 failed (also with `GUARD_BASE_REF=origin/main`). Real-repo cases count `HEAD` as applied so CI's shallow checkout works. `ci.yml` `verify` runs it. `bash scripts/test-lane.sh`: 14/15, the same as on the base commit ("migrates the lane's database": `Cannot find module 'drizzle-kit'` with `LANE_SKIP_INSTALL=1`; not touched here).
 - 2026-11-08 – Review fix loop. Red: 38 new cases (88 passed, 28 failed). Green: the resolver fails closed (dynamic, `-`, missing or `~user` `cd`/`-C` targets; a lane without a worktree; unconsumed `cd`/`pushd`/`GIT_DIR=`/`--git-dir`/`--work-tree`/`lane.sh exec`), `"$(scripts/lane.sh path <n>)"` resolves to the lane, destructive pushes (`--mirror`, deleting `main`/`master`, `git -c remote.*.push=+…`/`mirror`), backslash-newline continuations joined (bash 3.2-safe), `-n` inside combined commit flags; 116 passed, 0 failed (also with `GUARD_BASE_REF=origin/main`). Test lanes now sit at `<repo>-lanes/lane-<n>` without `LANES_DIR`, so the default lane path is tested.
 - 2026-11-08 – Security re-review round. Red: 24 new failing cases (124 passed, 24 failed). Green: one `git commit` per command; none behind `bash`/`sh -c`, a heredoc or pipe into a shell, `eval` or `env -C`; heredoc bodies stripped and quoted text blanked before the commit checks, so the `cd` prefix check starts at the real commit; long-option prefixes (`--for…`, `--mi…`, `--d…` for main/master, `--pru…`, `--no-ve…`); push with `GIT_CONFIG_*`/`--config-env` and `git config remote.*.push|mirror` refused; `-n` only as a real short-option cluster (`-main`, `-only`, `-config` in messages pass). 148 passed, 0 failed.
+- 2026-11-08 – Merged (PR #61); CI `verify`, `e2e`, `security` and the preview `deploy` passed. Lane removed.
 
 ## Parking lot
 - A real git `pre-commit` hook via `core.hooksPath` (question 2).
