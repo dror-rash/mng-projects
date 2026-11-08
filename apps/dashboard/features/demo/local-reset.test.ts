@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { isLocalDatabase, isTestAccount } from "./local-reset";
+import { isLocalDatabase, isLocalServer, isTestAccount } from "./local-reset";
 
 const local = { DATABASE_URL: "postgres://app:app@localhost:5432/app" };
 
@@ -83,5 +83,25 @@ describe("isTestAccount", () => {
     expect(isTestAccount("me@notexample.com")).toBe(false);
     expect(isTestAccount("me@example.com.evil.io")).toBe(false);
     expect(isTestAccount("me@sub.example.com")).toBe(false);
+  });
+});
+
+describe("isLocalServer", () => {
+  const cloudSql = { local: false, reason: "the connected server is Cloud SQL." };
+
+  it("allows a server with no Cloud SQL markers", () => {
+    expect(isLocalServer({ cloudSqlRole: false, cloudSqlSettings: false })).toEqual({ local: true });
+  });
+
+  it("refuses a server with the Cloud SQL role", () => {
+    expect(isLocalServer({ cloudSqlRole: true, cloudSqlSettings: false })).toEqual(cloudSql);
+  });
+
+  it("refuses a server with cloudsql settings", () => {
+    expect(isLocalServer({ cloudSqlRole: false, cloudSqlSettings: true })).toEqual(cloudSql);
+  });
+
+  it("refuses a server with both", () => {
+    expect(isLocalServer({ cloudSqlRole: true, cloudSqlSettings: true })).toEqual(cloudSql);
   });
 });

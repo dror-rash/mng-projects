@@ -45,3 +45,11 @@ export function isLocalDatabase(env: ResetEnv): { local: true } | { local: false
 export function isTestAccount(email: string) {
   return email.trim().toLowerCase().endsWith("@example.com");
 }
+
+/** Facts about the connected server, read by `scripts/server-facts.ts`. */
+export type ServerFacts = { cloudSqlRole: boolean; cloudSqlSettings: boolean };
+
+/** Not yet implemented (task 080, red). */
+export function isLocalServer(_facts: ServerFacts): { local: true } | { local: false; reason: string } {
+  return { local: true };
+}

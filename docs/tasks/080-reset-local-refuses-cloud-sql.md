@@ -50,6 +50,7 @@ Touches a maintenance script that deletes every workspace and test account past 
 ## Progress log
 - 2026-11-08 – Drafted from the first full security review (SEC-04); owner: "start fixing P0".
 - 2026-11-08 – Started in lane 4. Open questions answered by defaults (orchestrator): none open.
+- 2026-11-08 – Red: `isLocalServer` unit tests (3 of 4 fail: the stub allows every server; the no-markers case passes) and `scripts/reset-local.db.test.ts` (fails: `readServerFacts is not implemented yet.`). Type-only stubs keep lint and typecheck green.
 
 ## Parking lot
 - Renaming the production database so its name never matches the local one.
