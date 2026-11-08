@@ -56,7 +56,11 @@ The zones' `dev`/`start` scripts and the Playwright config read `SHELL_PORT`, `E
 - Cloud Run changes by hand on any release track (`gcloud [alpha|beta] run deploy`, `run services replace|update|update-traffic|delete`), and reading a Secret Manager value (`gcloud secrets versions access`);
 - force pushes in every spelling (`-f` alone or combined like `-uf`, `--force`, `--force-with-lease`, `--force-if-includes`, a `+refspec`) and destructive pushes (`--mirror`, deleting `main`/`master` with `:main` or `--delete`/`-d`, a `remote.*.push=+…` or `remote.*.mirror` from `git -c`); deleting a feature branch is fine;
 - `git add -f` / `--force` (ignored files stay out; ask the owner);
-- `git commit --no-verify` / `-n`, also inside combined short flags (`-nm`);
+- `git commit --no-verify` / `-n`, also inside a short-option cluster (`-nm`, `-anm`); text in a quoted message doesn't count;
+- `git config remote.<x>.push` / `remote.<x>.mirror`, and a push with `--prune`, `GIT_CONFIG_*` or `--config-env`;
+- a command with more than one `git commit`, or a commit in a command that also runs `bash`/`sh -c`, a heredoc or pipe into a shell, `eval` or `env -C`.
+
+Git accepts unambiguous prefixes of long options, so `--for…`, `--mi…`, `--d…`, `--pru…` and `--no-ve…` count as `--force…`, `--mirror`, `--delete`, `--prune` and `--no-verify`. The commit checks read the command without heredoc bodies and with quoted text blanked (needs `perl`), so a message can mention `git commit`, `cd` or `bash -c`.
 - a `feat:` / `fix:` / `refactor:` commit that changes a `.feature` file;
 - a commit that changes an applied migration;
 - any commit when `pnpm lint` or `pnpm typecheck` fails.
