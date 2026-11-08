@@ -99,3 +99,12 @@ Feature: Photos and files
     And I am signed in as a user of "Northwind"
     When I open the address of the photo "visit.jpg"
     Then it is not found, the same as a made-up photo address
+
+  # An upload left unfinished (a dropped connection) is cleared after an hour; until then it counts (SEC-07).
+  @wip @task:087
+  Scenario: Too many unfinished uploads are refused
+    Given I am on the "Panel upgrade" project page
+    And my connection drops during 10 photo uploads
+    When I add the photo "panel.jpg" with "Add photos"
+    Then I see the error "Too many uploads in progress. Try again later."
+    And the "Photos and files" section shows "No photos or files yet."

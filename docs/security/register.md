@@ -9,7 +9,7 @@ The one list of known security gaps and their status. The process that feeds it 
 | Priority | Open | Planned | Fixed | Accepted |
 |---|---|---|---|---|
 | P0 – fix now | 1 | 0 | 4 | 0 |
-| P1 – before real customer data on `main` | 12 | 1 | 0 | 0 |
+| P1 – before real customer data on `main` | 2 | 11 | 0 | 0 |
 | P2 – hardening | 15 | 0 | 0 | 0 |
 | P3 – info / decide | 8 | 0 | 0 | 0 |
 
@@ -37,18 +37,18 @@ No Critical findings. One High (SEC-01). Nothing in the review showed one worksp
 | ID | Sev | Gap | Area | Effort | Status | Source |
 |---|---|---|---|---|---|---|
 | SEC-06 | Med | The `main` runtime connects as `app`, the database owner, and only switches to `app_user`; any SQL foothold can `RESET ROLE` and bypass row-level security | DB / infra | M | planned (task 074) | INF-3, ACC-1 |
-| SEC-07 | Med | Uploads have no enforced size cap (the signed URL has no length range) and abandoned or orphaned uploads are never cleaned up: unbounded storage cost | Files | M | open | WEB-1 |
-| SEC-08 | Med | Deleting a workspace (or a cascade) leaves its photos and reports in the bucket forever (retention, erasure requests) | Files | S–M | open | WEB-2 |
+| SEC-07 | Med | Uploads have no enforced size cap (the signed URL has no length range) and abandoned or orphaned uploads are never cleaned up: unbounded storage cost | Files | M | planned (tasks 085, 087) | WEB-1 |
+| SEC-08 | Med | Deleting a workspace (or a cascade) leaves its photos and reports in the bucket forever (retention, erasure requests) | Files | S–M | planned (task 086) | WEB-2 |
 | SEC-09 | Med | No email verification and no password reset: anyone can register any address, and the real owner can't recover it; sign-up also reveals which emails have accounts | Auth | M | open (**owner decision:** email provider, or accept for the POC) | AUTH-2, AUTH-4 |
-| SEC-10 | Med | Sign-in brute force is limited only by the in-memory, per-instance rate limiter (up to 5× the budget); no account lockout | Auth | M | open (the shared-bucket worry is partly answered: task 068 saw a client IP on the first preview) | AUTH-3 |
-| SEC-11 | Med | No Dependabot alerts or updates, no `pnpm audit`, gitleaks or CodeQL in CI | Supply chain | S | open (**owner:** turn on Dependabot alerts) | SUP-5 |
-| SEC-12 | Med | Agent guard gaps: `gcloud secrets versions access`, `gcloud beta run deploy`, `git push origin +main`, `git add -f .env` and `git -c … commit` all pass; commits in lane worktrees skip the commit checks | Tooling | M | open (lane part parked in task 061) | SUP-2, SUP-3 |
+| SEC-10 | Med | Sign-in brute force is limited only by the in-memory, per-instance rate limiter (up to 5× the budget); no account lockout | Auth | M | planned (tasks 089, 090; the shared-bucket worry is partly answered: task 068 saw a client IP on the first preview) | AUTH-3 |
+| SEC-11 | Med | No Dependabot alerts or updates, no `pnpm audit`, gitleaks or CodeQL in CI | Supply chain | S | planned (task 082; **owner:** turn on Dependabot alerts and security updates) | SUP-5 |
+| SEC-12 | Med | Agent guard gaps: `gcloud secrets versions access`, `gcloud beta run deploy`, `git push origin +main`, `git add -f .env` and `git -c … commit` all pass; commits in lane worktrees skip the commit checks | Tooling | M | planned (task 084, which folds in task 061's parked lane item) | SUP-2, SUP-3 |
 | SEC-13 | Med | The auto-mode environment in `~/.claude/settings.json` describes another, private repo; agent sessions hold the owner's `gcloud` and `gh` (`gist`, `repo`) credentials | Tooling | S | open (**owner:** project-level auto-mode context and deny rules; a less-privileged gcloud config for agents) | SUP-2 |
-| SEC-14 | Low | `main` can scale to 5 instances × 3 zones × 4 connections against a 12-connection database; unauthenticated traffic can cause "too many connections" outages | Infra | S | open | INF-8 |
-| SEC-15 | Low | Fork PRs from anyone with one merged PR run edited workflows without approval; `ci.yml` has no `permissions:`; WIF doesn't check which workflow asks for a token | CI/CD | S | open (**owner:** fork approval for all outside contributors) | INF-11, INF-12 |
-| SEC-16 | Low | `drizzle-orm` 0.44.7 has a High SQL-injection advisory (identifiers); not reachable today, and Better Auth expects ≥0.45.2 | Supply chain | S | open | WEB-5, SUP-6 |
-| SEC-17 | Low | No alerting at all (IAM changes, deploys outside CI, 5xx, DB connections) and no budget alert | Infra | M | open | INF-5 |
-| SEC-18 | Low | Deleting a user who uploaded a file or recorded a visit fails (`attachment_check`, `site_visit_keep_project`), so an erasure request or a compromised account can't be deleted | DB | S | open (visit half parked in task 058) | ACC-3 |
+| SEC-14 | Low | `main` can scale to 5 instances × 3 zones × 4 connections against a 12-connection database; unauthenticated traffic can cause "too many connections" outages | Infra | S | planned (task 091) | INF-8 |
+| SEC-15 | Low | Fork PRs from anyone with one merged PR run edited workflows without approval; `ci.yml` has no `permissions:`; WIF doesn't check which workflow asks for a token | CI/CD | S | planned (tasks 082, 083; **owner:** fork approval for all outside contributors) | INF-11, INF-12 |
+| SEC-16 | Low | `drizzle-orm` 0.44.7 has a High SQL-injection advisory (identifiers); not reachable today, and Better Auth expects ≥0.45.2 | Supply chain | S | planned (task 081) | WEB-5, SUP-6 |
+| SEC-17 | Low | No alerting at all (IAM changes, deploys outside CI, 5xx, DB connections) and no budget alert | Infra | M | planned (task 092) | INF-5 |
+| SEC-18 | Low | Deleting a user who uploaded a file or recorded a visit fails (`attachment_check`, `site_visit_keep_project`), so an erasure request or a compromised account can't be deleted | DB | S | planned (task 088; the visit half was noted in task 061) | ACC-3 |
 
 ## P2 – hardening
 
@@ -87,3 +87,4 @@ No Critical findings. One High (SEC-01). Nothing in the review showed one worksp
 - 2026-11-08 – Register created from the first full review (41 gaps: 1 High, 12 Medium, rest Low/Info).
 - 2026-11-08 – SEC-03 fixed (PR #55) and SEC-04 fixed (PR #54); SEC-01 and SEC-05 in progress (PR #56); `main`'s old image build caches deleted. SEC-02 waits on the owner.
 - 2026-11-08 – SEC-01 and SEC-05 fixed (PR #56); the first `main` deploy after it built from the commit's Git URL with the pinned Node image and the checked proxy. Only SEC-02 (owner setting) is open in P0.
+- 2026-11-08 – P1 tasks planned: SEC-16 → 081, SEC-11 and SEC-15 → 082 (CI checks) and 083 (WIF), SEC-12 → 084, SEC-07 → 085 (size cap) and 087 (abandoned uploads), SEC-08 → 086, SEC-18 → 088, SEC-10 → 089 (shared rate limit) and 090 (lockout), SEC-14 → 091, SEC-17 → 092. Not planned: SEC-06 (task 074, after the POC), SEC-09 and SEC-13 (owner). Owner steps stay in the rows (SEC-11, SEC-15).

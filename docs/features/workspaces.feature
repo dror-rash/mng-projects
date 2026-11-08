@@ -100,3 +100,32 @@ Feature: Workspaces
     Then the "Workspace name" field accepts at most 100 characters
     When I post a workspace name of 101 characters
     Then I see the error "Workspace name must be 100 characters or fewer"
+
+  # Files live in storage, outside the database (ADR-0008): deleting a workspace deletes them too (SEC-08).
+  @wip @task:086
+  Scenario: Deleting a workspace deletes its photos and files
+    Given I am signed in with an existing account
+    And I create a workspace named "Acme Team"
+    And I have a customer "Acme Ltd" with status "Active" and tags "retail"
+    And "Acme Ltd" has a site "Haifa warehouse"
+    And I have a project named "Panel upgrade" at the site "Haifa warehouse"
+    And I am on the "Panel upgrade" project page
+    And I add the photo "panel.jpg" with "Add photos"
+    And I add the file "wiring-plan.pdf" with "Add files"
+    And I copy the download links of the photo "panel.jpg" and the file "wiring-plan.pdf"
+    When I delete the workspace "Acme Team"
+    Then the copied download links no longer open
+
+  @wip @task:086
+  Scenario: Deleting a workspace keeps another workspace's files
+    Given I am signed in with an existing account
+    And I have a customer "Acme Ltd" with status "Active" and tags "retail"
+    And "Acme Ltd" has a site "Haifa warehouse"
+    And I have a project named "Panel upgrade" at the site "Haifa warehouse"
+    And I am on the "Panel upgrade" project page
+    And I add the photo "panel.jpg" with "Add photos"
+    And I add the file "wiring-plan.pdf" with "Add files"
+    And I copy the download links of the photo "panel.jpg" and the file "wiring-plan.pdf"
+    And I create a workspace named "Acme Team"
+    When I delete the workspace "Acme Team"
+    Then the copied download links still open
