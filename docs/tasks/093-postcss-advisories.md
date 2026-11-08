@@ -1,6 +1,6 @@
 # Task 093: postcss advisories in `next` (pnpm override)
 
-- **Status:** in-progress
+- **Status:** in-review
 - **Milestone:** cross-cutting (security)
 - **Zone / package:** root `package.json` (`pnpm.overrides`), `pnpm-lock.yaml`. No app code, no schema change, no migration. Commit type `fix(deps)` (or `build(deps)`).
 - **Feature file:** none (no visible behavior; the existing unit, Storybook and e2e suites, and the preview's `@smoke` run, are the check)
