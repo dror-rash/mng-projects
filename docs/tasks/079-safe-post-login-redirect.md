@@ -50,6 +50,7 @@ Touches authentication (`packages/auth`), a security-sensitive path per `docs/SE
 - 2026-11-08 – Drafted from the first full security review (SEC-03); owner: "start fixing P0".
 - 2026-11-08 – Started in lane 3. Open questions answered by defaults (orchestrator): a seeded hand-written generator, no new dependency.
 - 2026-11-08 – Spec-writer: un-wipped the scenario, added steps `I am on the login page to return to {string}` and `I am on the dashboard` (auth.steps.ts). It passes on today's code (plain absolute URL already rejected), as planned; the red comes from the unit tests.
+- 2026-11-08 – Implementer, red: unit cases for control characters, backslashes, dot segments and decoded percent forms, a same-origin path with query and hash, and two seeded property tests (5000 generated inputs each: the result resolves to the base origin; it has no control characters or backslashes). `pnpm --filter @repo/auth test`: 18 of 38 fail (the 16 new rejection cases and both property tests); the existing cases pass.
 
 ## Parking lot
 - The same scenario for the sign-up page (`/signup?next=…`), if the owner wants both covered end to end.
