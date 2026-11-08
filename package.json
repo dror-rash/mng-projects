@@ -28,5 +28,10 @@
     "turbo": "^2.5.0",
     "typescript": "^5.9.0"
   },
-  "description": "A full-stack multi-zone web app built from Waypoint"
+  "description": "A full-stack multi-zone web app built from Waypoint",
+  "pnpm": {
+    "overrides": {
+      "next>postcss": "^8.5.18"
+    }
+  }
 }
