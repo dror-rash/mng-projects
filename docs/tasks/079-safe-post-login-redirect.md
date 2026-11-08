@@ -24,11 +24,11 @@ After logging in or signing up, people should only ever be sent to a page of thi
 - Server-side redirect validation in a route handler (the forms redirect in the browser).
 
 ## Acceptance criteria
-- [ ] A `next` address that points to another site (absolute URL, protocol-relative, or a path that a browser would read as another host) sends the person to the default page after login, not off the site. → `authentication.feature` "A next address on another site goes to the dashboard after logging in"; unit tests.
-- [ ] Inputs containing a tab, CR or LF (raw), or a backslash in any position give the fallback. → unit tests (`it.each` over the forms, including the forms with the characters after the first `/` and percent-encoded forms checked after `decodeURIComponent`).
-- [ ] For any string `x`, `new URL(safeNext(x), base).origin === base` for a fixed `base`. → property-style unit test over generated strings (a seeded generator mixing `/`, `\`, `:`, `.`, `@`, `%`, `?`, `#`, letters, whitespace and control characters, at least a few thousand cases; no new dependency unless the implementer prefers `fast-check`, see Open questions).
-- [ ] Same-origin paths keep their path, query and hash (`/dashboard/projects/x?tab=1#top`). → unit test.
-- [ ] Existing authentication scenarios stay green. → `pnpm test:e2e`.
+- [x] A `next` address that points to another site (absolute URL, protocol-relative, or a path that a browser would read as another host) sends the person to the default page after login, not off the site. → `authentication.feature` "A next address on another site goes to the dashboard after logging in"; unit tests.
+- [x] Inputs containing a tab, CR or LF (raw), or a backslash in any position give the fallback. → unit tests (`it.each` over the forms, including the forms with the characters after the first `/` and percent-encoded forms checked after `decodeURIComponent`).
+- [x] For any string `x`, `new URL(safeNext(x), base).origin === base` for a fixed `base`. → property-style unit test over generated strings (a seeded generator mixing `/`, `\`, `:`, `.`, `@`, `%`, `?`, `#`, letters, whitespace and control characters, at least a few thousand cases; no new dependency unless the implementer prefers `fast-check`, see Open questions).
+- [x] Same-origin paths keep their path, query and hash (`/dashboard/projects/x?tab=1#top`). → unit test.
+- [x] Existing authentication scenarios stay green. → `pnpm test:e2e`.
 
 ## Security notes
 Touches authentication (`packages/auth`), a security-sensitive path per `docs/SECURITY.md` (the `security-reviewer` runs). No data or role change: the function only decides the address after a successful login or sign-up. Fixes register gap **SEC-03**. Tests use made-up hostnames under `.example` / `.invalid` only.
@@ -51,6 +51,7 @@ Touches authentication (`packages/auth`), a security-sensitive path per `docs/SE
 - 2026-11-08 – Started in lane 3. Open questions answered by defaults (orchestrator): a seeded hand-written generator, no new dependency.
 - 2026-11-08 – Spec-writer: un-wipped the scenario, added steps `I am on the login page to return to {string}` and `I am on the dashboard` (auth.steps.ts). It passes on today's code (plain absolute URL already rejected), as planned; the red comes from the unit tests.
 - 2026-11-08 – Implementer, red: unit cases for control characters, backslashes, dot segments and decoded percent forms, a same-origin path with query and hash, and two seeded property tests (5000 generated inputs each: the result resolves to the base origin; it has no control characters or backslashes). `pnpm --filter @repo/auth test`: 18 of 38 fail (the 16 new rejection cases and both property tests); the existing cases pass.
+- 2026-11-08 – Implementer, green: `safeNext` rejects control characters and backslashes, resolves the input against a fixed dummy origin, accepts it only on that origin, and returns the normalized path + query + hash (checked once more to stay a same-origin path). Callers unchanged (login and sign-up forms; middleware and the invite flow use `loginUrl` with same-origin paths). `@repo/auth` 41/41; `pnpm test`, lint, typecheck green; e2e `@task:079` 1/1, `@zone:shell` 18/18 (`--workers=2`).
 
 ## Parking lot
 - The same scenario for the sign-up page (`/signup?next=…`), if the owner wants both covered end to end.
