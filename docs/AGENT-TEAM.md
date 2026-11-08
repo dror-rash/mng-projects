@@ -10,6 +10,7 @@ How tasks get done here since task 067 (ADR-0010). The main Claude Code session 
 | `spec-writer` | Removes `@wip`, writes step definitions, shows the red run failing for the right reason | `e2e/`, `docs/features` (`@wip` tags only) | write production code; reword scenarios |
 | `implementer` | TDD to green inside the task's lane, plus migrations, stories and docs | `apps/`, `packages/`, `docs/` | edit feature files or applied migrations; expand scope |
 | `access-auditor` | Read-only hunt for access leaks: roles, `withAccess`, RLS, access functions, client payloads | none | fix code (it reports, with CONFIRMED / PLAUSIBLE) |
+| `security-reviewer` | Read-only review of auth, web surface, files, infra and workflows, dependencies, secrets and agent tooling (`docs/SECURITY.md`); also an area reviewer in the full review | none | fix code (it reports severity with CONFIRMED / PLAUSIBLE) |
 | `reviewer` | Read-only review against `CLAUDE.md`, the task's scope and the TDD order | none | fix code (it reports blocker / should-fix / nit) |
 | `infra` | `infra/` Terraform, workflows, deploy checks; `terraform plan` output in the PR | `infra/`, `.github/`, `Dockerfile` | apply, deploy by hand, read secrets, touch app code |
 | `qa` | Full suites, build, Storybook, screenshots, DoD; triages failures | none | call a failure a pass; retry until green |
@@ -19,13 +20,14 @@ The definitions live in `.claude/agents/`.
 ## The pipeline for one task
 ```
 planner (READY?) → task-start (lane) → spec-writer (red) → implementer (green)
-   → access-auditor ∥ reviewer → implementer (fixes) → qa → dod → PR → merge → lane-merge
+   → access-auditor ∥ security-reviewer ∥ reviewer → implementer (fixes) → qa → dod → PR → merge → lane-merge
 ```
 
 Run it with the `run-task <id>` skill. The skills are in `.claude/skills/`:
 - `task-start`: readiness check, lane, status;
 - `dod`: the Definition of Done with evidence;
-- `lane-merge`: merge and clean up.
+- `lane-merge`: merge and clean up;
+- `security-review`: the full security review (monthly, per milestone, before go-live), which updates the [gap register](security/register.md). The process is in [`SECURITY.md`](SECURITY.md).
 
 ## Lanes
 Each task runs in its own worktree next to the repo (`../mng-projects-lanes/lane-<n>`), with its own database and ports:

@@ -23,11 +23,32 @@ export function resolvePublicOrigin({ configured, forwardedHost, forwardedProto,
   }
   return fallbackOrigin;
 }
-/** Only allow same-origin relative paths as post-login targets (prevents open redirects). */
+
+const SAFE_NEXT_ORIGIN = "https://safe-next.invalid";
+
+const hasUnsafeChar = (value: string) =>
+  [...value].some((char) => {
+    const code = char.charCodeAt(0);
+    return code <= 0x1f || code === 0x7f || char === "\\";
+  });
+
+const sameOrigin = (path: string) => {
+  try {
+    return new URL(path, SAFE_NEXT_ORIGIN).origin === SAFE_NEXT_ORIGIN;
+  } catch {
+    return false;
+  }
+};
+
+/**
+ * The post-login target for `next`, or `fallback`. Only same-origin paths are accepted: the result,
+ * resolved against any origin, stays on that origin. It is the normalized path + query + hash.
+ */
 export function safeNext(next: string | null | undefined, fallback = "/"): string {
-  if (!next) return fallback;
-  if (!next.startsWith("/") || next.startsWith("//") || next.startsWith("/\\")) return fallback;
-  return next;
+  if (!next || !next.startsWith("/") || hasUnsafeChar(next) || !sameOrigin(next)) return fallback;
+  const { pathname, search, hash } = new URL(next, SAFE_NEXT_ORIGIN);
+  const path = `${pathname}${search}${hash}`;
+  return path.startsWith("/") && !path.startsWith("//") && sameOrigin(path) ? path : fallback;
 }
 
 export function loginUrl(next: string, loginPath = "/login"): string {

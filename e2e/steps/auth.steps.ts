@@ -22,6 +22,10 @@ Given("I am on the login page", async ({ page }) => {
   await page.goto("/login");
 });
 
+Given("I am on the login page to return to {string}", async ({ page }, next: string) => {
+  await page.goto(`/login?next=${encodeURIComponent(next)}`);
+});
+
 Given("I am on the sign up page", async ({ page }) => {
   await page.goto("/signup");
 });
@@ -82,4 +86,8 @@ Given("I have an expired session", async ({ context }) => {
 
 Then("I am sent to the login page to return to {string}", async ({ page }, next: string) => {
   await expect(page).toHaveURL((url) => url.pathname === "/login" && url.searchParams.get("next") === next);
+});
+
+Then("I am on the dashboard", async ({ page }) => {
+  await expect(page).toHaveURL((url) => url.origin === new URL(origin).origin && url.pathname === "/dashboard");
 });
