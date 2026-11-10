@@ -45,6 +45,7 @@ Red: the two scenarios (the first fails today: the copied link still opens) and 
 ## Progress log
 - 2026-11-08 – Drafted from the first full security review (SEC-08); owner: "start fixing the P1 gaps".
 - 2026-11-10 – Started in lane 2 (owner: "do the rest of the P1"; build now, merge after the POC demo on 2026-11-13). Q1 default (inline).
+- 2026-11-10 – Red: `@wip` off both scenarios (tagged `@slow`: sign-up, setup and two uploads pass 30 s on a loaded dev machine); steps `I copy the download links of …`, `the copied download links no longer open` / `still open` in `attachments.steps.ts`. "deletes its photos and files" fails (copied signed link answers 200, expected 404); "keeps another workspace's files" passes (a guard, green before and after).
 
 ## Parking lot
 - A periodic sweep for prefixes whose workspace is gone (also catches a failed inline delete or a SQL cascade).
