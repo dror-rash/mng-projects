@@ -1,7 +1,9 @@
 CREATE INDEX "attachment_unconfirmed_idx" ON "attachment" USING btree ("workspace_id","uploaded_by","created_at") WHERE "attachment"."confirmed_at" is null;--> statement-breakpoint
 -- Task 087 (register SEC-07, cleanup part): an upload is recorded unconfirmed before the browser sends the
 -- file, and confirmed when it comes back. One that never comes back (a dropped connection, a closed tab, or
--- on purpose) is stale after an hour (its signed URL lasts 15 minutes, so nothing can still be arriving).
+-- on purpose) is stale after an hour. Its signed URL lasts 15 minutes, but storage checks that when the PUT
+-- starts, so a very slow body can still land after its row was cleared: a known orphan object, left for the
+-- bucket-wide sweep (task 087's parking lot).
 --
 -- Whoever starts an upload clears their workspace's stale uploads first: whoever may work on the project
 -- (p_project) deletes the stale uploads of that project's workspace, whoever left them (a deleted uploader
@@ -26,7 +28,8 @@ BEGIN
     DELETE FROM attachment a
     WHERE a.workspace_id = v_workspace
       AND a.confirmed_at IS NULL
-      AND a.created_at < localtimestamp - interval '1 hour'
+      -- In UTC, as the app's timestamps are (delete_attachment), whatever the session's time zone.
+      AND a.created_at < (now() AT TIME ZONE 'UTC') - interval '1 hour'
       AND starts_with(a.storage_key, v_workspace || '/')
     RETURNING a.storage_key;
 END
