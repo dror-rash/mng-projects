@@ -1,6 +1,6 @@
 import { createHmac } from "node:crypto";
 
-import { eq, getPoolDb, lt, schema } from "@repo/db";
+import { eq, getPoolDb, lt, schema, sql } from "@repo/db";
 import type { BetterAuthPlugin } from "better-auth";
 import { APIError, createAuthMiddleware, isAPIError } from "better-auth/api";
 
@@ -53,9 +53,13 @@ export function removableAfter(state: LockoutState): Date {
   return new Date(Math.max(windowEnd, state.lockedUntil?.getTime() ?? 0));
 }
 
-/** The row key for `email`: an HMAC-SHA256 (with the auth secret) of it trimmed and lower-cased. */
+/**
+ * The row key for `email`: an HMAC-SHA256 with the auth secret of a purpose label and the email, trimmed and
+ * lower-cased. The label keeps it apart from any other HMAC of the same secret. Rotating BETTER_AUTH_SECRET
+ * changes every key, so it resets all counts and locks.
+ */
 export function lockoutKey(email: string, secret: string): string {
-  return createHmac("sha256", secret).update(email.trim().toLowerCase()).digest("hex");
+  return createHmac("sha256", secret).update(`sign-in-lockout\0${email.trim().toLowerCase()}`).digest("hex");
 }
 
 /**
@@ -68,10 +72,15 @@ export function databaseStore(): LockoutStore {
     async attempt(key, now) {
       const db = getPoolDb();
       const result = await db.transaction(async (tx) => {
-        // An empty row first, so there is always a row to lock (two first attempts can't both insert).
+        // Insert an empty row or lock the existing one, in one statement: a no-op update locks the row, and if
+        // another attempt's cleanup deletes it meanwhile, Postgres retries the insert. (Insert-do-nothing, then
+        // select-for-update, lost the attempt when the cleanup deleted the row in between.)
         const empty = { failures: 0, windowStart: now, lockedUntil: null };
-        await tx.insert(table).values({ key, ...empty, removableAfter: removableAfter(empty) }).onConflictDoNothing();
-        const [row] = await tx.select().from(table).where(eq(table.key, key)).for("update");
+        const [row] = await tx
+          .insert(table)
+          .values({ key, ...empty, removableAfter: removableAfter(empty) })
+          .onConflictDoUpdate({ target: table.key, set: { key: sql`excluded.key` } })
+          .returning();
         if (isLocked(row, now)) return "locked" as const;
         const next = countAttempt(row, now);
         await tx.update(table).set({ ...next, removableAfter: removableAfter(next) }).where(eq(table.key, key));
