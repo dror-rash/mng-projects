@@ -53,9 +53,20 @@ describe("the sign-in rate limit across server instances", () => {
     expect(statuses).toEqual([401, 401, 401, 429, 429, 429]);
   });
 
-  it("gives no fresh budget to a multi-value x-forwarded-for with a changing first address", async () => {
-    // Better Auth trusts only a single-value header: a longer chain (a client's own x-forwarded-for, which
-    // Cloud Run appends to) falls into one shared bucket per path, whatever its first address says.
+  // Cloud Run appends the address it sees to any x-forwarded-for the client sent, so the rightmost value is the
+  // real client and anything left of it is the client's own claim.
+  it("keys a client-supplied x-forwarded-for on the address Cloud Run appended (the rightmost)", async () => {
+    const [first, second] = [await serverInstance(), await serverInstance()];
+    const client = someAddress();
+
+    const statuses: number[] = [];
+    for (const instance of [first, second, first]) statuses.push(await signIn(instance, client));
+    statuses.push(await signIn(second, `1.2.3.4, ${client}`));
+
+    expect(statuses).toEqual([401, 401, 401, 429]);
+  });
+
+  it("gives no fresh budget for a changing client-supplied part", async () => {
     const [first, second] = [await serverInstance(), await serverInstance()];
     const client = someAddress();
 
@@ -64,8 +75,17 @@ describe("the sign-in rate limit across server instances", () => {
       statuses.push(await signIn(instance, `203.0.113.${i + 1}, ${client}`));
     }
 
-    // That bucket may already hold attempts from an earlier run, so at most three get through.
-    expect(statuses.filter((status) => status !== 429).length).toBeLessThanOrEqual(3);
-    expect(statuses.at(-1)).toBe(429);
+    expect(statuses).toEqual([401, 401, 401, 429]);
+  });
+
+  it("gives two real addresses behind the same client-supplied value their own budgets", async () => {
+    const [first, second] = [await serverInstance(), await serverInstance()];
+    const [one, other] = [someAddress(), someAddress()];
+
+    const statuses: number[] = [];
+    for (const instance of [first, second, first]) statuses.push(await signIn(instance, `1.2.3.4, ${one}`));
+    statuses.push(await signIn(second, `1.2.3.4, ${other}`));
+
+    expect(statuses).toEqual([401, 401, 401, 401]);
   });
 });

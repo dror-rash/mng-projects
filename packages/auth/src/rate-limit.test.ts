@@ -23,7 +23,8 @@ describe("rateLimitOptions", () => {
 });
 
 describe("the client address the rate limit counts by", () => {
-  it("comes from x-forwarded-for only, with no trusted proxies", () => {
-    expect(addressOptions()).toEqual({ ipAddress: { ipAddressHeaders: ["x-forwarded-for"] } });
+  it("is the rightmost x-forwarded-for value (the one Cloud Run appended), and no other header", () => {
+    // Better Auth takes the rightmost address that isn't a trusted proxy; loopback is never a Cloud Run client.
+    expect(addressOptions()).toEqual({ ipAddress: { ipAddressHeaders: ["x-forwarded-for"], trustedProxies: ["127.0.0.1/32"] } });
   });
 });
