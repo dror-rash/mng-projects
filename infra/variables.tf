@@ -43,8 +43,9 @@ variable "preview_max_instances" {
 }
 
 variable "max_instances" {
-  type    = number
-  default = 5
+  description = "Maximum Cloud Run instances per main service (previews use preview_max_instances). Bounded by main's database connections: zones x max_instances x MAIN_DB_POOL_MAX must fit MAIN_DB_CONNECTIONS (infra/scripts/environment.sh; test-environment.sh fails otherwise), today 3 x 1 x 4 = 12. A burst queues or gets 429s instead of exhausting connections. Raise it with a bigger Cloud SQL tier or a pooler (infra/README.md, Known limits)."
+  type        = number
+  default     = 1
 }
 
 variable "db_tier" {

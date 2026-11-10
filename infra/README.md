@@ -114,8 +114,8 @@ ones: `bash infra/scripts/test-environment.sh` fails when they differ.
     the first previews failed `@smoke` with `too many connections for role "preview_runtime"`.)
   - `preview_owner` 3: one PR migrating (lock + migration) and one waiting on the lock.
   - Previews take at most 7 + 3 = 10 of `db-f1-micro`'s 22 login connections (25, 3 reserved); `main` keeps
-    22 − 10 = 12, and its worst case is 3 zones × 1 busy instance × 4 (`DB_POOL_MAX=4`) = 12: it fits at steady
-    state with no margin (see Known limits). `app` has no `CONNECTION LIMIT`, and operator sessions (`psql`,
+    22 − 10 = 12 (`MAIN_DB_CONNECTIONS`), and its worst case is 3 zones × 1 instance (`max_instances`) × 4
+    (`DB_POOL_MAX=4`) = 12: it fits with no margin (see Known limits; `test-environment.sh` checks it). `app` has no `CONNECTION LIMIT`, and operator sessions (`psql`,
     `db:studio`) and a main deploy's own migrate/provisioning connections come out of `main`'s 12.
   - A change to these limits reaches previews only after a main deploy (main provisions, previews only verify):
     until then every preview deploy fails its verification (`preview_runtime's connection limit is 6, not 7`).
@@ -278,14 +278,25 @@ password are masked. To start over, use a new demo account (a new `DEMO_EMAIL`);
 
 ## Known limits / follow-ups
 - Connections on `db-f1-micro` (22 for logins; task 075): previews at most 10 (`preview_runtime` 3 × 1 × 2 + 1 =
-  7, `preview_owner` 3), `main` 12 (3 zones × 1 busy instance × `DB_POOL_MAX=4`). That fills all 22 with no
-  margin, and counts one busy instance per zone: `main` can scale to 5 instances per zone (5 × 3 × 4 = 60), and a
-  main deploy briefly adds its own (migration lock + migration 2, then provisioning 2, then the role check 1,
-  then the demo seed 1) while the old revision still serves. Idle pool connections close after 10 s (`pg`'s
-  default). That timer runs between requests because CPU is always allocated
+  7, `preview_owner` 3), `main` 12 (`MAIN_DB_CONNECTIONS` in `environment.sh`). That fills all 22 with no margin.
+- `main` runs at most 1 instance per zone (`max_instances`, task 091, SEC-14), so its worst case is 3 zones × 1 ×
+  `DB_POOL_MAX=4` = 12, its share. (It was 5 per zone: 5 × 3 × 4 = 60 against 12, so a burst of traffic, signed in
+  or not, could scale the zones until new connections failed and every database page errored for everyone.)
+  `test-environment.sh` fails when zones × `max_instances` (`variables.tf`) × `MAIN_DB_POOL_MAX` exceeds
+  `MAIN_DB_CONNECTIONS`, and `provision-db-logins.test.mjs` fails when that share and the preview limits disagree.
+  What a burst does now: one instance per zone takes up to 80 requests at once (Cloud Run's default concurrency);
+  beyond that Cloud Run queues requests and may answer 429, and the pool of 4 makes queries wait their turn. So
+  slower pages, not an outage. The trade-off: no second instance for redundancy, and a cold start serves the first
+  request after scale-to-zero. Raise `max_instances` only with more connections: a bigger tier (the test reads the
+  new `MAIN_DB_CONNECTIONS`) or a connection pooler; or drop a zone that needs no database (task 074 asks it of
+  `example-zone`). 2 × pool 2 would give redundancy at the same 12 (task 091, question 1).
+- A main deploy briefly adds its own connections (migration lock + migration 2, then provisioning 2, then the
+  role check 1, then the demo seed 1) while the old revision still serves, and during a rollout the old
+  revision's instance and the new one can both hold connections (`max_instances` is per revision). Idle pool
+  connections close after 10 s (`pg`'s default). That timer runs between requests because CPU is always allocated
   (`run.googleapis.com/cpu-throttling: false`, checked on `dashboard-preview` and `shell`), so an older
-  revision's instances (the previous push of the same PR, or `main`'s old revision during a rollout) release their connections within about 10 s of their last request.
-  So this only bites under real load. Before real load: a bigger tier or a connection pooler, or lower `max_instances`.
+  revision's instances (the previous push of the same PR, or `main`'s old revision during a rollout) release their
+  connections within about 10 s of their last request. So the overlap only bites under load during a deploy.
 - Services are public (`allUsers`). If org policy forbids that, put a load balancer with IAP in front.
 - Previews share the production project and Cloud SQL instance. Use a separate project for staging if data
   isolation must not depend on database grants.
