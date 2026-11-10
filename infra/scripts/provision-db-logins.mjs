@@ -1,6 +1,11 @@
 #!/usr/bin/env node
-// Database logins of PR previews (task 068). Main deploys run it as main's owner login (`app`); it is
-// idempotent:
+// Database logins of main's runtime (task 074) and of PR previews (task 068). Main deploys run it as main's owner
+// login (`app`); it is idempotent:
+//   - app_runtime (main's runtime): LOGIN NOINHERIT, owns nothing, a SET-only member of app_user and of nothing
+//     else (the runtime switches with `-c role=app_user`), CONNECT on `app` only. With nothing better to switch
+//     to, a `SET ROLE` or `RESET ROLE` on a pooled connection can't leave row-level security behind (the owner
+//     login could: ADR-0006, 2026-11 amendment). Fatal: a failure fails the main deploy before any service
+//     deploys. No connection limit (main's owner login had none either);
 //   - preview_owner: LOGIN NOINHERIT, owns app_preview's objects and runs its migrations. ADMIN on app_user
 //     (migration 0020 runs `GRANT app_user TO current_user`), CONNECT and CREATE on app_preview (drizzle-kit
 //     creates its schema), USAGE and CREATE on its `public` schema;
@@ -8,7 +13,8 @@
 //     `-c role=app_user`), CONNECT on app_preview;
 //   - both have a CONNECTION LIMIT (db-f1-micro allows 25 connections in all, main's included;
 //     CONNECTION_BUDGET below);
-//   - neither can connect to `app`: CONNECT on it is revoked from PUBLIC and granted to the owner login;
+//   - neither can connect to `app`: CONNECT on it is revoked from PUBLIC and granted to the owner login and
+//     app_runtime; CONNECT on app_preview is revoked from PUBLIC too (the preview logins have their own grants);
 //   - TEMPORARY on app_preview is revoked from PUBLIC here: migration 0025 does it too, but run by
 //     preview_owner, which doesn't own the database, it only warns.
 // New roles are NOSUPERUSER, NOCREATEDB, NOCREATEROLE, NOREPLICATION and NOBYPASSRLS by default; verification
@@ -30,8 +36,9 @@
 //
 // Usage (names from infra/scripts/environment.sh):
 //   MAIN_DATABASE_URL=postgres://app:…@127.0.0.1:5432/app DATABASE_URL=postgres://app:…@127.0.0.1:5432/app_preview \
-//   MAIN_DB_NAME=app PREVIEW_DB_NAME=app_preview MAIN_OWNER_LOGIN=app PREVIEW_OWNER_LOGIN=preview_owner \
-//   PREVIEW_RUNTIME_LOGIN=preview_runtime PREVIEW_OWNER_PASSWORD=… PREVIEW_RUNTIME_PASSWORD=… \
+//   MAIN_DB_NAME=app PREVIEW_DB_NAME=app_preview MAIN_OWNER_LOGIN=app MAIN_RUNTIME_LOGIN=app_runtime \
+//   PREVIEW_OWNER_LOGIN=preview_owner PREVIEW_RUNTIME_LOGIN=preview_runtime \
+//   MAIN_RUNTIME_PASSWORD=… PREVIEW_OWNER_PASSWORD=… PREVIEW_RUNTIME_PASSWORD=… \
 //   node --experimental-strip-types infra/scripts/provision-db-logins.mjs
 // Previews: DATABASE_URL=<preview_owner on app_preview> … provision-db-logins.mjs --verify-only
 import { createHash, createHmac, pbkdf2Sync, randomBytes } from "node:crypto";
@@ -122,7 +129,9 @@ async function bestEffort(client, label, step, warnings) {
 /**
  * Main's own work, on a connection to the main database (PR code can't write there), inside the caller's
  * transaction, bounded by lock_timeout (`timeoutMs`, statements twice that).
- *   Fatal (protects `app`): CONNECT on `app` revoked from PUBLIC and the preview logins, granted to the owner.
+ *   Fatal (protects `app`): main's runtime login (created, password, its app_user grant), CONNECT on `app`
+ *   revoked from PUBLIC and the preview logins and granted to the owner and main's runtime login, CONNECT on
+ *   the preview database revoked from PUBLIC and main's runtime login.
  *   Best effort (preview concerns; a preview login can hold its own pg_authid row, so these may time out):
  *   the logins, passwords, connection limits, app_user grants, and the grants on app_preview. A failure is
  *   returned as a warning; the next preview deploy's verification fails with the cause.
@@ -130,12 +139,13 @@ async function bestEffort(client, label, step, warnings) {
  * like `grant app_user to preview_runtime with inherit true`): `app` may not revoke `GRANTED BY
  * preview_owner`, but revoking preview_owner's ADMIN option with CASCADE drops every grant made with it; the
  * ADMIN grant is then made again.
- * @param {{ mainDb: string, previewDb: string, mainOwner: string, previewOwner: string, previewRuntime: string,
- *           previewOwnerPassword: string, previewRuntimePassword: string }} names
+ * @param {{ mainDb: string, previewDb: string, mainOwner: string, mainRuntime: string, previewOwner: string,
+ *           previewRuntime: string, mainRuntimePassword: string, previewOwnerPassword: string,
+ *           previewRuntimePassword: string }} names
  * @returns {Promise<{ warnings: string[] }>}
  */
 export async function provisionMainSide(main, names, { timeoutMs = PREVIEW_SIDE_TIMEOUT_MS } = {}) {
-  const { mainDb, previewDb, mainOwner, previewOwner, previewRuntime } = names;
+  const { mainDb, previewDb, mainOwner, mainRuntime, previewOwner, previewRuntime } = names;
   await pinSearchPath(main);
   await main.query("select pg_catalog.set_config('lock_timeout', $1, true), pg_catalog.set_config('statement_timeout', $2, true)", [
     `${Number(timeoutMs)}ms`,
@@ -167,13 +177,21 @@ export async function provisionMainSide(main, names, { timeoutMs = PREVIEW_SIDE_
     await main.query(`revoke temporary on database ${ident(previewDb)} from public`);
   }, warnings);
 
-  // Fatal: what keeps the preview logins (and everyone else) out of `app`. Only logins that exist.
+  // Fatal: main's runtime login (task 074). NOINHERIT and SET-only: app_user is the one role it can become.
+  await ensureLogin(main, mainRuntime, -1);
+  await setPassword(main, mainRuntime, names.mainRuntimePassword);
+  await main.query(`grant ${runtimeRole} to ${ident(mainRuntime)} with inherit false, set true`);
+
+  // Fatal: what keeps the preview logins (and everyone else) out of `app`, and main's runtime login out of the
+  // preview database. Only logins that exist.
   const existing = await main.query("select rolname::text as name from pg_catalog.pg_roles where rolname = any ($1::text[])", [
     [previewOwner, previewRuntime],
   ]);
   const revokeFrom = ["public", ...existing.rows.map((row) => ident(row.name))].join(", ");
   await main.query(`revoke connect on database ${ident(mainDb)} from ${revokeFrom}`);
-  await main.query(`grant connect on database ${ident(mainDb)} to ${ident(mainOwner)}`);
+  await main.query(`grant connect on database ${ident(mainDb)} to ${ident(mainOwner)}, ${ident(mainRuntime)}`);
+  await main.query(`revoke connect on database ${ident(previewDb)} from public, ${ident(mainRuntime)}`);
+  await main.query(`grant connect on database ${ident(previewDb)} to ${ident(mainOwner)}`);
   return { warnings };
 }
 
@@ -195,13 +213,13 @@ export async function provisionPreviewSide(preview, { previewDb, previewOwner },
 }
 
 /**
- * What protects the main database, read on main's own connection (failures fail the main deploy): the
- * preview logins exist without owner-level attributes, can't connect to the main database, PUBLIC can't
- * either, and main's owner can.
+ * What protects the main database, read on main's own connection (failures fail the main deploy): main's
+ * runtime login is what it should be (verifyMainRuntime), the preview logins exist without owner-level
+ * attributes, can't connect to the main database, PUBLIC can't either, and main's owner can.
  */
-export async function verifyMainSide(main, { mainDb, mainOwner, previewOwner, previewRuntime }) {
+export async function verifyMainSide(main, { mainDb, previewDb, mainOwner, mainRuntime, previewOwner, previewRuntime }) {
   await pinSearchPath(main);
-  const failures = [];
+  const failures = await verifyMainRuntime(main, { mainDb, previewDb, mainOwner, mainRuntime });
   const { rows } = await main.query(
     `select r.rolname::text as name, r.rolsuper, r.rolcreaterole, r.rolcreatedb, r.rolbypassrls, r.rolreplication,
             pg_catalog.pg_has_role(r.oid, $3::text::pg_catalog.name, 'MEMBER') as main_owner_member,
@@ -226,6 +244,46 @@ export async function verifyMainSide(main, { mainDb, mainOwner, previewOwner, pr
   );
   if (database.rows[0].public_connect) failures.push(`PUBLIC can connect to the main database ${mainDb}`);
   if (!database.rows[0].owner_connect) failures.push(`main's owner login ${mainOwner} can't connect to ${mainDb}`);
+  return failures;
+}
+
+/**
+ * Main's runtime login (task 074): it logs in, has no owner-level attribute, doesn't inherit, owns nothing in
+ * any database (pg_shdepend), its only membership is the provisioned app_user grant (SET only), it can't
+ * SET ROLE to main's owner login, and it can connect to the main database and not to the preview one.
+ */
+async function verifyMainRuntime(main, { mainDb, previewDb, mainOwner, mainRuntime }) {
+  const failures = [];
+  const { rows } = await main.query(
+    `select r.rolcanlogin, r.rolsuper, r.rolcreaterole, r.rolcreatedb, r.rolbypassrls, r.rolreplication, r.rolinherit,
+            pg_catalog.pg_has_role(r.oid, $3::text::pg_catalog.name, 'SET') as can_set_owner,
+            (select pg_catalog.count(*)::int from pg_catalog.pg_shdepend d
+              where d.refclassid = 'pg_catalog.pg_authid'::pg_catalog.regclass and d.refobjid = r.oid and d.deptype = 'o') as owned,
+            array(select g.rolname::text from pg_catalog.pg_auth_members m join pg_catalog.pg_roles g on g.oid = m.roleid
+                  where m.member = r.oid and g.rolname <> $2::text order by 1) as other_roles,
+            array(select pg_catalog.concat_ws(':', m.admin_option, m.inherit_option, m.set_option)
+                  from pg_catalog.pg_auth_members m join pg_catalog.pg_roles g on g.oid = m.roleid
+                  where m.member = r.oid and g.rolname = $2::text order by 1) as runtime_grants,
+            pg_catalog.has_database_privilege(r.oid, $4::text::pg_catalog.name, 'CONNECT') as main_connect,
+            pg_catalog.has_database_privilege(r.oid, $5::text::pg_catalog.name, 'CONNECT') as preview_connect
+     from pg_catalog.pg_roles r where r.rolname = $1::text`,
+    [mainRuntime, RUNTIME_ROLE, mainOwner, mainDb, previewDb],
+  );
+  const role = rows[0];
+  if (!role) return [`${mainRuntime} doesn't exist (main's runtime login)`];
+  if (!role.rolcanlogin) failures.push(`${mainRuntime} can't log in`);
+  for (const attribute of ["rolsuper", "rolcreaterole", "rolcreatedb", "rolbypassrls", "rolreplication", "rolinherit"]) {
+    if (role[attribute]) failures.push(`${mainRuntime} has ${attribute}`);
+  }
+  if (role.can_set_owner) failures.push(`${mainRuntime} can SET ROLE to main's owner login ${mainOwner}`);
+  if (role.owned > 0) failures.push(`${mainRuntime} owns ${role.owned} object(s)`);
+  if (role.other_roles.length > 0) failures.push(`${mainRuntime} is a member of roles other than ${RUNTIME_ROLE}: ${role.other_roles.join(", ")}`);
+  // "<admin>:<inherit>:<set>": one grant, SET only.
+  if (role.runtime_grants.join(",") !== "f:f:t") {
+    failures.push(`${mainRuntime}'s memberships of ${RUNTIME_ROLE} aren't the provisioned ones: ${role.runtime_grants.join(",") || "none"}`);
+  }
+  if (!role.main_connect) failures.push(`${mainRuntime} can't connect to the main database ${mainDb}`);
+  if (role.preview_connect) failures.push(`${mainRuntime} can connect to the preview database ${previewDb}`);
   return failures;
 }
 
@@ -310,9 +368,14 @@ function namesFromEnv(env, { withPasswords }) {
     mainDb: env.MAIN_DB_NAME,
     previewDb: env.PREVIEW_DB_NAME,
     mainOwner: env.MAIN_OWNER_LOGIN,
+    mainRuntime: env.MAIN_RUNTIME_LOGIN,
     previewOwner: env.PREVIEW_OWNER_LOGIN,
     previewRuntime: env.PREVIEW_RUNTIME_LOGIN,
-    ...(withPasswords && { previewOwnerPassword: env.PREVIEW_OWNER_PASSWORD, previewRuntimePassword: env.PREVIEW_RUNTIME_PASSWORD }),
+    ...(withPasswords && {
+      mainRuntimePassword: env.MAIN_RUNTIME_PASSWORD,
+      previewOwnerPassword: env.PREVIEW_OWNER_PASSWORD,
+      previewRuntimePassword: env.PREVIEW_RUNTIME_PASSWORD,
+    }),
   };
   const missing = Object.entries(names).filter(([, value]) => !value).map(([key]) => key);
   if (missing.length > 0) throw new Error(`missing ${missing.join(", ")} (source infra/scripts/environment.sh)`);
@@ -380,7 +443,10 @@ async function provision(names) {
   } finally {
     await main.end();
   }
-  console.log(`Database logins provisioned on ${names.mainDb}: ${names.previewOwner} and ${names.previewRuntime} can't connect to it.`);
+  console.log(
+    `Database logins provisioned on ${names.mainDb}: ${names.mainRuntime} owns nothing and can only become ${RUNTIME_ROLE}; ` +
+      `${names.previewOwner} and ${names.previewRuntime} can't connect to it.`,
+  );
 
   let preview;
   try {
