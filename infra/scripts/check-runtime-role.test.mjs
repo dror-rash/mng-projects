@@ -104,6 +104,19 @@ test("fails when the runtime login can SET ROLE to the tables' owner", async () 
   assert.match(failures.join("\n"), new RegExp(`the login \\(session_user\\) "role_check_runtime_[0-9_]+" can SET ROLE "${owner}", which owns`));
 });
 
+test("fails when the runtime login can SET ROLE to any role but itself and app_user", async () => {
+  const extra = `role_check_extra_${process.pid}`;
+  try {
+    const failures = await checkAsRuntimeLogin(async (client, login) => {
+      await client.query(`create role ${extra} nologin`);
+      await client.query(`grant ${extra} to ${login} with inherit false, set true`);
+    });
+    assert.match(failures.join("\n"), new RegExp(`the login \\(session_user\\) "role_check_runtime_[0-9_]+" can SET ROLE to roles other than itself and app_user: ${extra}`));
+  } finally {
+    await withClient(buildPoolConfig(env, null), (client) => client.query(`drop role if exists ${extra}`));
+  }
+});
+
 test("on a runtime login's connection, SET ROLE to the owner is refused", async () => {
   const { rows } = await withClient(buildPoolConfig(env, null), (client) =>
     client.query("select pg_get_userbyid(relowner)::text as owner from pg_class where oid = 'public.workspace'::regclass"),

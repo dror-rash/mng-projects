@@ -432,9 +432,50 @@ test("main's verification fails when its runtime login inherits, or has ADMIN on
   assert.match(failures, /role_check_main_runtime's memberships of app_user aren't the provisioned ones/);
 });
 
-test("main's verification fails when its runtime login can connect to the preview database", async () => {
-  const failures = await mainFailuresAfter((client, names) => client.query(`grant connect on database "${names.previewDb}" to ${names.mainRuntime}`));
+// Keeping app_runtime out of app_preview revokes CONNECT from PUBLIC there, so it goes with the preview logins'
+// own grants, as one best-effort step: a skipped step never locks previews out, and the next preview deploy's
+// verification reports it (like every preview-side step).
+test("the preview verification fails when main's runtime login can connect to the preview database", async () => {
+  const failures = await failuresAfter((client, names) => client.query(`grant connect on database "${names.previewDb}" to ${names.mainRuntime}`));
   assert.match(failures, /role_check_main_runtime can connect to the preview database/);
+});
+
+test("the preview verification passes before main's runtime login exists (a preview of the PR that adds it)", async () => {
+  await inRolledBackTransaction(async (client, names) => {
+    await provisionAll(client, names);
+    assert.deepEqual(await verifyDbLogins(client, { ...names, mainRuntime: "role_check_no_such_login" }), []);
+  });
+});
+
+test("the preview verification fails when a preview login connects only through PUBLIC", async () => {
+  const failures = await failuresAfter(async (client, names) => {
+    await client.query(`grant connect on database "${names.previewDb}" to public`);
+    await client.query(`revoke connect on database "${names.previewDb}" from ${names.previewRuntime}`);
+  });
+  assert.match(failures, /role_check_preview_runtime has no CONNECT grant of its own on the preview database/);
+});
+
+test("when the preview logins' CONNECT grants can't run, PUBLIC keeps CONNECT on the preview database and main goes on", async () => {
+  await inRolledBackTransaction(async (client, names) => {
+    await withClient(loginConfig, async (holder) => {
+      // Holds the preview database's pg_database row (an open GRANT on it), so every grant on it waits.
+      await holder.query("begin");
+      await holder.query(`grant temporary on database "${names.previewDb}" to public`);
+      try {
+        const { warnings } = await provisionMainSide(client, names, { timeoutMs: 300 });
+        assert.match(warnings.join("\n"), new RegExp(`CONNECT on ${names.previewDb}: .*lock timeout`));
+        assert.deepEqual(await verifyMainSide(client, names), []);
+        const { rows } = await client.query(
+          `select exists (select 1 from pg_database d, aclexplode(coalesce(d.datacl, acldefault('d', d.datdba))) a
+                          where d.datname = $1 and a.grantee = 0 and a.privilege_type = 'CONNECT') as public_connect`,
+          [names.previewDb],
+        );
+        assert.equal(rows[0].public_connect, true);
+      } finally {
+        await holder.query("rollback");
+      }
+    });
+  });
 });
 
 test("main's verification fails when its runtime login can't connect to the main database", async () => {
