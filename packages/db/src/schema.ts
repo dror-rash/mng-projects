@@ -84,7 +84,10 @@ export const rateLimit = pgTable("rate_limit", {
   count: integer("count").notNull(),
   // Milliseconds since the epoch (Date.now()), as Better Auth writes it.
   lastRequest: bigint("last_request", { mode: "number" }).notNull(),
-});
+}, (table) => [
+  // Better Auth's cleanup deletes rows older than its longest window by this column.
+  index("rate_limit_last_request_idx").on(table.lastRequest),
+]);
 
 /** Workspaces own projects, tasks and customers (ADR-0005). */
 export const workspace = pgTable("workspace", {
