@@ -36,6 +36,7 @@ CHANNEL="$(resource google_monitoring_notification_channel email)"
 IAM="$(resource google_monitoring_alert_policy iam_policy_change)"
 KEYS="$(resource google_monitoring_alert_policy service_account_key)"
 RUN="$(resource google_monitoring_alert_policy run_change_outside_ci)"
+SECURITY="$(resource google_monitoring_alert_policy security_config_change)"
 ERRORS="$(resource google_monitoring_alert_policy main_5xx)"
 SQL="$(resource google_monitoring_alert_policy sql_connections)"
 BUDGET="$(resource google_billing_budget monthly)"
@@ -66,13 +67,13 @@ check "the channel is an email channel" in_block "$CHANNEL" '^  type += "email"$
 check "the channel sends to var.alert_email" in_block "$CHANNEL" 'email_address += var\.alert_email'
 
 # --- Every alert policy: notifies the channel, says what to do first ---
-for p in IAM KEYS RUN ERRORS SQL; do
+for p in IAM KEYS RUN SECURITY ERRORS SQL; do
   text="${!p}"
   check "$p: the policy exists" test -n "$text"
   check "$p: notifies the email channel" in_block "$text" 'notification_channels += \[google_monitoring_notification_channel\.email\.id\]'
   check "$p: documents what to do first" in_block "$text" '^  documentation \{'
 done
-for p in IAM KEYS RUN; do
+for p in IAM KEYS RUN SECURITY; do
   text="${!p}"
   check "$p: is a log-match alert" in_block "$text" 'condition_matched_log \{'
   check "$p: notifies at most once per 5 minutes" in_block "$text" 'period += "300s"'
@@ -82,12 +83,74 @@ check "the audit log is the project's Admin Activity log" \
   grep -qE '^  audit_activity_log += "projects/\$\{var\.project_id\}/logs/cloudaudit\.googleapis\.com%2Factivity"$' "$MON"
 
 # --- Log filters (checked against the project's audit log, task 092) ---
-check "IAM: matches every SetIamPolicy (project, service account, secret, …) and bucket IAM" \
-  in_block "$IAM" 'protoPayload\.methodName =~ "\(\?i\)\(setiampolicy\|setiampermissions\)\$"'
-check "keys: matches service-account key creation and upload" \
-  in_block "$KEYS" '\^google\\\\\.iam\\\\\.admin\\\\\.v1\\\\\.\(Create\|Upload\)ServiceAccountKey\$'
-check "run: matches creating, replacing, updating and deleting a service (v1 and v2)" \
-  in_block "$RUN" '\^google\\\\\.cloud\\\\\.run\\\\\.v\[12\]\\\\\.Services\\\\\.\(Create\|Replace\|Update\|Delete\)Service\$'
+# The method regexes live in locals, as plain strings with no backslash: Terraform heredocs keep a backslash as
+# is, and Cloud Logging reads "\\." in a filter as a literal backslash, so an escaped dot matches nothing
+# (a filter of task 092's first version did). Literal dots are written [.] instead.
+# A regex from local.log_alert_methods (`  name = "regex"`), or the security list joined with |.
+method_re() { # name
+  if [ "$1" = security_config ]; then
+    awk '/^  security_config_methods = \[$/ { inside = 1; next } inside && /^  \]$/ { exit }
+         inside { line = $0; sub(/^ +"/, "", line); sub(/",?( *#.*)?$/, "", line); printf "%s%s", sep, line; sep = "|" }' "$MON"
+  else
+    awk -v name="$1" '/^  log_alert_methods = \{$/ { inside = 1; next } inside && /^  \}$/ { exit }
+         inside && $1 == name { line = $0; sub(/^[^"]*"/, "", line); sub(/"$/, "", line); print line; exit }' "$MON"
+  fi
+}
+matches() { # regex, method name: Perl's regex, which reads these patterns like RE2
+  [ -n "$1" ] && perl -e 'exit(($ARGV[1] =~ /$ARGV[0]/) ? 0 : 1)' "$1" "$2"
+}
+no_backslash() { [ -n "$1" ] && ! grep -qF '\' <<<"$1"; }
+for name in iam_policy service_account_key run_service security_config; do
+  check "$name: the regex has no backslash (Logging would read it literally)" no_backslash "$(method_re "$name")"
+done
+check "no methodName filter in monitoring.tf has a backslash" bash -c "! grep -E 'methodName' '$MON' | grep -qF '\\'"
+check "IAM: filters on local.log_alert_methods.iam_policy" in_block "$IAM" 'protoPayload\.methodName =~ "\$\{local\.log_alert_methods\.iam_policy\}"$'
+check "keys: filters on local.log_alert_methods.service_account_key" in_block "$KEYS" 'protoPayload\.methodName =~ "\$\{local\.log_alert_methods\.service_account_key\}"$'
+check "run: filters on local.log_alert_methods.run_service" in_block "$RUN" 'protoPayload\.methodName =~ "\$\{local\.log_alert_methods\.run_service\}"$'
+check "security: filters on every local.security_config_methods" in_block "$SECURITY" 'protoPayload\.methodName =~ "\$\{join\("\|", local\.security_config_methods\)\}"$'
+check "security: leaves out no one (not even the deployers)" not_in_block "$SECURITY" 'principalEmail'
+
+# Method names from the project's audit log and the APIs' docs: each must match its alert, or not.
+table() { # yes|no, regex name, method...
+  local want="$1" name="$2" re m; shift 2; re="$(method_re "$name")"
+  for m in "$@"; do
+    if [ "$want" = yes ]; then check "$name matches $m" matches "$re" "$m"
+    else check "$name doesn't match $m" bash -c '[ -n "$1" ] && ! perl -e '"'"'exit(($ARGV[1] =~ /$ARGV[0]/) ? 0 : 1)'"'"' "$1" "$2"' _ "$re" "$m"; fi
+  done
+}
+table yes iam_policy SetIamPolicy google.iam.admin.v1.SetIAMPolicy storage.setIamPermissions \
+  google.cloud.secretmanager.v1.SecretManagerService.SetIamPolicy google.cloud.run.v2.Services.SetIamPolicy \
+  google.devtools.artifactregistry.v1.ArtifactRegistry.SetIamPolicy
+table no iam_policy GetIamPolicy google.iam.admin.v1.GetIAMPolicy storage.getIamPermissions \
+  google.cloud.run.v2.Services.TestIamPermissions SetIamPolicyX
+table yes service_account_key google.iam.admin.v1.CreateServiceAccountKey google.iam.admin.v1.UploadServiceAccountKey
+table no service_account_key google.iam.admin.v1.DeleteServiceAccountKey google.iam.admin.v1.CreateServiceAccount \
+  google_iam_admin_v1_CreateServiceAccountKey
+table yes run_service google.cloud.run.v1.Services.ReplaceService google.cloud.run.v2.Services.UpdateService \
+  google.cloud.run.v1.Services.CreateService google.cloud.run.v2.Services.CreateService \
+  google.cloud.run.v1.Services.DeleteService google.cloud.run.v2.Services.DeleteService
+table no run_service google.cloud.run.v2.Services.GetService google.cloud.run.v2.Jobs.CreateJob \
+  google.cloud.run.v2.Revisions.DeleteRevision google.cloud.run.v3.Services.UpdateService
+table yes security_config \
+  google.iam.v1.WorkloadIdentityPools.CreateWorkloadIdentityPool google.iam.v1.WorkloadIdentityPools.UpdateWorkloadIdentityPool \
+  google.iam.v1.WorkloadIdentityPools.DeleteWorkloadIdentityPool google.iam.v1.WorkloadIdentityPools.UndeleteWorkloadIdentityPool \
+  google.iam.v1.WorkloadIdentityPools.CreateWorkloadIdentityPoolProvider google.iam.v1.WorkloadIdentityPools.UpdateWorkloadIdentityPoolProvider \
+  google.iam.v1.WorkloadIdentityPools.DeleteWorkloadIdentityPoolProvider google.iam.v1.WorkloadIdentityPools.UndeleteWorkloadIdentityPoolProvider \
+  google.iam.admin.v1.CreateRole google.iam.admin.v1.UpdateRole google.iam.admin.v1.DeleteRole google.iam.admin.v1.UndeleteRole \
+  storage.hmacKeys.create \
+  google.cloud.secretmanager.v1.SecretManagerService.AddSecretVersion google.cloud.secretmanager.v1.SecretManagerService.DisableSecretVersion \
+  google.cloud.secretmanager.v1.SecretManagerService.DestroySecretVersion google.cloud.secretmanager.v1.SecretManagerService.DeleteSecret \
+  cloudsql.users.create cloudsql.users.update cloudsql.users.delete cloudsql.instances.update \
+  google.cloud.run.v1.Jobs.CreateJob google.cloud.run.v1.Jobs.ReplaceJob google.cloud.run.v2.Jobs.CreateJob google.cloud.run.v2.Jobs.UpdateJob \
+  google.logging.v2.ConfigServiceV2.CreateSink google.logging.v2.ConfigServiceV2.UpdateSink google.logging.v2.ConfigServiceV2.DeleteSink \
+  google.logging.v2.ConfigServiceV2.CreateExclusion google.logging.v2.ConfigServiceV2.UpdateExclusion google.logging.v2.ConfigServiceV2.DeleteExclusion \
+  storage.buckets.update \
+  google.monitoring.v3.NotificationChannelService.UpdateNotificationChannel google.monitoring.v3.NotificationChannelService.DeleteNotificationChannel \
+  google.monitoring.v3.AlertPolicyService.UpdateAlertPolicy google.monitoring.v3.AlertPolicyService.DeleteAlertPolicy
+table no security_config cloudsql.instances.connect cloudsql.users.list google.iam.admin.v1.GetRole \
+  google.cloud.secretmanager.v1.SecretManagerService.AccessSecretVersion google.cloud.secretmanager.v1.SecretManagerService.GetSecret \
+  storage.hmacKeys.list storage.buckets.get google.cloud.run.v2.Jobs.RunJob google.logging.v2.ConfigServiceV2.ListSinks \
+  google.monitoring.v3.AlertPolicyService.ListAlertPolicies google.cloud.run.v1.Services.ReplaceService SetIamPolicy
 check "run: leaves out the two deployers, by their Terraform emails" \
   in_block "$RUN" 'NOT protoPayload\.authenticationInfo\.principalEmail = \(.*google_service_account\.deployer'
 check "run: the deployers are taken from local.environments (both of them)" \
@@ -106,10 +169,17 @@ check "5xx: per service" in_block "$ERRORS" 'group_by_fields += \["resource\.lab
 check "5xx: above 5%" in_block "$ERRORS" 'threshold_value += 0\.05$'
 check "5xx: over 5 minutes" in_block "$ERRORS" 'alignment_period += "300s"'
 check "5xx: greater than" in_block "$ERRORS" 'comparison += "COMPARISON_GT"'
+check "5xx: both conditions must hold for the same service" in_block "$ERRORS" '^  combiner += "AND_WITH_MATCHING_RESOURCE"$'
+check "5xx: two conditions" test "$(grep -cE '^  conditions \{$' <<<"$ERRORS")" -eq 2
+check "5xx: and at least 3 errors in the window (more than 2)" in_block "$ERRORS" 'threshold_value += 2 # at least 3'
 check "sql: counts Postgres backends" in_block "$SQL" 'cloudsql\.googleapis\.com/database/postgresql/num_backends'
 check "sql: on the app instance" in_block "$SQL" 'google_sql_database_instance\.main\.name'
 check "sql: above 80% of the login connections" in_block "$SQL" 'threshold_value += local\.sql_connection_alert$'
-check "sql: 80% of 25 minus 3 reserved" grep -qE '^  sql_connection_alert += 0\.8 \* \(25 - 3\)' "$MON"
+check "sql: db-f1-micro allows 25 connections" bash -c "awk '/^  sql_max_connections = \\{\$/,/^  \\}\$/' '$MON' | grep -qE '^    \"db-f1-micro\" += 25\$'"
+check "sql: 80% of the tier's connections minus 3 reserved" \
+  grep -qE '^  sql_connection_alert += 0\.8 \* \(lookup\(local\.sql_max_connections, var\.db_tier, 0\) - 3\)' "$MON"
+check "sql: refuses a tier it doesn't know" in_block "$SQL" 'condition += contains\(keys\(local\.sql_max_connections\), var\.db_tier\)'
+
 check "sql: for 5 minutes" in_block "$SQL" 'duration += "300s"'
 
 # --- Budget ---
@@ -158,6 +228,18 @@ if [ -z "${TEST_MONITORING_PROBE:-}" ]; then
     "perl -0pi -e 's/(resource \"google_monitoring_alert_policy\" \"run_change_outside_ci\" \\{.*?)period += \"300s\"/\$1period = \"3600s\"/s' monitoring.tf"
   check "probe: dropping the deployer exclusion is caught" probe "run: leaves out the two deployers" \
     "perl -pi -e 's/NOT protoPayload\\.authenticationInfo\\.principalEmail/protoPayload.authenticationInfo.principalEmail/' monitoring.tf"
+  check "probe: a backslash-escaped dot is caught" probe "run_service: the regex has no backslash" \
+    "perl -pi -e 's/\\^google\\[\\.\\]cloud/^google\\\\\\\\.cloud/' monitoring.tf"
+  check "probe: an IAM regex that matches GetIamPolicy is caught" probe "iam_policy doesn't match GetIamPolicy" \
+    "perl -pi -e 's/\\(setiampolicy\\|/(iampolicy|/' monitoring.tf"
+  check "probe: dropping Secret Manager from the security alert is caught" probe "security_config matches google.cloud.secretmanager.v1.SecretManagerService.AddSecretVersion" \
+    "perl -ni -e 'print unless /secretmanager/ && /AddSecretVersion/' monitoring.tf"
+  check "probe: dropping the alert policy deletes from the security alert is caught" probe "security_config matches google.monitoring.v3.AlertPolicyService.DeleteAlertPolicy" \
+    "perl -ni -e 'print unless /AlertPolicyService/' monitoring.tf"
+  check "probe: dropping the 5xx count condition's combiner is caught" probe "5xx: both conditions must hold" \
+    "perl -pi -e 's/AND_WITH_MATCHING_RESOURCE/OR/' monitoring.tf"
+  check "probe: dropping the tier precondition is caught" probe "sql: refuses a tier it doesn't know" \
+    "perl -pi -e 's/condition( +)= contains\\(keys\\(local\\.sql_max_connections\\), var\\.db_tier\\)/condition\$1= true/' monitoring.tf"
   check "probe: a 10% threshold is caught" probe "5xx: above 5%" "perl -pi -e 's/threshold_value( +)= 0\\.05/threshold_value\${1}= 0.1/' monitoring.tf"
   check "probe: 5xx on previews too is caught" probe "5xx: on main's services only" \
     "perl -pi -e 's/ if runtime\\.environment == \"main\"//' monitoring.tf"
