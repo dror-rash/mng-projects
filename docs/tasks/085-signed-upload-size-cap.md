@@ -1,6 +1,6 @@
 # Task 085: Storage refuses uploads over the size limit
 
-- **Status:** in-progress (code done; waiting for the owner's Terraform change and the preview hand check)
+- **Status:** in-review (code done; waiting for the owner's Terraform change and the preview hand check)
 - **Milestone:** cross-cutting (security), M13 follow-up
 - **Zone / package:** `packages/storage` (`createUploadUrl`), `apps/dashboard/features/attachments/actions.ts` (passes the kind's limit), `infra/storage.tf` (CORS allowed headers, both buckets), `docker-compose.yml` and `.github/workflows/ci.yml` (`fake-gcs-server -cors-headers`), `infra/scripts/test-workflows.sh` (the three CORS lists in step). No migration. Commit types `test(dashboard)` / `test(storage)` / `test(infra)` → `feat(storage)` / `fix(infra)` / `fix(ci)`.
 - **Feature file:** none new (see "Test plan": the visible limits are already `attachments.feature` and `reports.feature` scenarios; what changes is where the bytes are stopped)
