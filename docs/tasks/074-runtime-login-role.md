@@ -1,6 +1,6 @@
 # Task 074: A separate runtime login for the database
 
-- **Status:** in-progress
+- **Status:** in-review
 - **Milestone:** M11 Deploy to GCP (follow-up)
 - **Zone / package:** `infra/`, `.github/workflows/`, `packages/db`, `docs/adr/`
 - **Feature file:** none (no visible behavior); checked by the runtime role check and DB tests
