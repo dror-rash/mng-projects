@@ -13,11 +13,13 @@ export function rateLimitOptions(
 }
 
 /**
- * The client address the rate limit counts by (`advanced.ipAddress`): the header Cloud Run sets, and no other.
- * Better Auth trusts it only with a single value; with several (a client sending its own, which Cloud Run
- * appends to) it can't tell which to believe and counts the request in one bucket shared by all such requests
- * on that path (review SEC-10). No trusted proxies: a future load balancer's format is SEC-20's.
+ * The client address the rate limit counts by (`advanced.ipAddress`): `x-forwarded-for`, and no other header.
+ * Cloud Run appends the address it sees to whatever x-forwarded-for the client sent, so only the rightmost
+ * value can be believed. With trusted proxies set, Better Auth walks the header from the right and takes the
+ * first address that isn't one of them; loopback is never a Cloud Run client, so that is the rightmost value
+ * (a spoofed prefix can't pick the bucket or fill a shared one). This assumes Cloud Run's front end is the only
+ * hop: revisit when a load balancer is added in front (SEC-20), whose own address would then be rightmost.
  */
-export function addressOptions(): { ipAddress: { ipAddressHeaders: string[] } } {
-  return { ipAddress: { ipAddressHeaders: ["x-forwarded-for"] } };
+export function addressOptions(): { ipAddress: { ipAddressHeaders: string[]; trustedProxies: string[] } } {
+  return { ipAddress: { ipAddressHeaders: ["x-forwarded-for"], trustedProxies: ["127.0.0.1/32"] } };
 }
