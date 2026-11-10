@@ -1,3 +1,5 @@
+import { createHmac } from "node:crypto";
+
 import { betterAuth } from "better-auth";
 import { memoryAdapter } from "better-auth/adapters/memory";
 import { describe, expect, it } from "vitest";
@@ -91,6 +93,11 @@ describe("the lockout key", () => {
 
   it("depends on the secret, so it can't be computed from an email alone", () => {
     expect(lockoutKey("someone@example.com", secret)).not.toBe(lockoutKey("someone@example.com", `${secret}-other`));
+  });
+
+  it("is separated from other uses of the secret: not the plain HMAC of the email", () => {
+    const plain = createHmac("sha256", secret).update("someone@example.com").digest("hex");
+    expect(lockoutKey("someone@example.com", secret)).not.toBe(plain);
   });
 
   it("differs between emails", () => {

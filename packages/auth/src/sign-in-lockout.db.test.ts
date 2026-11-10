@@ -137,3 +137,51 @@ describe("the sign-in lockout in the database", () => {
     expect(statuses.filter((s) => s.status === 429)).toHaveLength(7);
   });
 });
+
+// The store directly, against the race the cleanup can cause (security review of task 090): an attempt for a key
+// whose expired row another attempt's cleanup deletes while the first waits for the row lock must still count.
+describe("the database store", () => {
+  /** Waits until `count` sessions wait, directly or behind each other, for a lock session `holder` holds. */
+  async function untilBlocked(holder: number, count: number) {
+    for (let i = 0; i < 200; i++) {
+      // pg_locks, not pg_stat_activity: the runtime role can't see other logins' activity.
+      const { rows } = await getPoolDb().execute<{ n: number }>(sql`
+        with recursive waiting as (
+          select ${holder}::int as pid
+          union
+          select l.pid from pg_locks l join waiting w on w.pid = any(pg_blocking_pids(l.pid)) where not l.granted
+        )
+        select count(*)::int - 1 as n from waiting`);
+      if ((rows[0]?.n ?? 0) >= count) return;
+      await new Promise((resolve) => setTimeout(resolve, 25));
+    }
+    throw new Error("no attempt waited for the row lock");
+  }
+
+  it("counts attempts whose expired row the cleanup deletes while they wait for it", async () => {
+    const { databaseStore } = await import("./sign-in-lockout");
+    const store = databaseStore();
+    const key = `expired-${randomUUID()}`;
+    await getPoolDb().execute(sql`
+      insert into sign_in_lockout (key, failures, window_start, locked_until, removable_after)
+      values (${key}, 3, now() - interval '1 hour', null, now() - interval '45 minutes')`);
+
+    // Another attempt's cleanup holds the expired row while these attempts arrive, then deletes it.
+    let attempts: Promise<string[]> | undefined;
+    await getPoolDb().transaction(async (cleanup) => {
+      const { rows } = await cleanup.execute<{ pid: number }>(sql`select pg_backend_pid() as pid`);
+      await cleanup.execute(sql`select key from sign_in_lockout where key = ${key} for update`);
+      attempts = Promise.all([1, 2, 3].map(() => store.attempt(key, new Date())));
+      const holder = rows[0]?.pid;
+      if (holder === undefined) throw new Error("no backend pid");
+      await untilBlocked(holder, 3);
+      await cleanup.execute(sql`delete from sign_in_lockout where key = ${key} and removable_after < now()`);
+    });
+    expect(await attempts).toEqual(["allowed", "allowed", "allowed"]);
+
+    const { rows } = await getPoolDb().execute<{ failures: number }>(
+      sql`select failures from sign_in_lockout where key = ${key}`,
+    );
+    expect(rows).toEqual([{ failures: 3 }]);
+  });
+});
