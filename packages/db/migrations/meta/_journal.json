@@ -281,6 +281,13 @@
       "when": 1793898788354,
       "tag": "0039_readings_append_only",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1794337243688,
+      "tag": "0040_unfinished_uploads",
+      "breakpoints": true
     }
   ]
 }

@@ -336,6 +336,10 @@ export const attachment = pgTable(
   (table) => [
     index("attachment_project_idx").on(table.projectId, table.createdAt),
     index("attachment_visit_idx").on(table.visitId),
+    /** Unfinished uploads (task 087): the workspace's stale ones are cleared, and each person's are counted. */
+    index("attachment_unconfirmed_idx")
+      .on(table.workspaceId, table.uploadedBy, table.createdAt)
+      .where(sql`${table.confirmedAt} is null`),
     check("attachment_kind_check", sql`${table.kind} in ('photo', 'file', 'report')`),
     check("attachment_size_check", sql`${table.sizeBytes} >= 0`),
   ],
