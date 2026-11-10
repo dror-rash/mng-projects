@@ -1,26 +1,12 @@
-import { getPoolDb, schema } from "@repo/db";
 import { betterAuth } from "better-auth";
-import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { nextCookies, toNextJsHandler } from "better-auth/next-js";
 import { headers } from "next/headers";
 
-import { rateLimitOptions } from "./rate-limit";
+import { authOptions } from "./options";
 
 function createAuth() {
-  // Preview deploys have unpredictable *.run.app hosts; only they set ALLOW_PREVIEW_ORIGINS.
-  const allowPreviewOrigins = process.env.ALLOW_PREVIEW_ORIGINS === "true";
-
   return betterAuth({
-    // The pool, never a request's `withAccess` transaction: the adapter keeps what it is given, and
-    // getAuth() may first run inside one. Auth tables have grants and no row-level security.
-    database: drizzleAdapter(getPoolDb(), { provider: "pg", schema }),
-    secret: process.env.BETTER_AUTH_SECRET,
-    baseURL: process.env.BETTER_AUTH_URL,
-    trustedOrigins: allowPreviewOrigins ? ["https://*.run.app", "https://*.a.run.app"] : [],
-    emailAndPassword: { enabled: true, minPasswordLength: 8 },
-    ...rateLimitOptions(process.env),
-    // Must be identical in every zone, or one zone can't read another's cookie.
-    advanced: { useSecureCookies: process.env.NODE_ENV === "production" },
+    ...authOptions(process.env),
     plugins: [nextCookies()], // keep last
   });
 }
