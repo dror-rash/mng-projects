@@ -1,6 +1,6 @@
 # Task 088: An account that uploaded files or recorded visits can be deleted
 
-- **Status:** in-progress
+- **Status:** in-review
 - **Milestone:** cross-cutting (security), M13 follow-up
 - **Zone / package:** `packages/db` (one migration replacing two trigger functions; `rls-pins.mjs`; DB tests). Commit types `test(db)` → `fix(db)`.
 - **Feature file:** none (no page deletes accounts today; DB tests are the check)
