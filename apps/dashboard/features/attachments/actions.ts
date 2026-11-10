@@ -10,13 +10,20 @@ import { requireProjectWorkAccess } from "@/features/projects/require-project-ac
 import { getProjectVisit } from "@/features/visits/queries";
 
 import { allowedOnVisit, maxUploadBytes, parseAttachmentKind, uploadRefusal } from "./attachment-limits";
+import { prepareUpload, removeStaleObjects } from "./unfinished-uploads";
 
-// Photos and files (task 059) and reports (task 064). The browser uploads straight to storage: `startUploadAction` checks access
-// and the limits, records the upload (unconfirmed) and signs a URL; the browser sends the file; then
-// `finishUploadAction` checks the stored object and confirms it, or throws it away. The signed URL carries the
-// kind's size limit, so storage refuses a larger body (task 085); the confirm check stays (the local server
-// doesn't enforce the limit). Access problems (another partner's project, a made-up id, someone else's upload)
-// throw the same not-found error; the limits come back as a message to show.
+// Photos and files (task 059) and reports (task 064). The browser uploads straight to storage. An upload's life:
+//   1. start: `startUploadAction` checks access and the limits, clears the workspace's stale uploads and
+//      checks the user's unfinished ones (task 087, `unfinished-uploads.ts`), records the upload (unconfirmed)
+//      and signs a URL;
+//   2. upload: the browser sends the file to storage with the URL's headers;
+//   3. confirm: `finishUploadAction` checks the stored object and confirms it, or throws it away.
+// One that never comes back to step 3 (a dropped connection, a closed tab) counts towards its uploader's 10
+// unfinished uploads in the workspace, and is cleared (record and object) by the first upload started in the
+// workspace an hour after it began (its URL lasts 15 minutes, so nothing can still arrive).
+// The signed URL carries the kind's size limit, so storage refuses a larger body (task 085); the confirm check
+// stays (the local server doesn't enforce the limit). Access problems (another partner's project, a made-up
+// id, someone else's upload) throw the same not-found error; the limits come back as a message to show.
 
 export type UploadStart = { ok: true; uploadUrl: string; headers: Record<string, string> } | { ok: false; error: string };
 export type UploadFinish = { ok: true } | { ok: false; error: string };
@@ -44,7 +51,8 @@ export async function startUploadAction(input: {
   if (!kind || (input.visitId && !allowedOnVisit(kind)) || !UUID.test(String(input.attachmentId)) || !fileName) {
     throw new Error("Not found");
   }
-  const key = await withAccess(session.user.id, async (): Promise<{ refusal: string } | { storageKey: string; contentType: string }> => {
+  type Started = { workspaceId: string; staleKeys: string[] } & ({ refusal: string } | { storageKey: string; contentType: string });
+  const key = await withAccess(session.user.id, async (): Promise<{ refusal: string } | Started> => {
     const project = await requireProjectWorkAccess(session.user.id, String(input.projectId));
     if (input.visitId && !(await getProjectVisit(session.user.id, project.id, String(input.visitId)))) {
       throw new Error("Not found");
@@ -52,6 +60,11 @@ export async function startUploadAction(input: {
     const refusal = uploadRefusal(kind, String(input.contentType), Number(input.size));
     if (refusal) {
       return { refusal };
+    }
+    const { staleKeys, refusal: tooMany } = await prepareUpload(session.user.id, project);
+    const cleared = { workspaceId: project.workspaceId, staleKeys };
+    if (tooMany) {
+      return { ...cleared, refusal: tooMany };
     }
     const storageKey = objectKey({ workspaceId: project.workspaceId, projectId: project.id });
     const contentType = String(input.contentType).toLowerCase();
@@ -71,8 +84,12 @@ export async function startUploadAction(input: {
     if (inserted.length === 0) {
       throw new Error("Not found");
     }
-    return { storageKey, contentType };
+    return { ...cleared, storageKey, contentType };
   });
+  // After the transaction: the cleared records are gone for good, so their objects can go too.
+  if ("staleKeys" in key && key.staleKeys.length > 0) {
+    await removeStaleObjects(key.workspaceId, key.staleKeys);
+  }
   if ("refusal" in key) {
     return { ok: false, error: key.refusal };
   }
