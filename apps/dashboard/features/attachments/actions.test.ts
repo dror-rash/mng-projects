@@ -4,7 +4,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // `startUploadAction` with stand-ins around it: the session, the project access check, the database,
 // storage and the unfinished-uploads module (its own DB test covers it). What is checked here is the size
 // limit it asks storage to sign into the upload URL (task 085), and that it clears stale uploads and refuses
-// one too many unfinished ones (task 087).
+// one too many unfinished ones (task 087); and that `finishUploadAction` doesn't confirm an upload whose
+// record was cleared meanwhile.
 
 vi.mock("@/features/auth/require-session", () => ({
   requireActionSession: async () => ({ user: { id: "user-1" } }),
@@ -16,6 +17,10 @@ vi.mock("@/features/visits/queries", () => ({ getProjectVisit: async () => ({ id
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 
 const insert = vi.hoisted(() => vi.fn());
+const pending = vi.hoisted(() => ({
+  row: { id: "upload-1", workspaceId: "ws-1", projectId: "project-1", kind: "photo", storageKey: "ws-1/project-1/upload-1", contentType: "image/jpeg", fileName: "a.jpg" },
+  confirmed: [] as { id: string }[],
+}));
 vi.mock("@repo/db", async (importOriginal) => {
   const actual = await importOriginal<typeof Db>();
   const fake = {
@@ -23,23 +28,26 @@ vi.mock("@repo/db", async (importOriginal) => {
       insert();
       return { values: () => ({ onConflictDoNothing: () => ({ returning: async () => [{ id: "inserted" }] }) }) };
     },
+    select: () => ({ from: () => ({ where: async () => [pending.row] }) }),
+    update: () => ({ set: () => ({ where: () => ({ returning: async () => pending.confirmed }) }) }),
   };
   // No transaction to open: `withAccess` just runs its function against the stand-in.
   return { ...actual, getDb: () => fake, withAccess: (_userId: string, fn: () => Promise<unknown>) => fn() };
 });
 
 const createUploadUrl = vi.hoisted(() => vi.fn());
+const stat = vi.hoisted(() => vi.fn());
 vi.mock("@repo/storage", () => ({
   createUploadUrl,
   objectKey: () => "ws-1/project-1/object",
   remove: vi.fn(),
-  stat: vi.fn(),
+  stat,
 }));
 
 const unfinished = vi.hoisted(() => ({ prepareUpload: vi.fn(), removeStaleObjects: vi.fn() }));
 vi.mock("./unfinished-uploads", () => unfinished);
 
-const { startUploadAction } = await import("./actions");
+const { finishUploadAction, startUploadAction } = await import("./actions");
 
 const MB = 1024 * 1024;
 
@@ -104,5 +112,25 @@ describe("startUploadAction and unfinished uploads", () => {
     expect(await start("photo", "text/plain")).toMatchObject({ ok: false });
 
     expect(unfinished.prepareUpload).not.toHaveBeenCalled();
+  });
+});
+
+describe("finishUploadAction", () => {
+  beforeEach(() => {
+    stat.mockReset().mockResolvedValue({ size: 1000, contentType: "image/jpeg" });
+  });
+
+  it("confirms the upload when its record is still there", async () => {
+    pending.confirmed = [{ id: "upload-1" }];
+
+    expect(await finishUploadAction({ attachmentId: "upload-1" })).toEqual({ ok: true });
+    expect(unfinished.removeStaleObjects).not.toHaveBeenCalled();
+  });
+
+  it("answers not found and removes the object when the record was cleared before the confirm", async () => {
+    pending.confirmed = [];
+
+    await expect(finishUploadAction({ attachmentId: "upload-1" })).rejects.toThrow("Not found");
+    expect(unfinished.removeStaleObjects).toHaveBeenCalledWith("ws-1", ["ws-1/project-1/upload-1"]);
   });
 });
