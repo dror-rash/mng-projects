@@ -176,8 +176,9 @@ describe("role changes", () => {
 
 describe("coverage guards", () => {
   // Better Auth's tables: the app reads them through the pool, outside withAccess (ADR-0006). rate_limit holds
-  // its rate-limit counts (task 089), which only Better Auth reads.
-  const withoutRls = ["account", "rate_limit", "session", "user", "verification"];
+  // its rate-limit counts (task 089), which only Better Auth reads; sign_in_lockout the failed sign-ins per
+  // hashed email (task 090), which only the sign-in hooks in @repo/auth read.
+  const withoutRls = ["account", "rate_limit", "session", "sign_in_lockout", "user", "verification"];
 
   it("every table in public has row-level security, except Better Auth's", async () => {
     const { rows } = await getMaintenanceDb().execute<{ name: string }>(sql`
@@ -209,5 +210,28 @@ describe("rate_limit (task 089)", () => {
       select indexdef as definition from pg_indexes where schemaname = 'public' and tablename = 'rate_limit'`);
 
     expect(rows.some((r) => /\(last_request\)/.test(r.definition))).toBe(true);
+  });
+});
+
+describe("sign_in_lockout (task 090)", () => {
+  it("has an index on removable_after, which the cleanup deletes by", async () => {
+    const { rows } = await getMaintenanceDb().execute<{ definition: string }>(sql`
+      select indexdef as definition from pg_indexes where schemaname = 'public' and tablename = 'sign_in_lockout'`);
+
+    expect(rows.some((r) => /\(removable_after\)/.test(r.definition))).toBe(true);
+  });
+
+  it("has no column that could hold an email: a key, counts and times", async () => {
+    const { rows } = await getMaintenanceDb().execute<{ name: string; type: string }>(sql`
+      select column_name as name, data_type as type from information_schema.columns
+      where table_schema = 'public' and table_name = 'sign_in_lockout' order by ordinal_position`);
+
+    expect(rows).toEqual([
+      { name: "key", type: "text" },
+      { name: "failures", type: "integer" },
+      { name: "window_start", type: "timestamp with time zone" },
+      { name: "locked_until", type: "timestamp with time zone" },
+      { name: "removable_after", type: "timestamp with time zone" },
+    ]);
   });
 });
