@@ -175,8 +175,9 @@ describe("role changes", () => {
 });
 
 describe("coverage guards", () => {
-  // Better Auth's tables: the app reads them through the pool, outside withAccess (ADR-0006).
-  const withoutRls = ["account", "session", "user", "verification"];
+  // Better Auth's tables: the app reads them through the pool, outside withAccess (ADR-0006). rate_limit holds
+  // its rate-limit counts (task 089), which only Better Auth reads.
+  const withoutRls = ["account", "rate_limit", "session", "user", "verification"];
 
   it("every table in public has row-level security, except Better Auth's", async () => {
     const { rows } = await getMaintenanceDb().execute<{ name: string }>(sql`

@@ -281,6 +281,13 @@
       "when": 1793898788354,
       "tag": "0039_readings_append_only",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1794333635676,
+      "tag": "0040_rate_limit",
+      "breakpoints": true
     }
   ]
 }
