@@ -33,9 +33,8 @@ describe("createUploadUrl", () => {
     }
   });
 
-  it("has no unlimited upload URL", async () => {
+  it("has no unlimited upload URL: maxBytes is required, by the types and at run time", async () => {
     // @ts-expect-error maxBytes is required
-    const call = () => createUploadUrl({ key: "w/p/x", contentType: "text/plain" });
-    expect(call).toBeTypeOf("function");
+    await expect(createUploadUrl({ key: "w/p/x", contentType: "text/plain" })).rejects.toThrow("maxBytes");
   });
 });
