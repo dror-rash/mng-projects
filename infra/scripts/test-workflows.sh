@@ -11,6 +11,9 @@
 #    commits on main, gitleaks is pinned by version and sha256, and deploy.yml skips Dependabot pull requests
 #    (no secrets or OIDC token there) but never a push to main, and so does preview-cleanup.yml; ci.yml cancels
 #    only PR runs and drops checkout credentials; every Dependabot ecosystem has a cooldown.
+# 4) Workload Identity (task 083): the provider's deploy_target mapping gives deployer-main only to deploy.yml on a
+#    push to main and deployer-preview only to deploy.yml or preview-cleanup.yml on a pull_request (evaluated by
+#    wif-deploy-target.mjs for sample token claims).
 # Text checks on the repository files (no YAML parser needed). Probes at the end run the checks on a copy with
 # one change each and expect the matching check to fail. Run: bash infra/scripts/test-workflows.sh
 set -u
@@ -254,6 +257,39 @@ dependabot_cooldown_everywhere() {
   [ "$n" -gt 0 ] && [ "$c" -eq "$n" ] && [ "$(grep -cE '^      default-days: 3$' "$DEPENDABOT")" -eq "$n" ]
 }
 check "every Dependabot ecosystem has a 3-day cooldown" dependabot_cooldown_everywhere
+
+# --- Workload Identity: which workflow gets which deployer (task 083) ---
+# The provider's deploy_target mapping in infra/main.tf, evaluated for GitHub token claims (wif-deploy-target.mjs).
+# The repository is a made-up one: the mapping must take it from var.github_repository.
+WIF_REPO="acme/app"
+wif_claims() { # event, ref, workflow file (or "-" for no workflow_ref claim), [repository of the workflow_ref]
+  local wr=""
+  [ "$3" = "-" ] || wr=",\"workflow_ref\":\"${4:-$WIF_REPO}/.github/workflows/$3@$2\""
+  printf '{"repository":"%s","event_name":"%s","ref":"%s"%s}' "$WIF_REPO" "$1" "$2" "$wr"
+}
+deploy_target_is() { # expected, event, ref, workflow file, [repository of the workflow_ref]
+  local got
+  got="$(node "$ROOT/infra/scripts/wif-deploy-target.mjs" "$WIF_REPO" "$(wif_claims "${@:2}")")" || return 1
+  [ "$got" = "$1" ]
+}
+deploy_target_isnt_a_deployer() { ! deploy_target_is main "$@" && ! deploy_target_is preview "$@"; }
+check "WIF: deploy.yml on a push to main gets deployer-main" deploy_target_is main push refs/heads/main deploy.yml
+check "WIF: ci.yml on a push to main gets no deployer" deploy_target_is none push refs/heads/main ci.yml
+check "WIF: preview-cleanup.yml on a push to main gets no deployer" deploy_target_is none push refs/heads/main preview-cleanup.yml
+check "WIF: another workflow file on a push to main gets no deployer" deploy_target_is none push refs/heads/main x-deploy.yml
+check "WIF: deploy.yml of another repository's path gets no deployer" deploy_target_is none push refs/heads/main deploy.yml other/app
+check "WIF: deploy.yml on a push to another branch gets no deployer" deploy_target_is none push refs/heads/feature deploy.yml
+check "WIF: deploy.yml on workflow_dispatch gets no deployer" deploy_target_is none workflow_dispatch refs/heads/main deploy.yml
+check "WIF: deploy.yml on a pull_request gets deployer-preview" deploy_target_is preview pull_request refs/pull/7/merge deploy.yml
+check "WIF: preview-cleanup.yml on a pull_request gets deployer-preview" \
+  deploy_target_is preview pull_request refs/pull/7/merge preview-cleanup.yml
+check "WIF: ci.yml on a pull_request gets no deployer" deploy_target_is none pull_request refs/pull/7/merge ci.yml
+check "WIF: another workflow file on a pull_request gets no deployer" deploy_target_is none pull_request refs/pull/7/merge check.yml
+check "WIF: deploy.yml of another repository's path on a pull_request gets no deployer" \
+  deploy_target_is none pull_request refs/pull/7/merge deploy.yml other/app
+check "WIF: deploy.yml on pull_request_target gets no deployer" deploy_target_is none pull_request_target refs/heads/main deploy.yml
+check "WIF: a push to main without a workflow_ref claim gets no deployer" deploy_target_isnt_a_deployer push refs/heads/main -
+check "WIF: a pull_request without a workflow_ref claim gets no deployer" deploy_target_isnt_a_deployer pull_request refs/pull/7/merge -
 
 # --- Probes: each check above catches the change it is for ---
 # A copy of the files these checks read, with one change, must fail the named check. A clean copy passes.
