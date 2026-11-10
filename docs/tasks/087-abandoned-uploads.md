@@ -1,6 +1,6 @@
 # Task 087: Abandoned uploads are cleared, and unfinished uploads are capped
 
-- **Status:** todo (after the POC)
+- **Status:** in-progress
 - **Milestone:** cross-cutting (security), M13 follow-up
 - **Zone / package:** `packages/db` (one migration: a definer function, its RLS pin), `apps/dashboard/features/attachments/` (`actions.ts`, `attachment-limits.ts`), `e2e/steps` (one new step). Commit types `test` → `feat(db)` / `fix(dashboard)`.
 - **Feature file:** `docs/features/attachments.feature` (one `@wip @task:087` scenario)
@@ -49,6 +49,7 @@ Red: DB tests for the function (none exists), the `@task:087` scenario (the 11th
 
 ## Progress log
 - 2026-11-08 – Drafted from the first full security review (SEC-07); owner: "start fixing the P1 gaps".
+- 2026-11-10 – Started in lane 4, based on task 085's branch (PR #84, not merged). Open questions take their defaults (1 hour; 10 unfinished per person and workspace; "Too many uploads in progress. Try again later."; no bucket-wide sweep now). From reviews of 086 and 088: the cleanup must handle `uploaded_by is null` (a deleted uploader). Merge after the POC demo on 2026-11-13, after 085.
 
 ## Parking lot
 - The scheduled sweep (question 4).
