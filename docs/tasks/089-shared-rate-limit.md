@@ -1,6 +1,6 @@
 # Task 089: One sign-in rate limit across all instances
 
-- **Status:** todo (after the POC)
+- **Status:** in-progress
 - **Milestone:** cross-cutting (security)
 - **Zone / package:** `packages/auth` (`server.ts`, `rate-limit.ts`), `packages/db` (`schema.ts`: Better Auth's rate-limit table; one migration; the RLS-coverage exception list). Commit types `test(auth)` → `fix(auth)` / `feat(db)`.
 - **Feature file:** none (end-to-end runs disable the rate limit on purpose, rule 13; DB-backed tests and the release gate's live check cover it)
@@ -46,6 +46,7 @@ Red: the two-instance test. Then the schema table (`pnpm db:generate`), the auth
 
 ## Progress log
 - 2026-11-08 – Drafted from the first full security review (SEC-10); owner: "start fixing the P1 gaps".
+- 2026-11-10 – Started in lane 3 (owner: "do the rest of the P1"; build now, merge after the POC demo on 2026-11-13). Q1 default (Better Auth's limits).
 
 ## Parking lot
 - A breached-password check on sign-up (review SEC-10 "8-character minimum, no breached-password check").
