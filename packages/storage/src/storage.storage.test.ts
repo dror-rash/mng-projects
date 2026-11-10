@@ -11,8 +11,11 @@ function newKey() {
   return key;
 }
 
+const MAX_BYTES = 1024 * 1024;
+
+/** Uploads with every header the signed URL asks for, the size range included (task 085). */
 async function upload(key: string, body: string, contentType = "text/plain") {
-  const { url, headers } = await createUploadUrl({ key, contentType });
+  const { url, headers } = await createUploadUrl({ key, contentType, maxBytes: MAX_BYTES });
   return fetch(url, { method: "PUT", headers, body });
 }
 
@@ -53,16 +56,20 @@ describe("signed URLs against the local server", () => {
 });
 
 describe("what a signed URL allows", () => {
-  it("binds an upload to its content type, and to an object that doesn't exist yet", async () => {
-    const { url, headers } = await createUploadUrl({ key: newKey(), contentType: "image/jpeg" });
+  it("binds an upload to its content type, an object that doesn't exist yet, and a size range", async () => {
+    const { url, headers } = await createUploadUrl({ key: newKey(), contentType: "image/jpeg", maxBytes: MAX_BYTES });
     const signed = new URL(url).searchParams.get("X-Goog-SignedHeaders")?.split(";");
-    expect(signed).toEqual(expect.arrayContaining(["content-type", "x-goog-if-generation-match"]));
-    expect(headers).toEqual({ "Content-Type": "image/jpeg", "x-goog-if-generation-match": "0" });
+    expect(signed).toEqual(expect.arrayContaining(["content-type", "x-goog-if-generation-match", "x-goog-content-length-range"]));
+    expect(headers).toEqual({
+      "Content-Type": "image/jpeg",
+      "x-goog-if-generation-match": "0",
+      "x-goog-content-length-range": `0,${MAX_BYTES}`,
+    });
   });
 
   it("expires: 15 minutes for uploads and 5 for downloads by default, or as asked", async () => {
     const key = newKey();
-    expect(new URL((await createUploadUrl({ key, contentType: "text/plain" })).url).searchParams.get("X-Goog-Expires")).toBe("900");
+    expect(new URL((await createUploadUrl({ key, contentType: "text/plain", maxBytes: MAX_BYTES })).url).searchParams.get("X-Goog-Expires")).toBe("900");
     expect(new URL(await createDownloadUrl({ key })).searchParams.get("X-Goog-Expires")).toBe("300");
     expect(new URL(await createDownloadUrl({ key, expiresInSeconds: 1 })).searchParams.get("X-Goog-Expires")).toBe("1");
   });

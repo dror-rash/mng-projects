@@ -110,7 +110,7 @@ export async function adminAttachment(
   const workspaceId = idOf(state, "workspace");
   const { mimeType, buffer } = fileOf(name);
   const key = objectKey({ workspaceId, projectId });
-  const { url, headers } = await createUploadUrl({ key, contentType: mimeType });
+  const { url, headers } = await createUploadUrl({ key, contentType: mimeType, maxBytes: buffer.length });
   const upload = await fetch(url, { method: "PUT", headers, body: buffer });
   expect(upload.ok).toBe(true);
   const id = crypto.randomUUID();
