@@ -1,6 +1,6 @@
 # Task 074: A separate runtime login for the database
 
-- **Status:** todo (after the POC)
+- **Status:** in-progress
 - **Milestone:** M11 Deploy to GCP (follow-up)
 - **Zone / package:** `infra/`, `.github/workflows/`, `packages/db`, `docs/adr/`
 - **Feature file:** none (no visible behavior); checked by the runtime role check and DB tests
@@ -45,6 +45,7 @@ Answered by task 068's design (2026-11-04): the grant runs in a deploy script (`
 ## Progress log
 - 2026-11-04 – Planned from task 068's review: the owner login plus `-c role=app_user` lets any `SET ROLE` on a pooled connection escape row-level security. After the POC.
 - 2026-11-04 – Narrowed: task 068 already gives previews a runtime login that owns nothing (`preview_runtime`, granted by a deploy script), which answers the former questions on where the grant runs and how many preview logins. Left: main's runtime login and a `SET ROLE <owner>` check.
+- 2026-11-10 – Started in lane 1 (owner: "do the rest of the P1"; merge after the POC demo on 2026-11-13). Open question 1 taken as: local dev and CI keep one login (the DB tests and the role check cover the separate login on Cloud SQL).
 
 ## Parking lot
 - (none yet)
