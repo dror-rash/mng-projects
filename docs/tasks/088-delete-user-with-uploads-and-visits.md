@@ -1,6 +1,6 @@
 # Task 088: An account that uploaded files or recorded visits can be deleted
 
-- **Status:** todo (after the POC)
+- **Status:** in-progress
 - **Milestone:** cross-cutting (security), M13 follow-up
 - **Zone / package:** `packages/db` (one migration replacing two trigger functions; `rls-pins.mjs`; DB tests). Commit types `test(db)` → `fix(db)`.
 - **Feature file:** none (no page deletes accounts today; DB tests are the check)
@@ -44,6 +44,7 @@ Red: the DB test deleting a user with an upload and a visit (and the broader one
 
 ## Progress log
 - 2026-11-08 – Drafted from the first full security review (SEC-18) and task 061's "Bug found" note; owner: "start fixing the P1 gaps".
+- 2026-11-10 – Started in lane 6 (owner: "do the rest of the P1"; build now, merge after the POC demo on 2026-11-13).
 
 ## Parking lot
 - What an erasure request removes beyond the account (content, files the user uploaded): owner decision.
