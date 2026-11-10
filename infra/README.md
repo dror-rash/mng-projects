@@ -188,7 +188,9 @@ ones: `bash infra/scripts/test-environment.sh` fails when they differ.
 
   `workflow_ref` names the top-level workflow, so a workflow that called `deploy.yml` as a reusable workflow
   would still be refused (`job_workflow_ref` would name `deploy.yml`). A token without the claim fails the mapping:
-  refused. A new workflow that needs a deployer means changing the mapping here. `bash infra/scripts/test-workflows.sh`
+  refused. The preview rule matches `…/deploy.yml@refs/` and `…/preview-cleanup.yml@refs/` (any ref; a file named
+  `deploy.yml@x.yml` doesn't match, and workflow files can't be in subdirectories). A new workflow that needs a
+  deployer means changing the mapping here. `bash infra/scripts/test-workflows.sh`
   evaluates the mapping for sample claims (`wif-deploy-target.mjs`); keep the expression on one line, in the CEL
   subset that script accepts. Still open (SEC-15): a same-repository PR's `deploy.yml` is the PR's own copy, so
   `deployer-preview` trusts whoever can push a branch; fork PRs get no token.
