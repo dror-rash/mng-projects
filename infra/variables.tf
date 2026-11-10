@@ -58,3 +58,36 @@ variable "db_deletion_protection" {
   type        = bool
   default     = true
 }
+
+# ---------- Alerts and budget (task 092): set in terraform.tfvars only, never in the repo ----------
+variable "alert_email" {
+  description = "Address the alerts and the budget notifications go to (the owner's)."
+  type        = string
+  sensitive   = true
+
+  validation {
+    condition     = can(regex("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$", var.alert_email))
+    error_message = "alert_email must be an email address."
+  }
+}
+
+variable "billing_account" {
+  description = "Billing account the project is linked to, as XXXXXX-XXXXXX-XXXXXX (gcloud billing projects describe <PROJECT_ID>). The budget lives there."
+  type        = string
+  sensitive   = true
+
+  validation {
+    condition     = can(regex("^[0-9A-F]{6}-[0-9A-F]{6}-[0-9A-F]{6}$", var.billing_account))
+    error_message = "billing_account must look like 000000-000000-000000 (six hex digits, three times)."
+  }
+}
+
+variable "monthly_budget" {
+  description = "Monthly budget of the project in USD (whole dollars). Alerts at 50%, 90% and 100% of it."
+  type        = number
+
+  validation {
+    condition     = var.monthly_budget > 0 && floor(var.monthly_budget) == var.monthly_budget
+    error_message = "monthly_budget must be a whole number of dollars above 0."
+  }
+}

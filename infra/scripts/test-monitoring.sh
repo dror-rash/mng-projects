@@ -76,14 +76,16 @@ for p in IAM KEYS RUN; do
   text="${!p}"
   check "$p: is a log-match alert" in_block "$text" 'condition_matched_log \{'
   check "$p: notifies at most once per 5 minutes" in_block "$text" 'period += "300s"'
-  check "$p: reads the Admin Activity audit log" in_block "$text" 'cloudaudit\.googleapis\.com%2Factivity'
+  check "$p: reads the Admin Activity audit log" in_block "$text" '^ +logName = "\$\{local\.audit_activity_log\}"$'
 done
+check "the audit log is the project's Admin Activity log" \
+  grep -qE '^  audit_activity_log += "projects/\$\{var\.project_id\}/logs/cloudaudit\.googleapis\.com%2Factivity"$' "$MON"
 
 # --- Log filters (checked against the project's audit log, task 092) ---
 check "IAM: matches every SetIamPolicy (project, service account, secret, …) and bucket IAM" \
   in_block "$IAM" 'protoPayload\.methodName =~ "\(\?i\)\(setiampolicy\|setiampermissions\)\$"'
 check "keys: matches service-account key creation and upload" \
-  in_block "$KEYS" 'google\.iam\.admin\.v1\.\(Create\|Upload\)ServiceAccountKey'
+  in_block "$KEYS" '\^google\\\\\.iam\\\\\.admin\\\\\.v1\\\\\.\(Create\|Upload\)ServiceAccountKey\$'
 check "run: matches creating, replacing, updating and deleting a service (v1 and v2)" \
   in_block "$RUN" '\^google\\\\\.cloud\\\\\.run\\\\\.v\[12\]\\\\\.Services\\\\\.\(Create\|Replace\|Update\|Delete\)Service\$'
 check "run: leaves out the two deployers, by their Terraform emails" \
@@ -94,7 +96,12 @@ check "run: the deployers are taken from local.environments (both of them)" \
 # --- Metric alerts ---
 check "5xx: counts Cloud Run requests of class 5xx" in_block "$ERRORS" 'metric\.label\.response_code_class = \\"5xx\\"'
 check "5xx: is a ratio of all requests" in_block "$ERRORS" 'denominator_filter'
-check "5xx: on main's services only" in_block "$ERRORS" 'runtime\.environment == "main"'
+main_only() {
+  grep -qE '^  main_services += sort\(\[for key, runtime in local\.runtimes : runtime\.service_name if runtime\.environment == "main"\]\)$' "$MON" &&
+    [ "$(grep -cE 'service_name = one_of\(\$\{join\(", ", \[for name in local\.main_services : ' <<<"$ERRORS")" -eq 2 ] &&
+    ! grep -qE 'local\.runtimes' <<<"$ERRORS"
+}
+check "5xx: on main's services only (both numerator and denominator)" main_only
 check "5xx: per service" in_block "$ERRORS" 'group_by_fields += \["resource\.label\.service_name"\]'
 check "5xx: above 5%" in_block "$ERRORS" 'threshold_value += 0\.05$'
 check "5xx: over 5 minutes" in_block "$ERRORS" 'alignment_period += "300s"'
