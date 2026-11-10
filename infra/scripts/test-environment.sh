@@ -38,6 +38,13 @@ tf_default() { # name
   ' "$VARIABLES_TF"
 }
 
+# "mapped" when a main.tf gives each service's revision max_instance_count from local.runtimes' max_instances, and
+# that is var.preview_max_instances for previews and var.max_instances for main; "unmapped" otherwise.
+max_instances_mapping() { # main.tf
+  if grep -qE '^ +max_instances += +pair\[1\] == "preview" \? var\.preview_max_instances : var\.max_instances *$' "$1" &&
+     grep -qE '^ +max_instance_count += +each\.value\.max_instances *$' "$1"; then echo mapped; else echo unmapped; fi
+}
+
 # Previews and main never share.
 expect "previews use the preview database"             app_preview                 "$(in_env true '$DB_NAME')"
 expect "main uses the main database"                   app                         "$(in_env false '$DB_NAME')"
@@ -92,6 +99,17 @@ expect "reads the zones and main's max_instances from variables.tf" yes \
 main_worst=$(( ${zones:-0} * ${max_instances:-0} * ${main_pool:-0} ))
 expect "main's worst case ($zones zones x $max_instances instances x pool $main_pool = $main_worst) fits its $main_share connections" \
   yes "$( [ -n "$main_share" ] && [ "$main_worst" -le "$main_share" ] && echo yes || echo no)"
+
+# The budget only holds if main.tf gives main var.max_instances and previews var.preview_max_instances (an
+# override in terraform.tfvars is a blind spot: change the default instead). Probes: a hard-coded or swapped
+# mapping must fail the check.
+PROBE_DIR="$(mktemp -d)"; trap 'rm -rf "$PROBE_DIR"' EXIT
+expect "main.tf maps main to var.max_instances and previews to var.preview_max_instances" mapped \
+  "$(max_instances_mapping "$MAIN_TF")"
+sed 's/var\.preview_max_instances : var\.max_instances/var.preview_max_instances : 5/' "$MAIN_TF" > "$PROBE_DIR/hardcoded.tf"
+expect "probe: a hard-coded main maximum fails the mapping check" unmapped "$(max_instances_mapping "$PROBE_DIR/hardcoded.tf")"
+sed 's/var\.preview_max_instances : var\.max_instances/var.max_instances : var.preview_max_instances/' "$MAIN_TF" > "$PROBE_DIR/swapped.tf"
+expect "probe: a swapped mapping fails the mapping check" unmapped "$(max_instances_mapping "$PROBE_DIR/swapped.tf")"
 
 echo "$pass passed, $fail failed"
 [ "$fail" -eq 0 ]
