@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { authOptions } from "./options";
-import { rateLimitOptions } from "./rate-limit";
+import { addressOptions, rateLimitOptions } from "./rate-limit";
 
 describe("rateLimitOptions", () => {
   it("keeps the counts in the database, shared by every instance, when the test flag is not set", () => {
@@ -25,6 +24,6 @@ describe("rateLimitOptions", () => {
 
 describe("the client address the rate limit counts by", () => {
   it("comes from x-forwarded-for only, with no trusted proxies", () => {
-    expect(authOptions({}).advanced).toHaveProperty("ipAddress", { ipAddressHeaders: ["x-forwarded-for"] });
+    expect(addressOptions()).toEqual({ ipAddress: { ipAddressHeaders: ["x-forwarded-for"] } });
   });
 });

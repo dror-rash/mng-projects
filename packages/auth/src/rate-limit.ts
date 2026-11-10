@@ -11,3 +11,13 @@ export function rateLimitOptions(
 ): { rateLimit: { enabled: false } | { storage: "database" } } {
   return env.AUTH_DISABLE_RATE_LIMIT === "true" ? { rateLimit: { enabled: false } } : { rateLimit: { storage: "database" } };
 }
+
+/**
+ * The client address the rate limit counts by (`advanced.ipAddress`): the header Cloud Run sets, and no other.
+ * Better Auth trusts it only with a single value; with several (a client sending its own, which Cloud Run
+ * appends to) it can't tell which to believe and counts the request in one bucket shared by all such requests
+ * on that path (review SEC-10). No trusted proxies: a future load balancer's format is SEC-20's.
+ */
+export function addressOptions(): { ipAddress: { ipAddressHeaders: string[] } } {
+  return { ipAddress: { ipAddressHeaders: ["x-forwarded-for"] } };
+}
