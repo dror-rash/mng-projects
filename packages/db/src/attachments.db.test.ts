@@ -35,8 +35,11 @@ const ids = {
   outsider: `${run}-outsider`,
   otherCustomer: `${run}-other-customer`,
   otherProject: `${run}-other-project`,
+  projectC: `${run}-project-c`,
+  exWorker: `${run}-ex-worker`,
+  idleWorker: `${run}-idle-worker`,
 };
-const users = [ids.admin, ids.auditor, ids.worker, ids.otherWorker, ids.pa, ids.pb, ids.outsider];
+const users = [ids.admin, ids.auditor, ids.worker, ids.otherWorker, ids.pa, ids.pb, ids.outsider, ids.exWorker, ids.idleWorker];
 
 async function as<T extends Record<string, unknown>>(userId: string, query: ReturnType<typeof sql>) {
   const result = await withAccess(userId, () => getDb().execute<T>(query));
@@ -81,6 +84,8 @@ beforeAll(async () => {
     { workspaceId: ids.workspace, userId: ids.pa, role: "partner", partnerId: ids.partnerA },
     { workspaceId: ids.workspace, userId: ids.pb, role: "partner", partnerId: ids.partnerB },
     { workspaceId: ids.otherWorkspace, userId: ids.outsider, role: "admin" },
+    { workspaceId: ids.workspace, userId: ids.exWorker, role: "worker" },
+    { workspaceId: ids.workspace, userId: ids.idleWorker, role: "worker" },
   ]);
   await db.insert(schema.organization).values({ id: ids.acme, workspaceId: ids.workspace, name: "Acme Ltd" });
   await db.insert(schema.customerPartner).values([
@@ -91,11 +96,13 @@ beforeAll(async () => {
   await db.insert(schema.project).values([
     { id: ids.projectA, name: "A", workspaceId: ids.workspace, ...at, visibility: "partner", partnerId: ids.partnerA },
     { id: ids.projectB, name: "B", workspaceId: ids.workspace, ...at, visibility: "partner", partnerId: ids.partnerB },
+    { id: ids.projectC, name: "C", workspaceId: ids.workspace, ...at },
   ]);
   const other = await insertCustomerWithSite(ids.otherWorkspace, ids.otherCustomer);
   await db.insert(schema.project).values({ id: ids.otherProject, name: "Other", workspaceId: ids.otherWorkspace, ...other });
   await db.execute(sql`insert into project_worker (project_id, user_id, workspace_id) values
-    (${ids.projectA}, ${ids.worker}, ${ids.workspace}), (${ids.projectA}, ${ids.otherWorker}, ${ids.workspace})`);
+    (${ids.projectA}, ${ids.worker}, ${ids.workspace}), (${ids.projectA}, ${ids.otherWorker}, ${ids.workspace}),
+    (${ids.projectA}, ${ids.exWorker}, ${ids.workspace}), (${ids.projectC}, ${ids.worker}, ${ids.workspace})`);
   await db.execute(sql`insert into site_visit (id, project_id, visited_on, created_by) values
     (${ids.visitA}, ${ids.projectA}, current_date, ${ids.admin}), (${ids.visitB}, ${ids.projectB}, current_date, ${ids.admin})`);
   await db.execute(insertAttachment(ids.adminPhoto, ids.projectA, ids.admin, { visitId: ids.visitA }));
@@ -245,5 +252,45 @@ describe("clearing stale uploads", () => {
     expect(await remaining(p)).toEqual([`${p}a`, `${p}b`]);
 
     expect(await clear(ids.pb, ids.projectB)).toEqual([keyOf(`${p}a`), keyOf(`${p}b`, ids.projectB)].sort());
+  });
+
+  it("cuts off at an hour whatever the session's time zone", async () => {
+    const p = `${run}-stale5-`;
+    await upload(`${p}recent`, { minutes: 30 });
+    await upload(`${p}stale`, { minutes: 61 });
+    // 14 hours ahead of UTC: a cutoff in local time would take the recent one too.
+    const keys = await withAccess(ids.worker, async () => {
+      await getDb().execute(sql`set local timezone = 'Pacific/Kiritimati'`);
+      const { rows } = await getDb().execute<{ key: string }>(sql`select clear_stale_uploads(${ids.projectA}) as key`);
+      return rows.map((r) => r.key);
+    });
+
+    expect(keys).toEqual([keyOf(`${p}stale`)]);
+    expect(await remaining(p)).toEqual([`${p}recent`]);
+    await getMaintenanceDb().execute(sql`delete from attachment where id like ${`${p}%`}`);
+  });
+
+  it("clears nothing for a worker taken off the crew, or on no crew", async () => {
+    const p = `${run}-stale3-`;
+    await upload(`${p}a`);
+    await getMaintenanceDb().execute(sql`delete from project_worker where project_id = ${ids.projectA} and user_id = ${ids.exWorker}`);
+
+    expect(await clear(ids.exWorker, ids.projectA)).toEqual([]);
+    expect(await clear(ids.idleWorker, ids.projectA)).toEqual([]);
+    expect(await remaining(p)).toEqual([`${p}a`]);
+    await getMaintenanceDb().execute(sql`delete from attachment where id like ${`${p}%`}`);
+  });
+
+  it("clears nothing through a deleted project, for its crew worker or an admin", async () => {
+    const p = `${run}-stale4-`;
+    await upload(`${p}a`);
+    await upload(`${p}c`, { project: ids.projectC, by: ids.admin });
+    await getMaintenanceDb().execute(sql`update project set deleted_at = now() where id = ${ids.projectC}`);
+
+    expect(await clear(ids.worker, ids.projectC)).toEqual([]);
+    expect(await clear(ids.admin, ids.projectC)).toEqual([]);
+    expect(await remaining(p)).toEqual([`${p}a`, `${p}c`]);
+    await getMaintenanceDb().execute(sql`update project set deleted_at = null where id = ${ids.projectC}`);
+    await getMaintenanceDb().execute(sql`delete from attachment where id like ${`${p}%`}`);
   });
 });
