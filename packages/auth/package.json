@@ -13,7 +13,8 @@
   "scripts": {
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "test:db": "dotenv -e ../../.env -- vitest run -c vitest.db.config.ts"
   },
   "dependencies": {
     "@repo/db": "workspace:*",
@@ -28,6 +29,7 @@
     "@repo/config": "workspace:*",
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",
+    "dotenv-cli": "^7.4.0",
     "eslint": "^9.0.0",
     "next": "^15.5.0",
     "react": "^19.0.0",
