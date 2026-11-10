@@ -1,6 +1,6 @@
 # Task 091: `main` can't scale past its database connections
 
-- **Status:** todo (after the POC)
+- **Status:** in-progress
 - **Milestone:** cross-cutting (security), M11 follow-up
 - **Zone / package:** `infra/variables.tf` (`max_instances`), `infra/scripts/test-environment.sh` (a budget check), `infra/README.md` ("Known limits"). Commit type `fix(infra)`.
 - **Feature file:** none (no app behavior; a script test and `terraform plan`)
@@ -45,6 +45,7 @@ Red: the budget check in the script test. Then the default, the description, the
 
 ## Progress log
 - 2026-11-08 – Drafted from the first full security review (SEC-14); owner: "start fixing the P1 gaps".
+- 2026-11-10 – Started in lane 5 (owner: "do the rest of the P1"; build now, merge after the POC demo on 2026-11-13). Q1 default (1 instance × pool 4).
 
 ## Parking lot
 - A connection pooler or a bigger tier when real load arrives (`infra/README.md` "Known limits").
