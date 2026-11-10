@@ -1,6 +1,6 @@
 # Task 083: Only the deploy workflows can get a deployer token
 
-- **Status:** in-progress
+- **Status:** in-review
 - **Milestone:** cross-cutting (security)
 - **Zone / package:** `infra/main.tf` (Workload Identity provider), `infra/README.md`. Commit type `fix(infra)`.
 - **Feature file:** none (no app behavior; `terraform plan` and a hand check on a preview)
