@@ -262,12 +262,13 @@ check "every Dependabot ecosystem has a 3-day cooldown" dependabot_cooldown_ever
 # The provider's deploy_target mapping in infra/main.tf, evaluated for GitHub token claims (wif-deploy-target.mjs).
 # The repository is a made-up one: the mapping must take it from var.github_repository.
 WIF_REPO="acme/app"
-wif_claims() { # event, ref, workflow file (or "-" for no workflow_ref claim), [repository of the workflow_ref]
+wif_claims() { # event, ref, workflow file (or "-" for no workflow_ref claim), [repository of the workflow_ref],
+              # [ref in the workflow_ref, default the ref claim]
   local wr=""
-  [ "$3" = "-" ] || wr=",\"workflow_ref\":\"${4:-$WIF_REPO}/.github/workflows/$3@$2\""
+  [ "$3" = "-" ] || wr=",\"workflow_ref\":\"${4:-$WIF_REPO}/.github/workflows/$3@${5:-$2}\""
   printf '{"repository":"%s","event_name":"%s","ref":"%s"%s}' "$WIF_REPO" "$1" "$2" "$wr"
 }
-deploy_target_is() { # expected, event, ref, workflow file, [repository of the workflow_ref]
+deploy_target_is() { # expected, then wif_claims' arguments
   local got
   got="$(node "$ROOT/infra/scripts/wif-deploy-target.mjs" "$WIF_REPO" "$(wif_claims "${@:2}")")" || return 1
   [ "$got" = "$1" ]
@@ -283,6 +284,14 @@ check "WIF: deploy.yml on workflow_dispatch gets no deployer" deploy_target_is n
 check "WIF: deploy.yml on a pull_request gets deployer-preview" deploy_target_is preview pull_request refs/pull/7/merge deploy.yml
 check "WIF: preview-cleanup.yml on a pull_request gets deployer-preview" \
   deploy_target_is preview pull_request refs/pull/7/merge preview-cleanup.yml
+# A workflow file may be named deploy.yml@x.yml: its workflow_ref starts with ".../deploy.yml@" too.
+check "WIF: a file named deploy.yml@x.yml on a pull_request gets no deployer" \
+  deploy_target_is none pull_request refs/pull/7/merge deploy.yml@x.yml
+check "WIF: a file named preview-cleanup.yml@x.yml on a pull_request gets no deployer" \
+  deploy_target_is none pull_request refs/pull/7/merge preview-cleanup.yml@x.yml
+# The preview rule doesn't tie the workflow_ref's ref to the ref claim (a closed PR's runs may differ).
+check "WIF: preview-cleanup.yml on a pull_request with another ref in its workflow_ref gets deployer-preview" \
+  deploy_target_is preview pull_request refs/pull/7/merge preview-cleanup.yml "" refs/pull/7/head
 check "WIF: ci.yml on a pull_request gets no deployer" deploy_target_is none pull_request refs/pull/7/merge ci.yml
 check "WIF: another workflow file on a pull_request gets no deployer" deploy_target_is none pull_request refs/pull/7/merge check.yml
 check "WIF: deploy.yml of another repository's path on a pull_request gets no deployer" \
@@ -405,6 +414,9 @@ if [ -z "${TEST_WORKFLOWS_PROBE:-}" ]; then
     'perl -pi -e "s/github_workflows = .\\$\\{var\\.github_repository\\}/github_workflows = \x22dror-rash\/mng-projects/" infra/main.tf'
   check "probe: JavaScript-only syntax (===) in the mapping is refused" probe "WIF: deploy.yml on a push to main gets deployer-main" \
     'perl -pi -e "s/assertion\\.event_name == .push./assertion.event_name === \x27push\x27/" infra/main.tf'
+  check "probe: a bare claim (JavaScript truthiness, a CEL error) in the mapping is refused" probe \
+    "WIF: deploy.yml on a push to main gets deployer-main" \
+    'perl -pi -e "s/= .assertion\\.event_name == .push. &&/= \x22assertion.workflow_ref \&\& assertion.event_name == \x27push\x27 \&\&/" infra/main.tf'
 fi
 
 echo "# $pass passed, $fail failed"
