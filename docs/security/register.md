@@ -48,7 +48,7 @@ No Critical findings. One High (SEC-01). Nothing in the review showed one worksp
 | SEC-15 | Low | Fork PRs from anyone with one merged PR run edited workflows without approval; `ci.yml` has no `permissions:`; WIF doesn't check which workflow asks for a token | CI/CD | S | `ci.yml` part fixed (PR #62, task 082); planned (task 083, WIF); **owner:** fork approval for all outside contributors | INF-11, INF-12 |
 | SEC-16 | Low | `drizzle-orm` 0.44.7 has a High SQL-injection advisory (identifiers); not reachable today, and Better Auth expects ≥0.45.2 | Supply chain | S | planned (task 081); GHSA-gpj5-g38j-94v9 ignored in `pnpm.auditConfig.ignoreGhsas` until task 081 (remove it there) | WEB-5, SUP-6 |
 | SEC-42 | Low | `postcss` 8.4.31, pinned by `next`, has two High advisories (GHSA-6g55-p6wh-862q, GHSA-r28c-9q8g-f849; fixed in ≥ 8.5.18); build-time only, but `pnpm audit --prod` (task 082) fails on them | Supply chain | S | fixed (PR #60, task 093) | task 082 audit |
-| SEC-17 | Low | No alerting at all (IAM changes, deploys outside CI, 5xx, DB connections) and no budget alert | Infra | M | planned (task 092) | INF-5 |
+| SEC-17 | Low | No alerting at all (IAM changes, deploys outside CI, 5xx, DB connections) and no budget alert | Infra | M | fixed (PR #82, task 092; live once the owner applies) | INF-5 |
 | SEC-18 | Low | Deleting a user who uploaded a file or recorded a visit fails (`attachment_check`, `site_visit_keep_project`), so an erasure request or a compromised account can't be deleted | DB | S | planned (task 088; the visit half was noted in task 061) | ACC-3 |
 
 ## P2 – hardening
@@ -97,3 +97,4 @@ No Critical findings. One High (SEC-01). Nothing in the review showed one worksp
 - 2026-11-08 – SEC-11 fixed in CI (PR #62, task 082: audit, gitleaks, Dependabot config); the owner's alert settings stay open. SEC-15's `ci.yml` part fixed in the same PR.
 - 2026-11-08 – SEC-12 fixed (PR #61, task 084): the guard refuses the listed commands and checks lane commits in their worktree, failing closed.
 - 2026-11-08 – SEC-02 fixed by the owner's ruleset on `main` (PR required; `verify`, `e2e`, `security` required and up to date; no force push or deletion; linear history off so merge commits work). Its details are restored in the review. The `production` environment part becomes SEC-44 (P2). All P0 gaps are fixed.
+- 2026-11-10 – SEC-17 fixed (PR #82, task 092), live once the owner applies.
