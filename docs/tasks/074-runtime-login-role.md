@@ -46,6 +46,13 @@ Answered by task 068's design (2026-11-04): the grant runs in a deploy script (`
 - 2026-11-04 – Planned from task 068's review: the owner login plus `-c role=app_user` lets any `SET ROLE` on a pooled connection escape row-level security. After the POC.
 - 2026-11-04 – Narrowed: task 068 already gives previews a runtime login that owns nothing (`preview_runtime`, granted by a deploy script), which answers the former questions on where the grant runs and how many preview logins. Left: main's runtime login and a `SET ROLE <owner>` check.
 - 2026-11-10 – Started in lane 1 (owner: "do the rest of the P1"; merge after the POC demo on 2026-11-13). Open question 1 taken as: local dev and CI keep one login (the DB tests and the role check cover the separate login on Cloud SQL).
+- 2026-11-10 – Red (`b7cebcc`, tests only on top of `49cf0d0`'s code, lane 1 database): `test-environment.sh` 43 passed, 5 failed (main's names); node tests (`check-runtime-role`, `provision-db-logins`) 59 passed, 13 failed of 72 (no `app_runtime`, no owner check); `test-preview-migrate.sh` 24 passed, 5 failed.
+- 2026-11-10 – Green (`f60498f`): `app_runtime` provisioned on main deploys, the role check fails when the login is or can become an owner, `environment.sh` and Terraform (`db-runtime-password`, `runtime_transition_secrets`), ADR-0006 amendment, README rollout. `pnpm test:infra` all green (48, 14, 74, 29, 103), `test:db` 149, e2e 323 passed. `terraform plan`: 7 to add, nothing destroyed; the 6 in-place Cloud Run `scaling` updates are drift already on `main`.
+- 2026-11-10 – Security review (no blockers). Fixes: the preview logins' `CONNECT` grants on `app_preview` and the revoke of `PUBLIC`'s run as one best-effort step, grants first (a skipped grant no longer locks previews out), and the preview verification needs their own grants, not `PUBLIC`'s; the role check also fails when the login can `SET ROLE` to any role but itself and `app_user`. Red: 4 failed of 76 node tests; green: `pnpm test:infra` 48, 14, 78, 29, 103.
+
+## Follow-up
+- Rollout step 4 (`infra/README.md`, "Main's runtime login: rollout"): remove `runtime_transition_secrets` from `infra/main.tf` in a separate small PR within a week of the rollout, and apply it (3 IAM grants removed). Until then a compromised `main` container can still read `db-password`, the owner's password, so SEC-06 stays partly open.
+- The comment on `RUNTIME_ROLE` in `packages/db/src/pool-config.ts` still says the login is the owner; it needs updating (the infra agent may not edit `packages/`).
 
 ## Parking lot
 - (none yet)
