@@ -45,6 +45,7 @@ export async function prepareUpload(
  * (its record is gone), and is logged with counts only, never object names.
  */
 export async function removeStaleObjects(workspaceId: string, keys: string[]): Promise<void> {
+  // Storage keys are internal: never log them or send them to the client (counts only).
   const prefix = `${workspaceId}/`;
   const own = keys.filter((key) => key.startsWith(prefix) && PROJECT_AND_ID.test(key.slice(prefix.length)));
   const results = await Promise.allSettled(own.map((key) => remove(key)));

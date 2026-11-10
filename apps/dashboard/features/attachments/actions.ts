@@ -20,7 +20,9 @@ import { prepareUpload, removeStaleObjects } from "./unfinished-uploads";
 //   3. confirm: `finishUploadAction` checks the stored object and confirms it, or throws it away.
 // One that never comes back to step 3 (a dropped connection, a closed tab) counts towards its uploader's 10
 // unfinished uploads in the workspace, and is cleared (record and object) by the first upload started in the
-// workspace an hour after it began (its URL lasts 15 minutes, so nothing can still arrive).
+// workspace an hour after it began. Its URL lasts 15 minutes, but storage checks that when the PUT starts,
+// so a very slow body can land after its record was cleared: a known orphan object until the bucket-wide
+// sweep (parked, task 087). A confirm that comes after the clearing answers not found and removes the object.
 // The signed URL carries the kind's size limit, so storage refuses a larger body (task 085); the confirm check
 // stays (the local server doesn't enforce the limit). Access problems (another partner's project, a made-up
 // id, someone else's upload) throw the same not-found error; the limits come back as a message to show.
@@ -109,6 +111,7 @@ export async function finishUploadAction(input: { attachmentId: string }): Promi
     getDb()
       .select({
         id: schema.attachment.id,
+        workspaceId: schema.attachment.workspaceId,
         projectId: schema.attachment.projectId,
         kind: schema.attachment.kind,
         storageKey: schema.attachment.storageKey,
@@ -135,16 +138,23 @@ export async function finishUploadAction(input: { attachmentId: string }): Promi
     : stored.contentType !== upload.contentType
       ? "The file isn't what it said it was"
       : uploadRefusal(kind, stored.contentType, stored.size);
-  await withAccess(session.user.id, async () => {
+  const confirmed = await withAccess(session.user.id, async () => {
     if (refusal) {
       await getDb().delete(schema.attachment).where(eq(schema.attachment.id, upload.id));
-    } else {
-      await getDb()
-        .update(schema.attachment)
-        .set({ confirmedAt: new Date(), sizeBytes: stored!.size })
-        .where(eq(schema.attachment.id, upload.id));
+      return false;
     }
+    const rows = await getDb()
+      .update(schema.attachment)
+      .set({ confirmedAt: new Date(), sizeBytes: stored!.size })
+      .where(eq(schema.attachment.id, upload.id))
+      .returning({ id: schema.attachment.id });
+    return rows.length > 0;
   });
+  if (!refusal && !confirmed) {
+    // Cleared as stale between the read and the confirm (task 087): its object goes too.
+    await removeStaleObjects(upload.workspaceId, [upload.storageKey]);
+    throw new Error("Not found");
+  }
   if (refusal) {
     await remove(upload.storageKey);
     return { ok: false, error: refusal };
