@@ -3,6 +3,7 @@ import type { BetterAuthOptions } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 
 import { addressOptions, rateLimitOptions } from "./rate-limit";
+import { signInLockout } from "./sign-in-lockout";
 
 type Env = Record<string, string | undefined>;
 
@@ -28,5 +29,7 @@ export function authOptions(env: Env) {
       useSecureCookies: env.NODE_ENV === "production",
       ...addressOptions(),
     },
+    // Failed sign-ins per email (task 090); on whatever AUTH_DISABLE_RATE_LIMIT says. server.ts adds nextCookies last.
+    plugins: [signInLockout()],
   } satisfies BetterAuthOptions;
 }

@@ -5,9 +5,10 @@ import { headers } from "next/headers";
 import { authOptions } from "./options";
 
 function createAuth() {
+  const options = authOptions(process.env);
   return betterAuth({
-    ...authOptions(process.env),
-    plugins: [nextCookies()], // keep last
+    ...options,
+    plugins: [...options.plugins, nextCookies()], // keep last
   });
 }
 
