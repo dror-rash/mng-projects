@@ -11,6 +11,9 @@
 #    commits on main, gitleaks is pinned by version and sha256, and deploy.yml skips Dependabot pull requests
 #    (no secrets or OIDC token there) but never a push to main, and so does preview-cleanup.yml; ci.yml cancels
 #    only PR runs and drops checkout credentials; every Dependabot ecosystem has a cooldown.
+# 4) Storage CORS (task 085): every header a signed upload sends (createUploadUrl in packages/storage) is allowed
+#    by the buckets' CORS (infra/storage.tf) and by fake-gcs-server in docker-compose.yml and ci.yml; otherwise
+#    the browser's preflight is refused and uploads break.
 # Text checks on the repository files (no YAML parser needed). Probes at the end run the checks on a copy with
 # one change each and expect the matching check to fail. Run: bash infra/scripts/test-workflows.sh
 set -u
@@ -255,14 +258,42 @@ dependabot_cooldown_everywhere() {
 }
 check "every Dependabot ecosystem has a 3-day cooldown" dependabot_cooldown_everywhere
 
+# --- Storage CORS (task 085) ---
+# The headers createUploadUrl sends: Content-Type and the keys of its extensionHeaders, lowercased.
+upload_headers() {
+  { echo content-type
+    awk '/const extensionHeaders = \{/ { inside = 1 } inside { print } inside && /\};/ { inside = 0 }' \
+      "$ROOT/packages/storage/src/index.ts" | grep -oE '"x-goog-[a-z-]+":' | tr -d '":'
+  } | tr '[:upper:]' '[:lower:]' | sort -u
+}
+ci_cors_headers() { grep -oE -- '-cors-headers [^ ]+' "$CI" | awk '{ print $2 }' | tr ',' '\n'; }
+compose_cors_headers() { grep -oE -- '"-cors-headers", "[^"]+"' "$ROOT/docker-compose.yml" | sed -E 's/.*", "//; s/"$//' | tr ',' '\n'; }
+tf_cors_headers() { grep -E '^[[:space:]]*files_cors_response_headers[[:space:]]*=' "$ROOT/infra/storage.tf" | grep -oE '"[^"]+"' | tr -d '"'; }
+allows_upload_headers() { # list function
+  local allowed h n=0
+  allowed="$("$1" | tr '[:upper:]' '[:lower:]')"
+  for h in $(upload_headers); do
+    grep -qxF -- "$h" <<<"$allowed" || return 1
+    n=$((n + 1))
+  done
+  [ "$n" -ge 3 ]   # content-type, x-goog-if-generation-match, x-goog-content-length-range at least
+}
+check "createUploadUrl's headers are found (content-type and at least two x-goog- headers)" \
+  test "$(upload_headers | grep -c .)" -ge 3
+check "ci.yml's fake-gcs-server allows every header createUploadUrl sends" allows_upload_headers ci_cors_headers
+check "docker-compose.yml's fake-gcs-server allows every header createUploadUrl sends" allows_upload_headers compose_cors_headers
+check "infra/storage.tf's bucket CORS allows every header createUploadUrl sends" allows_upload_headers tf_cors_headers
+
 # --- Probes: each check above catches the change it is for ---
 # A copy of the files these checks read, with one change, must fail the named check. A clean copy passes.
 if [ -z "${TEST_WORKFLOWS_PROBE:-}" ]; then
   PROBE_DIR="$(mktemp -d)"; trap 'rm -rf "$PROBE_DIR"' EXIT
   probe() { # expected FAIL text (empty: the copy must pass), shell command run inside the copy
     local dir="$PROBE_DIR/p$((pass + fail))" out
-    mkdir -p "$dir/.github/workflows" "$dir/infra/scripts"
+    mkdir -p "$dir/.github/workflows" "$dir/infra/scripts" "$dir/packages/storage/src"
     cp "$ROOT"/.github/workflows/*.yml "$dir/.github/workflows/"
+    cp "$ROOT/docker-compose.yml" "$dir/"; cp "$ROOT/infra/storage.tf" "$dir/infra/"
+    cp "$ROOT/packages/storage/src/index.ts" "$dir/packages/storage/src/"
     [ ! -e "$ROOT/.github/dependabot.yml" ] || cp "$ROOT/.github/dependabot.yml" "$dir/.github/"
     cp "$ROOT"/Dockerfile "$ROOT"/.dockerignore "$ROOT"/.gitignore "$dir/"
     cp "$ROOT"/infra/scripts/*.sh "$dir/infra/scripts/"
@@ -273,7 +304,10 @@ if [ -z "${TEST_WORKFLOWS_PROBE:-}" ]; then
         diff -q "$ROOT/Dockerfile" "$dir/Dockerfile" >/dev/null && diff -q "$ROOT/.dockerignore" "$dir/.dockerignore" >/dev/null &&
         diff -q "$ROOT/infra/scripts/get-cloud-sql-proxy.sh" "$dir/infra/scripts/get-cloud-sql-proxy.sh" >/dev/null &&
         diff -q "$ROOT/infra/scripts/get-gitleaks.sh" "$dir/infra/scripts/get-gitleaks.sh" >/dev/null &&
-        diff -q "$ROOT/.github/dependabot.yml" "$dir/.github/dependabot.yml" >/dev/null && return 1
+        diff -q "$ROOT/.github/dependabot.yml" "$dir/.github/dependabot.yml" >/dev/null &&
+        diff -q "$ROOT/docker-compose.yml" "$dir/docker-compose.yml" >/dev/null &&
+        diff -q "$ROOT/infra/storage.tf" "$dir/infra/storage.tf" >/dev/null &&
+        diff -q "$ROOT/packages/storage/src/index.ts" "$dir/packages/storage/src/index.ts" >/dev/null && return 1
     fi
     out="$(TEST_WORKFLOWS_PROBE=1 bash "$dir/infra/scripts/test-workflows.sh" 2>&1)"
     if [ -z "$1" ]; then grep -q ', 0 failed$' <<<"$out"; else grep -qF -- "FAIL - $1" <<<"$out"; fi
@@ -358,6 +392,17 @@ if [ -z "${TEST_WORKFLOWS_PROBE:-}" ]; then
     "perl -0pi -e 's/\n    cooldown:\n      default-days: 3//' .github/dependabot.yml"
   check "probe: a workflow overriding gitleaks' URL is caught" probe "the workflows never override gitleaks" \
     "printf '      - run: GITLEAKS_URL=https://x bash infra/scripts/get-gitleaks.sh\n' >> $CIW"
+  check "probe: ci.yml's fake-gcs-server without x-goog-content-length-range is caught" probe \
+    "ci.yml's fake-gcs-server allows every header" "perl -pi -e 's/,x-goog-content-length-range//' $CIW"
+  check "probe: docker-compose.yml's fake-gcs-server without x-goog-content-length-range is caught" probe \
+    "docker-compose.yml's fake-gcs-server allows every header" "perl -pi -e 's/,x-goog-content-length-range//' docker-compose.yml"
+  check "probe: the buckets' CORS without x-goog-content-length-range is caught" probe \
+    "infra/storage.tf's bucket CORS allows every header" "perl -pi -e 's/, \"x-goog-content-length-range\"//' infra/storage.tf"
+  check "probe: a new header signed by createUploadUrl but not allowed by CORS is caught" probe \
+    "ci.yml's fake-gcs-server allows every header" \
+    "perl -pi -e 's/^(\s*)(\"x-goog-if-generation-match\": \"0\",)/\$1\$2\n\$1\"x-goog-meta-probe\": \"1\",/' packages/storage/src/index.ts"
+  check "probe: createUploadUrl's headers not found is caught" probe "createUploadUrl's headers are found" \
+    "perl -pi -e 's/const extensionHeaders = \{/const signedHeaders = {/' packages/storage/src/index.ts"
 fi
 
 echo "# $pass passed, $fail failed"
