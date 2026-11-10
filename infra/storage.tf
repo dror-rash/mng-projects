@@ -12,8 +12,10 @@ locals {
   # `urls` lists them all.
   shell_origins = distinct(concat([google_cloud_run_v2_service.zone["shell/main"].uri], google_cloud_run_v2_service.zone["shell/main"].urls))
 
+  # The headers a signed upload sends (createUploadUrl in packages/storage): the browser's preflight is
+  # refused for any header not listed here, so a new signed header must be added here first (task 085).
   files_cors_methods          = ["PUT", "GET"]
-  files_cors_response_headers = ["Content-Type", "x-goog-if-generation-match"]
+  files_cors_response_headers = ["Content-Type", "x-goog-if-generation-match", "x-goog-content-length-range"]
 }
 
 # Main: no lifecycle rule. Attachments are soft-deleted in the database and must stay restorable.
