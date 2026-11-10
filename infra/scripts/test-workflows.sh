@@ -302,6 +302,8 @@ if [ -z "${TEST_WORKFLOWS_PROBE:-}" ]; then
     [ ! -e "$ROOT/.github/dependabot.yml" ] || cp "$ROOT/.github/dependabot.yml" "$dir/.github/"
     cp "$ROOT"/Dockerfile "$ROOT"/.dockerignore "$ROOT"/.gitignore "$dir/"
     cp "$ROOT"/infra/scripts/*.sh "$dir/infra/scripts/"
+    cp "$ROOT"/infra/scripts/*.mjs "$dir/infra/scripts/"
+    cp "$ROOT"/infra/*.tf "$dir/infra/"
     (cd "$dir" && eval "$2") || return 1
     # The change must have changed something (a probe whose edit matches nothing proves nothing).
     if [ -n "$1" ]; then
@@ -309,6 +311,7 @@ if [ -z "${TEST_WORKFLOWS_PROBE:-}" ]; then
         diff -q "$ROOT/Dockerfile" "$dir/Dockerfile" >/dev/null && diff -q "$ROOT/.dockerignore" "$dir/.dockerignore" >/dev/null &&
         diff -q "$ROOT/infra/scripts/get-cloud-sql-proxy.sh" "$dir/infra/scripts/get-cloud-sql-proxy.sh" >/dev/null &&
         diff -q "$ROOT/infra/scripts/get-gitleaks.sh" "$dir/infra/scripts/get-gitleaks.sh" >/dev/null &&
+        diff -q "$ROOT/infra/main.tf" "$dir/infra/main.tf" >/dev/null &&
         diff -q "$ROOT/.github/dependabot.yml" "$dir/.github/dependabot.yml" >/dev/null && return 1
     fi
     out="$(TEST_WORKFLOWS_PROBE=1 bash "$dir/infra/scripts/test-workflows.sh" 2>&1)"
@@ -394,6 +397,14 @@ if [ -z "${TEST_WORKFLOWS_PROBE:-}" ]; then
     "perl -0pi -e 's/\n    cooldown:\n      default-days: 3//' .github/dependabot.yml"
   check "probe: a workflow overriding gitleaks' URL is caught" probe "the workflows never override gitleaks" \
     "printf '      - run: GITLEAKS_URL=https://x bash infra/scripts/get-gitleaks.sh\n' >> $CIW"
+  check "probe: deployer-main without the workflow_ref check is caught" probe "WIF: ci.yml on a push to main gets no deployer" \
+    'perl -pi -e "s/ && assertion\\.workflow_ref == .[^\x27]*. \\?/ ?/" infra/main.tf'
+  check "probe: deployer-preview without the workflow file check is caught" probe "WIF: ci.yml on a pull_request gets no deployer" \
+    'perl -pi -e "s/ && \\(assertion\\.workflow_ref\\.startsWith.*?\\)\\) \\?/ ?/" infra/main.tf'
+  check "probe: a hard-coded repository in the workflow path is caught" probe "WIF: deploy.yml on a push to main gets deployer-main" \
+    'perl -pi -e "s/github_workflows = .\\$\\{var\\.github_repository\\}/github_workflows = \x22dror-rash\/mng-projects/" infra/main.tf'
+  check "probe: JavaScript-only syntax (===) in the mapping is refused" probe "WIF: deploy.yml on a push to main gets deployer-main" \
+    'perl -pi -e "s/assertion\\.event_name == .push./assertion.event_name === \x27push\x27/" infra/main.tf'
 fi
 
 echo "# $pass passed, $fail failed"
