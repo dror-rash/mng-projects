@@ -89,6 +89,23 @@ export const rateLimit = pgTable("rate_limit", {
   index("rate_limit_last_request_idx").on(table.lastRequest),
 ]);
 
+/**
+ * Failed sign-ins per email (task 090, SEC-10): the sign-in hooks in @repo/auth count every attempt here and
+ * refuse sign-in to an email while `locked_until` is ahead. `key` is a keyed hash (HMAC with the auth secret)
+ * of the normalized email, never the email. Rows are deleted once `removable_after` (the end of the window or
+ * of the lock, whichever is later) has passed. Like the tables above it has no row-level security (ADR-0006).
+ */
+export const signInLockout = pgTable("sign_in_lockout", {
+  key: text("key").primaryKey(),
+  failures: integer("failures").notNull(),
+  windowStart: timestamp("window_start", { withTimezone: true }).notNull(),
+  lockedUntil: timestamp("locked_until", { withTimezone: true }),
+  removableAfter: timestamp("removable_after", { withTimezone: true }).notNull(),
+}, (table) => [
+  // The cleanup on every write deletes rows by this column.
+  index("sign_in_lockout_removable_after_idx").on(table.removableAfter),
+]);
+
 /** Workspaces own projects, tasks and customers (ADR-0005). */
 export const workspace = pgTable("workspace", {
   id: text("id").primaryKey(),
