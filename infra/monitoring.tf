@@ -10,9 +10,38 @@ locals {
   # Main's Cloud Run services (one per zone).
   main_services = sort([for key, runtime in local.runtimes : runtime.service_name if runtime.environment == "main"])
 
-  # db-f1-micro allows 25 connections, 3 of them reserved for Cloud SQL's superusers: 80% of the 22 left.
-  # Change it with var.db_tier (README, Known limits).
-  sql_connection_alert = 0.8 * (25 - 3)
+  # Cloud SQL's default max_connections per tier, 3 of them reserved for its superusers. The connection alert
+  # fires above 80% of the rest (db-f1-micro: 22, so 17.6). A tier not listed here fails the plan (precondition
+  # on google_monitoring_alert_policy.sql_connections): add its limit when var.db_tier changes.
+  sql_max_connections = {
+    "db-f1-micro" = 25
+    "db-g1-small" = 50
+  }
+  sql_connection_alert = 0.8 * (lookup(local.sql_max_connections, var.db_tier, 0) - 3)
+
+  # Method-name regexes of the log alerts, as Cloud Logging receives them (RE2). No backslashes: a Terraform
+  # heredoc keeps every backslash as written, and Logging reads "\\." as a literal backslash, so it matches nothing.
+  # Literal dots are [.]. infra/scripts/test-monitoring.sh runs them against known method names.
+  log_alert_methods = {
+    iam_policy          = "(?i)(setiampolicy|setiampermissions)$"
+    service_account_key = "^google[.]iam[.]admin[.]v1[.](Create|Upload)ServiceAccountKey$"
+    run_service         = "^google[.]cloud[.]run[.]v[12][.]Services[.](Create|Replace|Update|Delete)Service$"
+  }
+
+  # Changes to what guards the project, by anyone (deployers included): joined with | into one filter.
+  security_config_methods = [
+    "^google[.]iam[.]v1[.]WorkloadIdentityPools[.](Create|Update|Delete|Undelete)WorkloadIdentityPool(Provider)?$",
+    "^google[.]iam[.]admin[.]v1[.](Create|Update|Delete|Undelete)Role$", # custom roles (runDeployer)
+    "^storage[.]hmacKeys[.]create$",
+    "^google[.]cloud[.]secretmanager[.]v1[.]SecretManagerService[.](AddSecretVersion|DisableSecretVersion|DestroySecretVersion|DeleteSecret)$",
+    "^cloudsql[.]users[.](create|update|delete)$",
+    "^cloudsql[.]instances[.]update$",
+    "^google[.]cloud[.]run[.]v[12][.]Jobs[.](Create|Replace|Update)Job$",
+    "^google[.]logging[.]v2[.]ConfigServiceV2[.](Create|Update|Delete)(Sink|Exclusion)$",
+    "^storage[.]buckets[.]update$",
+    "^google[.]monitoring[.]v3[.]NotificationChannelService[.](Update|Delete)NotificationChannel$", # silencing
+    "^google[.]monitoring[.]v3[.]AlertPolicyService[.](Update|Delete)AlertPolicy$",                 # silencing
+  ]
 
   budget_thresholds = [0.5, 0.9, 1.0]
 }
@@ -43,7 +72,7 @@ resource "google_monitoring_alert_policy" "iam_policy_change" {
       # Artifact Registry repository, and bucket IAM (storage.setIamPermissions).
       filter = <<-EOT
         logName = "${local.audit_activity_log}"
-        protoPayload.methodName =~ "(?i)(setiampolicy|setiampermissions)$"
+        protoPayload.methodName =~ "${local.log_alert_methods.iam_policy}"
       EOT
     }
   }
@@ -78,7 +107,7 @@ resource "google_monitoring_alert_policy" "service_account_key" {
     condition_matched_log {
       filter = <<-EOT
         logName = "${local.audit_activity_log}"
-        protoPayload.methodName =~ "^google\\.iam\\.admin\\.v1\\.(Create|Upload)ServiceAccountKey$"
+        protoPayload.methodName =~ "${local.log_alert_methods.service_account_key}"
       EOT
     }
   }
@@ -112,10 +141,14 @@ resource "google_monitoring_alert_policy" "run_change_outside_ci" {
     display_name = "Create, replace, update or delete a service, not by a deployer"
     condition_matched_log {
       # Deploys and tag cleanups replace the service as deployer-main or deployer-preview (v1 ReplaceService);
-      # Terraform creates and updates through v2.
+      # Terraform creates and updates through v2. Leaving the deployers out means a misused deployer (say,
+      # deployer-main deploying something odd) isn't reported here: Workload Identity lets only pushes to main of
+      # this repository use it, and the ruleset guards main. The filter relies on CI impersonating the deployer
+      # service accounts (principalEmail is the account); with direct Workload Identity access it would be a
+      # principal:// subject instead and every deploy would alert.
       filter = <<-EOT
         logName = "${local.audit_activity_log}"
-        protoPayload.methodName =~ "^google\\.cloud\\.run\\.v[12]\\.Services\\.(Create|Replace|Update|Delete)Service$"
+        protoPayload.methodName =~ "${local.log_alert_methods.run_service}"
         NOT protoPayload.authenticationInfo.principalEmail = (${join(" OR ", [for env in keys(local.environments) : "\"${google_service_account.deployer[env].email}\""])})
       EOT
     }
@@ -141,10 +174,49 @@ resource "google_monitoring_alert_policy" "run_change_outside_ci" {
   depends_on = [google_project_service.enabled]
 }
 
+resource "google_monitoring_alert_policy" "security_config_change" {
+  display_name          = "Security config changed"
+  combiner              = "OR"
+  severity              = "WARNING"
+  notification_channels = [google_monitoring_notification_channel.email.id]
+
+  conditions {
+    display_name = "Workload Identity, custom roles, HMAC keys, secrets, SQL users, jobs, log sinks, buckets, alerts"
+    condition_matched_log {
+      filter = <<-EOT
+        logName = "${local.audit_activity_log}"
+        protoPayload.methodName =~ "${join("|", local.security_config_methods)}"
+      EOT
+    }
+  }
+
+  alert_strategy {
+    notification_rate_limit {
+      period = "300s"
+    }
+    auto_close = "1800s"
+  }
+
+  documentation {
+    mime_type = "text/markdown"
+    content   = <<-EOT
+      Something that guards the project changed: Workload Identity pool or provider, a custom role, an HMAC key,
+      a secret version or secret, a Cloud SQL user or the instance, a Cloud Run job, a log sink or exclusion, a
+      bucket's settings, or an alert policy or notification channel (silencing these alerts). Expected after a
+      `terraform apply` by the owner. Otherwise: check the method and principal in the log entry, undo it
+      (`terraform plan` from `infra/` shows the drift), and remove that principal's access. For a new secret
+      version or SQL user password, rotate the secret.
+    EOT
+  }
+
+  depends_on = [google_project_service.enabled]
+}
+
 # ---------- Metric alerts ----------
 resource "google_monitoring_alert_policy" "main_5xx" {
-  display_name          = "main: more than 5% 5xx responses"
-  combiner              = "OR"
+  display_name = "main: more than 5% 5xx responses"
+  # Both conditions for the same service: a single error at low traffic doesn't page.
+  combiner              = "AND_WITH_MATCHING_RESOURCE"
   severity              = "ERROR"
   notification_channels = [google_monitoring_notification_channel.email.id]
 
@@ -176,6 +248,27 @@ resource "google_monitoring_alert_policy" "main_5xx" {
     }
   }
 
+  conditions {
+    display_name = "At least 3 5xx responses over 5 minutes, per main service"
+    condition_threshold {
+      filter          = "resource.type = \"cloud_run_revision\" AND metric.type = \"run.googleapis.com/request_count\" AND resource.label.service_name = one_of(${join(", ", [for name in local.main_services : "\"${name}\""])}) AND metric.label.response_code_class = \"5xx\""
+      comparison      = "COMPARISON_GT"
+      threshold_value = 2 # at least 3
+      duration        = "0s"
+
+      aggregations {
+        alignment_period     = "300s"
+        per_series_aligner   = "ALIGN_DELTA"
+        cross_series_reducer = "REDUCE_SUM"
+        group_by_fields      = ["resource.label.service_name"]
+      }
+
+      trigger {
+        count = 1
+      }
+    }
+  }
+
   alert_strategy {
     auto_close = "1800s"
   }
@@ -183,8 +276,7 @@ resource "google_monitoring_alert_policy" "main_5xx" {
   documentation {
     mime_type = "text/markdown"
     content   = <<-EOT
-      More than 5% of a `main` service's requests failed with 5xx over 5 minutes (at low traffic a single error can
-      do it). First: the service's error logs (`resource.type="cloud_run_revision" severity>=ERROR`). If the latest
+      More than 5% of a `main` service's requests, and at least 3 of them, failed with 5xx over 5 minutes. First: the service's error logs (`resource.type="cloud_run_revision" severity>=ERROR`). If the latest
       deploy caused it, route traffic back to the previous revision or revert the commit on `main`. "too many
       connections" points at the Cloud SQL connection alert.
     EOT
@@ -232,6 +324,13 @@ resource "google_monitoring_alert_policy" "sql_connections" {
       as `app` through the Cloud SQL proxy). Previews can take at most 10 (README, Known limits); if `main` needs
       more, lower its `max_instances` or move to a bigger tier.
     EOT
+  }
+
+  lifecycle {
+    precondition {
+      condition     = contains(keys(local.sql_max_connections), var.db_tier)
+      error_message = "Add var.db_tier's connection limit to local.sql_max_connections (infra/monitoring.tf) so the connection alert's threshold fits the tier."
+    }
   }
 
   depends_on = [google_project_service.enabled]

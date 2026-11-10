@@ -161,10 +161,10 @@ check "5xx: counts Cloud Run requests of class 5xx" in_block "$ERRORS" 'metric\.
 check "5xx: is a ratio of all requests" in_block "$ERRORS" 'denominator_filter'
 main_only() {
   grep -qE '^  main_services += sort\(\[for key, runtime in local\.runtimes : runtime\.service_name if runtime\.environment == "main"\]\)$' "$MON" &&
-    [ "$(grep -cE 'service_name = one_of\(\$\{join\(", ", \[for name in local\.main_services : ' <<<"$ERRORS")" -eq 2 ] &&
+    [ "$(grep -cE 'service_name = one_of\(\$\{join\(", ", \[for name in local\.main_services : ' <<<"$ERRORS")" -eq 3 ] &&
     ! grep -qE 'local\.runtimes' <<<"$ERRORS"
 }
-check "5xx: on main's services only (both numerator and denominator)" main_only
+check "5xx: on main's services only (every filter)" main_only
 check "5xx: per service" in_block "$ERRORS" 'group_by_fields += \["resource\.label\.service_name"\]'
 check "5xx: above 5%" in_block "$ERRORS" 'threshold_value += 0\.05$'
 check "5xx: over 5 minutes" in_block "$ERRORS" 'alignment_period += "300s"'
