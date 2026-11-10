@@ -5,6 +5,7 @@
 set -u
 DIR="$(cd "$(dirname "$0")" && pwd)"
 MAIN_TF="$DIR/../main.tf"
+VARIABLES_TF="$DIR/../variables.tf"
 pass=0; fail=0
 expect() { # name, expected, actual
   if [ -n "$2" ] && [ "$2" = "$3" ]; then pass=$((pass+1)); echo "ok   - $1"; else fail=$((fail+1)); echo "FAIL - $1 (expected '$2', got '$3')"; fi
@@ -22,6 +23,19 @@ tf_env() { # env, key
     block && $0 ~ "^    \\}" { block = 0 }
     block && $1 == key { gsub(/"/, "", $3); print $3; exit }
   ' "$MAIN_TF"
+}
+
+# The default of a Terraform variable in variables.tf: a number, or the number of strings in a list.
+tf_default() { # name
+  awk -v name="$1" '
+    $0 ~ "^variable \"" name "\" \\{" { inside = 1; next }
+    inside && /^\}/ { exit }
+    inside && $1 == "default" {
+      sub(/^[^=]*=[ ]*/, "")
+      if ($0 ~ /^\[/) { print gsub(/"[^"]*"/, ""); exit }
+      print $0; exit
+    }
+  ' "$VARIABLES_TF"
 }
 
 # Previews and main never share.
@@ -68,6 +82,16 @@ done
 expect "the fixed names agree with the per-environment ones" \
   "app app_preview app preview_owner preview_runtime" \
   "$(in_env true '$MAIN_DB_NAME $PREVIEW_DB_NAME $MAIN_OWNER_LOGIN $PREVIEW_OWNER_LOGIN $PREVIEW_RUNTIME_LOGIN')"
+
+# main's connection budget (task 091, SEC-14): every zone at its maximum instances, each with a full pool, fits
+# main's share of db-f1-micro's login connections. Above it, a burst scales the zones until new connections fail.
+zones="$(tf_default zones)"; max_instances="$(tf_default max_instances)"
+main_pool="$(in_env false '$MAIN_DB_POOL_MAX')"; main_share="$(in_env false '$MAIN_DB_CONNECTIONS')"
+expect "reads the zones and main's max_instances from variables.tf" yes \
+  "$(printf '%s %s' "$zones" "$max_instances" | grep -qE '^[0-9]+ [0-9]+$' && echo yes || echo no)"
+main_worst=$(( ${zones:-0} * ${max_instances:-0} * ${main_pool:-0} ))
+expect "main's worst case ($zones zones x $max_instances instances x pool $main_pool = $main_worst) fits its $main_share connections" \
+  yes "$( [ -n "$main_share" ] && [ "$main_worst" -le "$main_share" ] && echo yes || echo no)"
 
 echo "$pass passed, $fail failed"
 [ "$fail" -eq 0 ]
