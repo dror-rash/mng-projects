@@ -1,6 +1,6 @@
 # Task 086: Deleting a workspace deletes its files from storage
 
-- **Status:** in-progress
+- **Status:** in-review
 - **Milestone:** cross-cutting (security), M13 follow-up
 - **Zone / package:** `packages/storage` (a `removePrefix` helper), `apps/dashboard/features/workspaces/settings-actions.ts` (`deleteWorkspaceAction`), `e2e/steps` (two new steps). No migration. Commit types `test(dashboard|storage)` → `feat(dashboard)` / `fix(storage)` → `refactor(storage)`.
 - **Feature file:** `docs/features/workspaces.feature` (two `@wip @task:086` scenarios)
