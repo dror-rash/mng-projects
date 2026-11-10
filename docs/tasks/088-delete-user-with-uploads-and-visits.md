@@ -23,10 +23,10 @@ Deleting a user account fails once that user has uploaded a file or recorded a s
 - Other trigger messages (SEC-36).
 
 ## Acceptance criteria
-- [ ] Deleting a user with an upload and a visit, while the workspace exists, succeeds (red first: fails today with the two triggers' errors). → DB test.
-- [ ] The broader "every authored row" DB test passes: rows stay, authors become null. → DB test.
-- [ ] Changing `uploaded_by` or `created_by` to **another user** is still refused (existing DB tests stay green, plus one case each if missing).
-- [ ] `rls-pins.mjs` matches, the role check passes locally (`test:infra` or the CI e2e job's check) and on the PR's preview.
+- [x] Deleting a user with an upload and a visit, while the workspace exists, succeeds (red first: fails today with the two triggers' errors). → DB test.
+- [x] The broader "every authored row" DB test passes: rows stay, authors become null. → DB test.
+- [x] Changing `uploaded_by` or `created_by` to **another user** is still refused (existing DB tests stay green, plus one case each if missing).
+- [ ] `rls-pins.mjs` matches, the role check passes locally (done: `pnpm test:infra`) (`test:infra` or the CI e2e job's check) and on the PR's preview.
 
 ## Security notes
 A migration that redefines two trigger functions (not definer functions, no grants or policies), so the `security-reviewer` runs for the migration and the `access-auditor` checks that only the null case opened up: an author can't be reassigned to someone else, so nobody can pass their upload or visit off as another user's. Fixes register gap **SEC-18**.
@@ -45,7 +45,9 @@ Red: the DB test deleting a user with an upload and a visit (and the broader one
 ## Progress log
 - 2026-11-08 – Drafted from the first full security review (SEC-18) and task 061's "Bug found" note; owner: "start fixing the P1 gaps".
 - 2026-11-10 – Started in lane 6 (owner: "do the rest of the P1"; build now, merge after the POC demo on 2026-11-13).
+- 2026-11-10 – Red: `user-delete.db.test.ts` (deleting an uploader, a visit author, and a user with every kind of row, while the workspace exists) failed with `an attachment stays what and where it was put` / `a visit keeps its project and author` from the foreign keys' `SET NULL`. Green: migration 0040 lets `uploaded_by` / `created_by` become null only once the user row is gone (`NOT EXISTS` in `"user"`), tighter than "to null" because `app_user` may update `site_visit.created_by` (an author or admin could otherwise disown a visit); reassigning to another user, or clearing while the account exists, is refused (new cases). Pins updated (4 hashes); `pnpm test:infra` passes. ARCHITECTURE: user deletion convention. Checks in the lane: lint, typecheck, `pnpm test` 568, `@repo/db` `test:db` 154, `@repo/dashboard` `test:db` 19, build, `CI=1 pnpm test:e2e --workers=2` 323 passed, none flaky.
 
 ## Parking lot
 - What an erasure request removes beyond the account (content, files the user uploaded): owner decision.
 - An admin action to remove a member's account (today an admin can only remove the membership).
+- `form_submission_keep` still lets `submitted_by` become null while the account exists (harmless today: `app_user` has no update on readings); tighten it like 0040 if readings ever get an update grant.
