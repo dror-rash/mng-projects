@@ -10,7 +10,7 @@
 An upload starts with an unconfirmed record and a signed URL; it is confirmed only when the browser comes back after sending the file. If it never comes back (a dropped phone connection, a closed tab, or on purpose), the record and the stored object stay forever, and nothing limits how many a user can leave behind. Register **SEC-07** (cleanup part; the size cap is task 085).
 
 ## Scope
-- **Stale uploads:** an upload unconfirmed for more than **1 hour** (question 1) is stale. The signed URL lasts 15 minutes, so a stale upload can't still be arriving.
+- **Stale uploads:** an upload unconfirmed for more than **1 hour** (question 1) is stale. The signed URL lasts 15 minutes, but storage checks the expiry when the PUT starts, so a very slow body can still land after its row was cleared (see the 2026-11-10 decision in the Progress log).
 - **Clearing them, in the app, no new infrastructure:** when anyone starts an upload in a workspace, the stale uploads of that workspace are deleted and their objects removed:
   - a `SECURITY DEFINER` function (e.g. `clear_stale_uploads(p_workspace uuid) returns setof text`, the storage keys it deleted), `search_path` pinned, callable only by a user who can work on a project in that workspace, deleting only unconfirmed rows older than the cutoff in that workspace; its definition pinned in `rls-pins.mjs`;
   - `startUploadAction` calls it inside `withAccess` before recording the new upload, then removes the returned objects after the transaction (a failed remove is logged with the count only, never names).
@@ -58,6 +58,13 @@ Red: DB tests for the function (none exists), the `@task:087` scenario (the 11th
   - The checks order: access, then the file's own limits (type, size), then the clearing and the cap.
 - 2026-11-10 – Checks in lane 4: `@task:087` 1 passed and the `@task:059`/`@task:064`/`@poc` upload scenarios 24 passed (one worker); full `CI=1 pnpm test:e2e --workers=2` 324 passed; unit 580 (dashboard 447); `@repo/db` `test:db` 152; dashboard `test:db` 23; `test:storage` 6; `check-runtime-role.test.mjs` 32; lint, typecheck, build pass.
 - 2026-11-10 – Tests: DB (`attachments.db.test.ts` "clearing stale uploads", `hardening.db.test.ts` no user / another workspace), dashboard unit (`attachment-limits.test.ts`, `actions.test.ts`), dashboard `test:db` `features/attachments/unfinished-uploads.db.test.ts` (database and local storage: records and objects cleared, the prefix check, the cap, the race). The dashboard's `test:db` now includes `features/**/*.db.test.ts` and needs the storage server, so CI runs it after `test:storage` (`ci.yml`).
+
+- 2026-11-10 – Fix loop after the access audit and security review (no blockers):
+  - **Decision (late bodies):** a body that lands after its row was cleared is a known orphan object until the parked bucket-wide sweep. If the browser does come back, `finishUploadAction` now finds the confirm UPDATE changed no row, removes the object (within the workspace's prefix) and answers not found instead of `ok: true`. The cutoff stays **1 hour**: a PUT would need to start in the URL's last moments and take over 45 minutes, and the browser would have to never come back. 24 hours would keep dropped uploads counting against the cap for a day for little gain.
+  - The cutoff is in UTC (`now() AT TIME ZONE 'UTC'`, as `delete_attachment`), whatever the session's time zone (migration 0040 edited in place: not merged; pin updated; lane database re-created and migrated). DB test: a session 14 hours ahead of UTC no longer clears a 30-minute-old upload.
+  - More DB checks (green at once): a worker taken off the crew or on no crew, and the crew worker or an admin through a soft-deleted project, clear nothing.
+  - `removeStaleObjects` says keys are never logged or sent to the client.
+  - Not done: a separate refused-upload step. The scenario's `When I add the photo "panel.jpg" with "Add photos"` is the same text as the shared step, so a separate step would need a different wording in the feature file, which only a spec change may make. The shared step stays as loosened in the red commit (the photo or an upload error); in every other scenario that uses it, the next step needs the photo (a `Then` that shows it, its Delete button, or its download link), so a refused upload still fails the scenario there.
 
 ## Parking lot
 - The scheduled sweep (question 4).
