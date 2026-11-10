@@ -1,6 +1,6 @@
 # Task 089: One sign-in rate limit across all instances
 
-- **Status:** in-progress
+- **Status:** in-review
 - **Milestone:** cross-cutting (security)
 - **Zone / package:** `packages/auth` (`server.ts`, `rate-limit.ts`), `packages/db` (`schema.ts`: Better Auth's rate-limit table; one migration; the RLS-coverage exception list). Commit types `test(auth)` → `fix(auth)` / `feat(db)`.
 - **Feature file:** none (end-to-end runs disable the rate limit on purpose, rule 13; DB-backed tests and the release gate's live check cover it)
@@ -23,11 +23,12 @@ Better Auth's rate limit keeps its counts in each server instance's memory, so w
 
 ## Acceptance criteria
 - [x] Two separate auth instances (two `betterAuth` objects on the same test database, standing for two Cloud Run instances) share one budget: sign-in attempts from one address over the limit, split between them, get 429. Red first: with the memory store each instance allows its own budget. → DB-backed test in `packages/auth` (against `DATABASE_URL`, like `test:db`).
-- [x] A request with a spoofed multi-value `x-forwarded-for` doesn't get a fresh budget. → same test file.
+- [x] A request with a spoofed multi-value `x-forwarded-for` doesn't get a fresh budget, and is counted on the address Cloud Run appended (the rightmost value). → same test file.
 - [x] `AUTH_DISABLE_RATE_LIMIT=true` still disables it (existing `rate-limit` unit test, extended).
 - [x] `hardening.db.test.ts` passes with the new table in the documented exception list.
 - [ ] Release-gate live check on the PR's preview: about five bad sign-ins in 10 s from one client get a 429 (output in the PR, no credentials).
 - [ ] Same check with a spoofed header: about four bad sign-ins in 10 s from one client, each with a different client-supplied `X-Forwarded-For` (e.g. `-H "X-Forwarded-For: 203.0.113.<n>"`), get a 429 (Cloud Run appends the real address, which is what is counted).
+- [ ] The spoofed requests are counted per real client, not in one shared bucket: (a) 3 bad sign-ins with varying spoofed `X-Forwarded-For`, then 1 with no header, from the same client: the 4th gets 429 (both kinds key on the real address); (b) after that client gets 429, one bad sign-in from a second network (Cloud Shell or a phone hotspot) gets 401. A pass on the previous step alone doesn't rule out a shared bucket.
 
 ## Security notes
 Touches `packages/auth` and a migration (a new table with grants from default privileges), so the `security-reviewer` runs. The table holds rate-limit keys (client addresses and paths): personal data in a small way; it is never shown, never logged, and has no RLS by design, so no app query may read it (SEC-38's rule). A database outage now also fails sign-in rate-limit checks (sign-in needs the database anyway). Fixes part of register gap **SEC-10** (with task 090).

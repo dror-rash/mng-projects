@@ -89,7 +89,7 @@ Before the POC demo, before real customer data on `main`, and before each releas
 - [ ] Live checks (read-only):
   - branch protection on `main` with `verify` and `e2e` required (`gh api …/branches/main/protection`);
   - the deployed revisions' env has no `AUTH_DISABLE_RATE_LIMIT` and has `BETTER_AUTH_URL` (`gcloud run services describe`);
-  - about five bad sign-ins in 10 s from one client get a 429, and a spoofed `X-Forwarded-For` doesn't reset it;
+  - about five bad sign-ins in 10 s from one client get a 429; a spoofed `X-Forwarded-For` doesn't reset it, and a second network still gets 401 (per-client buckets, not one shared one);
   - the security headers are present on the main URL;
   - `terraform plan` shows no security drift; no service-account keys; `allUsers` only where expected;
   - the latest `main` deploy log shows only masked credentials.
