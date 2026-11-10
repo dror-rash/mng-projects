@@ -1,6 +1,6 @@
 # Task 087: Abandoned uploads are cleared, and unfinished uploads are capped
 
-- **Status:** in-progress
+- **Status:** in-review
 - **Milestone:** cross-cutting (security), M13 follow-up
 - **Zone / package:** `packages/db` (one migration: a definer function, its RLS pin), `apps/dashboard/features/attachments/` (`actions.ts`, `attachment-limits.ts`), `e2e/steps` (one new step). Commit types `test` → `feat(db)` / `fix(dashboard)`.
 - **Feature file:** `docs/features/attachments.feature` (one `@wip @task:087` scenario)
