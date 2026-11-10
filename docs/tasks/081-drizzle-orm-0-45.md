@@ -1,6 +1,6 @@
 # Task 081: `drizzle-orm` 0.45 (identifier escaping advisory)
 
-- **Status:** todo (after the POC)
+- **Status:** in-progress
 - **Milestone:** cross-cutting (security)
 - **Zone / package:** `packages/db` (`package.json`), `pnpm-lock.yaml`. No schema change, no migration. Commit type `fix(db)` (or `build(db)`).
 - **Feature file:** none (no visible behavior; the existing unit, DB and e2e suites are the check)
@@ -44,6 +44,7 @@ Red: `pnpm audit --prod --json` lists the advisory (paste it in the PR). Bump bo
 
 ## Progress log
 - 2026-11-08 – Drafted from the first full security review (SEC-16); owner: "start fixing the P1 gaps".
+- 2026-11-10 – Started in lane 1 (owner: "do the rest of the P1"; build now, merge after the POC demo on 2026-11-13).
 
 ## Parking lot
 - `pnpm.overrides` for the dev-only advisory chain (review SEC-16 "Other audit hits").
