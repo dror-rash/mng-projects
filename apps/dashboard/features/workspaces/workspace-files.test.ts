@@ -33,9 +33,10 @@ describe("removeWorkspaceFiles", () => {
     expect(line).not.toContain("No such object");
   });
 
-  it("refuses an id that isn't one, without touching storage", async () => {
-    await expect(removeWorkspaceFiles("")).rejects.toThrow();
-    await expect(removeWorkspaceFiles("ws/1")).rejects.toThrow();
+  it("logs an id that isn't one instead of failing the delete, without touching storage", async () => {
+    await expect(removeWorkspaceFiles("")).resolves.toBeUndefined();
+    await expect(removeWorkspaceFiles("ws/1")).resolves.toBeUndefined();
     expect(removePrefix).not.toHaveBeenCalled();
+    expect(logged).toHaveLength(2);
   });
 });
