@@ -33,7 +33,11 @@ async function provisionAll(client, names) {
   await provisionPreviewSide(client, names);
 }
 
-const PASSWORDS = { previewOwnerPassword: "owner-pw-rolled-back-x1", previewRuntimePassword: "runtime-pw-rolled-back-y2" };
+const PASSWORDS = {
+  previewOwnerPassword: "owner-pw-rolled-back-x1",
+  previewRuntimePassword: "runtime-pw-rolled-back-y2",
+  mainRuntimePassword: "main-runtime-pw-rolled-back-z3",
+};
 
 async function withClient(config, fn) {
   const client = new Client(config);
@@ -57,6 +61,7 @@ async function inRolledBackTransaction(fn) {
         mainOwner: rows[0].login,
         previewOwner: "role_check_preview_owner",
         previewRuntime: "role_check_preview_runtime",
+        mainRuntime: "role_check_main_runtime",
         ...PASSWORDS,
       };
       return await fn(client, names);
@@ -134,8 +139,8 @@ test("never sends a password in plain text; stores SCRAM-SHA-256 verifiers", asy
     const spy = { query: (text, values) => (sent.push(String(text)), client.query(text, values)), escapeLiteral: (s) => client.escapeLiteral(s) };
     await provisionAll(spy, names);
     for (const password of Object.values(PASSWORDS)) assert.ok(!sent.some((text) => text.includes(password)));
-    const { rows } = await client.query("select rolpassword from pg_authid where rolname = any ($1)", [[names.previewOwner, names.previewRuntime]]);
-    assert.equal(rows.length, 2);
+    const { rows } = await client.query("select rolpassword from pg_authid where rolname = any ($1)", [[names.previewOwner, names.previewRuntime, names.mainRuntime]]);
+    assert.equal(rows.length, 3);
     for (const row of rows) assert.match(row.rolpassword, /^SCRAM-SHA-256\$4096:/);
   });
 });
@@ -171,6 +176,7 @@ test("runs as a non-superuser CREATEROLE login, like Cloud SQL's owner login", a
     const asApp = { ...names, mainOwner: "role_check_app" };
     await provisionAll(client, asApp);
     assert.deepEqual(await verifyDbLogins(client, asApp), []);
+    assert.deepEqual(await verifyMainSide(client, asApp), []);
   });
 });
 
@@ -354,4 +360,90 @@ test("main's own verification covers what protects the main database", async () 
     await client.query(`grant connect on database "${names.mainDb}" to ${names.previewRuntime}`);
     assert.match((await verifyMainSide(client, names)).join("\n"), /role_check_preview_runtime can connect to the main database/);
   });
+});
+
+// Task 074: main's runtime login. Like preview_runtime, a NOINHERIT login whose only membership is app_user
+// (SET only); it owns nothing, so there is no owner to `SET ROLE` to, and connects to the main database only.
+const mainFailuresAfter = (breakIt) =>
+  inRolledBackTransaction(async (client, names) => {
+    await provisionAll(client, names);
+    await breakIt(client, names);
+    return (await verifyMainSide(client, names)).join("\n");
+  });
+
+test("creates main's runtime login: owns nothing, NOINHERIT, SET-only member of app_user, CONNECT to the main database only", async () => {
+  await inRolledBackTransaction(async (client, names) => {
+    await provisionAll(client, names);
+    assert.deepEqual(await verifyMainSide(client, names), []);
+    const { rows } = await client.query(
+      `select r.rolcanlogin, r.rolsuper, r.rolcreaterole, r.rolcreatedb, r.rolbypassrls, r.rolreplication, r.rolinherit,
+              array(select g.rolname::text || ':' || m.admin_option || ':' || m.inherit_option || ':' || m.set_option
+                    from pg_auth_members m join pg_roles g on g.oid = m.roleid where m.member = r.oid) as memberships,
+              pg_has_role(r.oid, $2, 'SET') as can_set_owner,
+              has_database_privilege(r.oid, $3, 'CONNECT') as main_connect,
+              has_database_privilege(r.oid, $4, 'CONNECT') as preview_connect,
+              (select count(*)::int from pg_shdepend d where d.refobjid = r.oid and d.deptype = 'o') as owned
+       from pg_roles r where r.rolname = $1`,
+      [names.mainRuntime, names.mainOwner, names.mainDb, names.previewDb],
+    );
+    assert.deepEqual(rows, [
+      {
+        rolcanlogin: true, rolsuper: false, rolcreaterole: false, rolcreatedb: false, rolbypassrls: false, rolreplication: false,
+        rolinherit: false, memberships: ["app_user:false:false:true"], can_set_owner: false, main_connect: true, preview_connect: false, owned: 0,
+      },
+    ]);
+  });
+});
+
+test("main's runtime login is provisioned again on every main deploy (idempotent)", async () => {
+  await inRolledBackTransaction(async (client, names) => {
+    await provisionAll(client, names);
+    await provisionAll(client, names);
+    assert.deepEqual(await verifyMainSide(client, names), []);
+  });
+});
+
+test("main's verification fails when its runtime login is missing", async () => {
+  await inRolledBackTransaction(async (client, names) => {
+    assert.match((await verifyMainSide(client, names)).join("\n"), /role_check_main_runtime doesn't exist/);
+  });
+});
+
+test("main's verification fails when its runtime login can SET ROLE to the owner login", async () => {
+  const failures = await mainFailuresAfter((client, names) => client.query(`grant "${names.mainOwner}" to ${names.mainRuntime} with inherit false, set true`));
+  assert.match(failures, /role_check_main_runtime can SET ROLE to main's owner login/);
+  assert.match(failures, /role_check_main_runtime is a member of roles other than app_user/);
+});
+
+test("main's verification fails when its runtime login owns something", async () => {
+  const failures = await mainFailuresAfter(async (client, names) => {
+    await client.query("create table public.role_check_owned (id int)");
+    await client.query(`alter table public.role_check_owned owner to ${names.mainRuntime}`);
+  });
+  assert.match(failures, /role_check_main_runtime owns 1 object/);
+});
+
+test("main's verification fails when its runtime login inherits, or has ADMIN on app_user", async () => {
+  const failures = await mainFailuresAfter(async (client, names) => {
+    await client.query(`alter role ${names.mainRuntime} inherit`);
+    await client.query(`grant app_user to ${names.mainRuntime} with admin true`);
+  });
+  assert.match(failures, /role_check_main_runtime has rolinherit/);
+  assert.match(failures, /role_check_main_runtime's memberships of app_user aren't the provisioned ones/);
+});
+
+test("main's verification fails when its runtime login can connect to the preview database", async () => {
+  const failures = await mainFailuresAfter((client, names) => client.query(`grant connect on database "${names.previewDb}" to ${names.mainRuntime}`));
+  assert.match(failures, /role_check_main_runtime can connect to the preview database/);
+});
+
+test("main's verification fails when its runtime login can't connect to the main database", async () => {
+  const failures = await mainFailuresAfter((client, names) => client.query(`revoke connect on database "${names.mainDb}" from ${names.mainRuntime}`));
+  assert.match(failures, /role_check_main_runtime can't connect to the main database/);
+});
+
+test("main's verification fails when its runtime login has owner-level attributes", async () => {
+  const failures = await mainFailuresAfter((client, names) => client.query(`alter role ${names.mainRuntime} createrole bypassrls`));
+  assert.match(failures, /role_check_main_runtime has rolcreaterole/);
+  assert.match(failures, /role_check_main_runtime has rolbypassrls/);
 });

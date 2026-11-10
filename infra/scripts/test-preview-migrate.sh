@@ -2,7 +2,7 @@
 # End-to-end test of the deploy's database steps on fresh databases, set up like Cloud SQL (task 068):
 # the databases belong to a cloudsqlsuperuser stand-in, and main's owner login is a non-superuser with
 # CREATEROLE, a member of it, and ADMIN on app_user (it created it on Cloud SQL). Then, as the workflow does:
-#   main:    migrate `app` as the owner -> provision the preview logins -> role check as the owner
+#   main:    migrate `app` as the owner -> provision the logins -> role check as main's runtime login (task 074)
 #   preview: verify the logins -> migrate `app_preview` as preview_owner -> role check as preview_runtime
 # and the preview logins can't connect to `app`. Every role and database gets a unique name and is dropped.
 # Needs DATABASE_URL of a superuser on a cluster where the migrations have run once (app_user exists).
@@ -14,8 +14,9 @@ BASE="${DATABASE_URL%/*}"                       # postgres://user:pw@host:port
 HOSTPART="${BASE#*@}"                           # host:port
 n="$$"
 SU="role_check_cloudsqlsuperuser_$n"; APP="role_check_app_$n"; OWNER="role_check_preview_owner_$n"; RUNTIME="role_check_preview_runtime_$n"
+MAIN_RT="role_check_app_runtime_$n"
 MAIN_DB="role_check_app_$n"; PREVIEW_DB="role_check_app_preview_$n"
-APP_PW="app-pw-$n-$RANDOM"; OWNER_PW="owner-pw-$n-$RANDOM"; RUNTIME_PW="runtime-pw-$n-$RANDOM"
+APP_PW="app-pw-$n-$RANDOM"; OWNER_PW="owner-pw-$n-$RANDOM"; RUNTIME_PW="runtime-pw-$n-$RANDOM"; MAIN_RT_PW="main-runtime-pw-$n-$RANDOM"
 url() { echo "postgres://$1:$2@${HOSTPART}/$3"; }  # login, password, database
 su_sql() { psql "${BASE}/postgres" -v ON_ERROR_STOP=1 -qtAc "$1"; }
 NODE=(node --experimental-strip-types --no-warnings)
@@ -29,8 +30,8 @@ refused() { psql "$1" -qtAc "select 1" 2>&1 | grep -q "permission denied for dat
 cleanup() {
   su_sql "drop database if exists $PREVIEW_DB with (force)" >/dev/null 2>&1
   su_sql "drop database if exists $MAIN_DB with (force)" >/dev/null 2>&1
-  su_sql "drop owned by $OWNER, $RUNTIME, $APP, $SU" >/dev/null 2>&1
-  su_sql "drop role if exists $OWNER, $RUNTIME" >/dev/null 2>&1
+  su_sql "drop owned by $OWNER, $RUNTIME, $MAIN_RT, $APP, $SU" >/dev/null 2>&1
+  su_sql "drop role if exists $OWNER, $RUNTIME, $MAIN_RT" >/dev/null 2>&1
   su_sql "drop role if exists $APP, $SU" >/dev/null 2>&1
 }
 trap cleanup EXIT
@@ -39,7 +40,8 @@ su_sql "create role $SU nologin; create role $APP login createrole password '$AP
         grant app_user to $APP with admin option" || exit 1
 su_sql "create database $MAIN_DB owner $SU" && su_sql "create database $PREVIEW_DB owner $SU" || exit 1
 
-export MAIN_DB_NAME="$MAIN_DB" PREVIEW_DB_NAME="$PREVIEW_DB" MAIN_OWNER_LOGIN="$APP" PREVIEW_OWNER_LOGIN="$OWNER" PREVIEW_RUNTIME_LOGIN="$RUNTIME"
+export MAIN_DB_NAME="$MAIN_DB" PREVIEW_DB_NAME="$PREVIEW_DB" MAIN_OWNER_LOGIN="$APP" PREVIEW_OWNER_LOGIN="$OWNER" PREVIEW_RUNTIME_LOGIN="$RUNTIME" \
+  MAIN_RUNTIME_LOGIN="$MAIN_RT" MAIN_RUNTIME_PASSWORD="$MAIN_RT_PW"
 migrate() { (cd "$ROOT" && DATABASE_URL="$1" pnpm --silent --filter @repo/db db:migrate); }
 
 check "main: migrations run as a non-superuser owner login" migrate "$(url "$APP" "$APP_PW" "$MAIN_DB")"
@@ -49,8 +51,17 @@ check "main: provisions the preview logins (as that login, on the main and previ
 check "main: provisioning again changes nothing (idempotent)" \
   env MAIN_DATABASE_URL="$(url "$APP" "$APP_PW" "$MAIN_DB")" DATABASE_URL="$(url "$APP" "$APP_PW" "$PREVIEW_DB")" PREVIEW_OWNER_PASSWORD="$OWNER_PW" PREVIEW_RUNTIME_PASSWORD="$RUNTIME_PW" \
   "${NODE[@]}" "$ROOT/infra/scripts/provision-db-logins.mjs"
-check "main: role check passes as the owner login" \
-  env DATABASE_URL="$(url "$APP" "$APP_PW" "$MAIN_DB")" "${NODE[@]}" "$ROOT/infra/scripts/check-runtime-role.mjs"
+check "main: role check passes as main's runtime login (task 074)" \
+  env DATABASE_URL="$(url "$MAIN_RT" "$MAIN_RT_PW" "$MAIN_DB")" "${NODE[@]}" "$ROOT/infra/scripts/check-runtime-role.mjs"
+owner_check_fails() { # the role check run as the owner login must fail, saying why
+  local out; out="$(env DATABASE_URL="$(url "$APP" "$APP_PW" "$MAIN_DB")" "${NODE[@]}" "$ROOT/infra/scripts/check-runtime-role.mjs" 2>&1)" && return 1
+  grep -q "owns the tables" <<<"$out"
+}
+check "main: role check fails on purpose as the owner login" owner_check_fails
+check "main: the runtime login can't SET ROLE to the owner login" \
+  sh -c "psql '$(url "$MAIN_RT" "$MAIN_RT_PW" "$MAIN_DB")' -qtAc 'set role $APP' 2>&1 | grep -q 'permission denied to set role'"
+check "main: the runtime login owns nothing" \
+  test "$(su_sql "select count(*) from pg_shdepend where refobjid = '$MAIN_RT'::regrole and deptype = 'o'")" = 0
 check "preview: verifies the logins as preview_owner (before its first migration)" \
   env DATABASE_URL="$(url "$OWNER" "$OWNER_PW" "$PREVIEW_DB")" "${NODE[@]}" "$ROOT/infra/scripts/provision-db-logins.mjs" --verify-only
 check "preview: migrations run as preview_owner on a fresh database" migrate "$(url "$OWNER" "$OWNER_PW" "$PREVIEW_DB")"
@@ -107,6 +118,7 @@ check "main: gives up on it within its bound (${elapsed}s)" test "$elapsed" -lt 
 check "main: app is still closed to the preview logins" refused "$(url "$RUNTIME" "$RUNTIME_PW" "$MAIN_DB")"
 
 check "preview_runtime can't connect to the main database" refused "$(url "$RUNTIME" "$RUNTIME_PW" "$MAIN_DB")"
+check "main's runtime login can't connect to the preview database" refused "$(url "$MAIN_RT" "$MAIN_RT_PW" "$PREVIEW_DB")"
 check "preview_owner can't connect to the main database" refused "$(url "$OWNER" "$OWNER_PW" "$MAIN_DB")"
 check "a function planted by a preview migration doesn't run during main's provisioning" \
   sh -c "psql '$(url "$OWNER" "$OWNER_PW" "$PREVIEW_DB")' -qtAc \"create function public.pg_has_role(oid, text, text) returns boolean language plpgsql as \\\$\\\$ begin raise exception 'planted function called'; end \\\$\\\$\" >/dev/null && MAIN_DATABASE_URL='$(url "$APP" "$APP_PW" "$MAIN_DB")' DATABASE_URL='$(url "$APP" "$APP_PW" "$PREVIEW_DB")' PREVIEW_OWNER_PASSWORD='$OWNER_PW' PREVIEW_RUNTIME_PASSWORD='$RUNTIME_PW' ${NODE[*]} '$ROOT/infra/scripts/provision-db-logins.mjs'"
