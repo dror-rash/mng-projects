@@ -10,7 +10,7 @@ The one list of known security gaps and their status. The process that feeds it 
 |---|---|---|---|---|
 | P0 – fix now | 0 | 0 | 5 | 0 |
 | P1 – before real customer data on `main` | 2 | 9 | 3 | 0 |
-| P2 – hardening | 16 | 0 | 0 | 1 |
+| P2 – hardening | 17 | 0 | 0 | 1 |
 | P3 – info / decide | 8 | 0 | 0 | 0 |
 
 No Critical findings. One High (SEC-01). Nothing in the review showed one workspace's data reaching another through the app: every page, route handler and server action checks access on the server, and row-level security is on for every app table.
@@ -72,6 +72,7 @@ No Critical findings. One High (SEC-01). Nothing in the review showed one worksp
 | SEC-33 | Low | The leak suite misses 9 scenarios: the members page (partner, worker), admin-only forms posted by partners and workers, own partner page, parent id in the page source, sub-company site refusal, files after unassigning, readings after a project delete | Access | M | open (to the planner) | ACC report §2 |
 | SEC-43 | Low | `tinypool` 1.1.1 has two Critical prototype-pollution advisories (GHSA-5gmw-xhrv-c9v3, GHSA-85c8-ppgw-ccpr); it comes in through `better-auth`'s optional `vitest` peer, so `pnpm audit --prod` lists it, but only the test runner loads it | Supply chain | S | accepted (owner, 2026-11-08) until a vitest upgrade brings `tinypool` ≥2.1.2; both ignored in `pnpm.auditConfig.ignoreGhsas` | task 082 audit |
 | SEC-44 | Low | The `main` deploy runs on push in parallel with CI and isn't tied to a GitHub `production` environment; WIF doesn't require `assertion.environment == 'production'` for `main`. PRs must pass `verify`, `e2e` and `security` before merge (SEC-02), so only tested code reaches `main` | CI/CD | S | open (with task 083) | SEC-02 follow-up |
+| SEC-45 | Low | The database pool has no checkout timeout and the runtime role no `statement_timeout`: with `main` capped at one instance per zone (SEC-14), a burst of slow queries makes every request on that zone wait, up to Cloud Run's 300 s | DB / infra | S | open | task 091 review |
 
 ## P3 – information and decisions
 
@@ -97,3 +98,4 @@ No Critical findings. One High (SEC-01). Nothing in the review showed one worksp
 - 2026-11-08 – SEC-11 fixed in CI (PR #62, task 082: audit, gitleaks, Dependabot config); the owner's alert settings stay open. SEC-15's `ci.yml` part fixed in the same PR.
 - 2026-11-08 – SEC-12 fixed (PR #61, task 084): the guard refuses the listed commands and checks lane commits in their worktree, failing closed.
 - 2026-11-08 – SEC-02 fixed by the owner's ruleset on `main` (PR required; `verify`, `e2e`, `security` required and up to date; no force push or deletion; linear history off so merge commits work). Its details are restored in the review. The `production` environment part becomes SEC-44 (P2). All P0 gaps are fixed.
+- 2026-11-10 – SEC-45 added from task 091's review: no pool checkout timeout or `statement_timeout` (P2).

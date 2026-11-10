@@ -1,6 +1,6 @@
 # Task 091: `main` can't scale past its database connections
 
-- **Status:** in-progress
+- **Status:** in-review
 - **Milestone:** cross-cutting (security), M11 follow-up
 - **Zone / package:** `infra/variables.tf` (`max_instances`), `infra/scripts/test-environment.sh` (a budget check), `infra/README.md` ("Known limits"). Commit type `fix(infra)`.
 - **Feature file:** none (no app behavior; a script test and `terraform plan`)
