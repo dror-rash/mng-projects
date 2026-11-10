@@ -22,6 +22,7 @@ const ids = {
   project: `${run}-project`,
   revoked: `${run}-revoked`,
   expired: `${run}-expired`,
+  stale: `${run}-stale`,
 };
 const users = [ids.admin, ids.attacker, ids.demoted];
 const hash = (token: string) => createHash("sha256").update(token).digest("hex");
@@ -158,6 +159,23 @@ describe("the definer functions' own guards", () => {
       sql`select 1 from workspace_member where workspace_id = ${ids.workspace} and user_id = ${ids.attacker}`,
     );
     expect(rows).toEqual([]);
+  });
+});
+
+describe("clear_stale_uploads (task 087)", () => {
+  it("clears nothing without a user, and nothing in a workspace the user isn't in", async () => {
+    // An upload left unconfirmed for two hours: stale, so any caller who may clear it would.
+    await getMaintenanceDb().execute(
+      sql`insert into attachment (id, workspace_id, project_id, kind, storage_key, file_name, content_type, size_bytes, uploaded_by, created_at)
+          values (${ids.stale}, ${ids.workspace}, ${ids.project}, 'photo', ${`${ids.workspace}/${ids.project}/${ids.stale}`}, 'x.jpg', 'image/jpeg', 1,
+                  ${ids.admin}, localtimestamp - interval '2 hours')`,
+    );
+    const left = async () => (await getMaintenanceDb().execute(sql`select 1 from attachment where id = ${ids.stale}`)).rows.length;
+
+    const { rows } = await getDb().execute(sql`select clear_stale_uploads(${ids.project})`);
+    expect(rows).toEqual([]);
+    expect(await withAccess(ids.attacker, () => getDb().execute(sql`select clear_stale_uploads(${ids.project})`)).then((r) => r.rows)).toEqual([]);
+    expect(await left()).toBe(1);
   });
 });
 
