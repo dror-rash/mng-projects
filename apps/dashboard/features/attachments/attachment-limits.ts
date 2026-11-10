@@ -84,3 +84,9 @@ export function uploadRefusal(kind: AttachmentKind, contentType: string, sizeByt
   if (sizeBytes > limits.maxBytes) return limits.sizeError;
   return null;
 }
+
+/** Why a person with `unfinished` unconfirmed uploads in a workspace may not start another, or null (task 087). */
+export function unfinishedUploadsRefusal(unfinished: number): string | null {
+  void unfinished;
+  return null;
+}

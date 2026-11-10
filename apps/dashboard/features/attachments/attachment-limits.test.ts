@@ -1,6 +1,14 @@
 import { describe, expect, it } from "vitest";
 
-import { allowedOnVisit, GALLERY_KINDS, parseAttachmentKind, REPORT_KIND, uploadLabel, uploadRefusal } from "./attachment-limits";
+import {
+  allowedOnVisit,
+  GALLERY_KINDS,
+  parseAttachmentKind,
+  REPORT_KIND,
+  unfinishedUploadsRefusal,
+  uploadLabel,
+  uploadRefusal,
+} from "./attachment-limits";
 
 const MB = 1024 * 1024;
 
@@ -67,5 +75,14 @@ describe("allowedOnVisit", () => {
     expect(allowedOnVisit("photo")).toBe(true);
     expect(allowedOnVisit("file")).toBe(true);
     expect(allowedOnVisit("report")).toBe(false);
+  });
+});
+
+describe("unfinishedUploadsRefusal", () => {
+  it("lets a person have up to 10 unfinished uploads in a workspace, and refuses the 11th", () => {
+    expect(unfinishedUploadsRefusal(0)).toBeNull();
+    expect(unfinishedUploadsRefusal(9)).toBeNull();
+    expect(unfinishedUploadsRefusal(10)).toBe("Too many uploads in progress. Try again later.");
+    expect(unfinishedUploadsRefusal(25)).toBe("Too many uploads in progress. Try again later.");
   });
 });
