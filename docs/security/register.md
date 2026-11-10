@@ -10,7 +10,7 @@ The one list of known security gaps and their status. The process that feeds it 
 |---|---|---|---|---|
 | P0 – fix now | 0 | 0 | 5 | 0 |
 | P1 – before real customer data on `main` | 2 | 9 | 3 | 0 |
-| P2 – hardening | 16 | 0 | 0 | 1 |
+| P2 – hardening | 17 | 0 | 0 | 1 |
 | P3 – info / decide | 8 | 0 | 0 | 0 |
 
 No Critical findings. One High (SEC-01). Nothing in the review showed one workspace's data reaching another through the app: every page, route handler and server action checks access on the server, and row-level security is on for every app table.
@@ -40,7 +40,7 @@ No Critical findings. One High (SEC-01). Nothing in the review showed one worksp
 | SEC-07 | Med | Uploads have no enforced size cap (the signed URL has no length range) and abandoned or orphaned uploads are never cleaned up: unbounded storage cost | Files | M | planned (tasks 085, 087) | WEB-1 |
 | SEC-08 | Med | Deleting a workspace (or a cascade) leaves its photos and reports in the bucket forever (retention, erasure requests) | Files | S–M | planned (task 086) | WEB-2 |
 | SEC-09 | Med | No email verification and no password reset: anyone can register any address, and the real owner can't recover it; sign-up also reveals which emails have accounts | Auth | M | open (**owner decision:** email provider, or accept for the POC) | AUTH-2, AUTH-4 |
-| SEC-10 | Med | Sign-in brute force is limited only by the in-memory, per-instance rate limiter (up to 5× the budget); no account lockout | Auth | M | planned (tasks 089, 090; the shared-bucket worry is partly answered: task 068 saw a client IP on the first preview) | AUTH-3 |
+| SEC-10 | Med | Sign-in brute force is limited only by the in-memory, per-instance rate limiter (up to 5× the budget); no account lockout | Auth | M | in progress: shared limit fixed (PR #83, task 089); lockout planned (task 090); residual: IPv6 counted per /64 | AUTH-3 |
 | SEC-11 | Med | No Dependabot alerts or updates, no `pnpm audit`, gitleaks or CodeQL in CI | Supply chain | S | fixed in CI (PR #62, task 082); **owner:** turn on Dependabot alerts and security updates; `security` is required by the SEC-02 ruleset | SUP-5 |
 | SEC-12 | Med | Agent guard gaps: `gcloud secrets versions access`, `gcloud beta run deploy`, `git push origin +main`, `git add -f .env` and `git -c … commit` all pass; commits in lane worktrees skip the commit checks | Tooling | M | fixed (PR #61, task 084; owner limits stay with SEC-02 and SEC-13) | SUP-2, SUP-3 |
 | SEC-13 | Med | The auto-mode environment in `~/.claude/settings.json` describes another, private repo; agent sessions hold the owner's `gcloud` and `gh` (`gist`, `repo`) credentials | Tooling | S | open (**owner:** project-level auto-mode context and deny rules; a less-privileged gcloud config for agents) | SUP-2 |
@@ -72,6 +72,7 @@ No Critical findings. One High (SEC-01). Nothing in the review showed one worksp
 | SEC-33 | Low | The leak suite misses 9 scenarios: the members page (partner, worker), admin-only forms posted by partners and workers, own partner page, parent id in the page source, sub-company site refusal, files after unassigning, readings after a project delete | Access | M | open (to the planner) | ACC report §2 |
 | SEC-43 | Low | `tinypool` 1.1.1 has two Critical prototype-pollution advisories (GHSA-5gmw-xhrv-c9v3, GHSA-85c8-ppgw-ccpr); it comes in through `better-auth`'s optional `vitest` peer, so `pnpm audit --prod` lists it, but only the test runner loads it | Supply chain | S | accepted (owner, 2026-11-08) until a vitest upgrade brings `tinypool` ≥2.1.2; both ignored in `pnpm.auditConfig.ignoreGhsas` | task 082 audit |
 | SEC-44 | Low | The `main` deploy runs on push in parallel with CI and isn't tied to a GitHub `production` environment; WIF doesn't require `assertion.environment == 'production'` for `main`. PRs must pass `verify`, `e2e` and `security` before merge (SEC-02), so only tested code reaches `main` | CI/CD | S | open (with task 083) | SEC-02 follow-up |
+| SEC-46 | Low | Better Auth's limiter counts every `/api/auth/*` path before routing, so requests to made-up paths add `rate_limit` rows; rows are pruned only when an existing key's window resets. Reject unknown auth paths in the shell's route handler before calling Better Auth | Auth | M | open | task 089 review |
 
 ## P3 – information and decisions
 
@@ -97,3 +98,4 @@ No Critical findings. One High (SEC-01). Nothing in the review showed one worksp
 - 2026-11-08 – SEC-11 fixed in CI (PR #62, task 082: audit, gitleaks, Dependabot config); the owner's alert settings stay open. SEC-15's `ci.yml` part fixed in the same PR.
 - 2026-11-08 – SEC-12 fixed (PR #61, task 084): the guard refuses the listed commands and checks lane commits in their worktree, failing closed.
 - 2026-11-08 – SEC-02 fixed by the owner's ruleset on `main` (PR required; `verify`, `e2e`, `security` required and up to date; no force push or deletion; linear history off so merge commits work). Its details are restored in the review. The `production` environment part becomes SEC-44 (P2). All P0 gaps are fixed.
+- 2026-11-10 – SEC-10: shared limit fixed (PR #83, task 089), lockout is task 090. SEC-46 added (P2) from task 089's review: unknown auth paths add rate-limit rows.
