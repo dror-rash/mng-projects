@@ -1,6 +1,6 @@
 # Task 083: Only the deploy workflows can get a deployer token
 
-- **Status:** todo (after the POC)
+- **Status:** in-progress
 - **Milestone:** cross-cutting (security)
 - **Zone / package:** `infra/main.tf` (Workload Identity provider), `infra/README.md`. Commit type `fix(infra)`.
 - **Feature file:** none (no app behavior; `terraform plan` and a hand check on a preview)
@@ -45,6 +45,7 @@ Read a real token's claims from a deploy run's debug output (claim names only, n
 
 ## Progress log
 - 2026-11-08 – Drafted from the first full security review (SEC-15); owner: "start fixing the P1 gaps".
+- 2026-11-10 – Started in lane 4 (owner: "do the rest of the P1"; build now, merge after the POC demo on 2026-11-13). Defaults; the owner applies after the POC.
 
 ## Parking lot
 - Require the `production` environment claim for `deployer-main` once SEC-02 adds the environment.
