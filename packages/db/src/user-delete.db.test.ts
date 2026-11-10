@@ -133,10 +133,11 @@ describe("deleting a user whose workspace still exists", () => {
     expect(await errorCode(deleteUser(by))).toBe("succeeded");
     const after = await snapshot();
 
-    // Rows that are about the user (their membership, being listed on a visit) go; in every other row, the
-    // user's id becomes null and nothing else changes.
+    // The account and the rows that are about the user (their membership, being listed on a visit) go; in every
+    // other row, the user's id becomes null and nothing else changes.
     const membershipTables = ["workspace_member", "site_visit_member", "project_worker"];
     const expected = before
+      .filter(({ table, row }) => !(table === "user" && row.id === by))
       .filter(({ table, row }) => !(membershipTables.includes(table) && row.user_id === by))
       .map(({ table, row }) => ({
         table,
