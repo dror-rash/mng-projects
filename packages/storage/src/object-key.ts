@@ -13,7 +13,10 @@ export function objectKey({ workspaceId, projectId }: { workspaceId: string; pro
   return `${workspaceId}/${projectId}/${crypto.randomUUID()}`;
 }
 
-/** Stub (task 086, red). */
+/** The folder every object of a workspace is under (`<workspace>/`, see `objectKey`): what deleting it removes. */
 export function workspacePrefix(workspaceId: string): string {
-  throw new Error(`Not implemented: ${workspaceId}`);
+  if (!ID.test(workspaceId)) {
+    throw new Error(`Not an id for an object key: "${workspaceId}"`);
+  }
+  return `${workspaceId}/`;
 }

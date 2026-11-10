@@ -67,7 +67,29 @@ export async function remove(key: string): Promise<void> {
   await getBucket().file(key).delete({ ignoreNotFound: true });
 }
 
-/** Stub (task 086, red). */
-export async function removePrefix(prefix: string, options: { pageSize?: number } = {}): Promise<void> {
-  throw new Error(`Not implemented: ${prefix} ${options.pageSize}`);
+/** A folder: one or more non-empty names, each ending in `/`. */
+const PREFIX = /^([^/]+\/)+$/;
+
+/**
+ * Deletes every object under `prefix` (a folder such as `workspacePrefix(id)`); a missing object is not an
+ * error. Deletes the first page of the listing until the listing is empty, without page tokens: deleting
+ * moves the pages, and the local server leaves the token out. Refuses an empty prefix (the whole bucket) or
+ * one without a trailing `/` (it would also match a neighbor: `ws-1` matches `ws-10/…`).
+ */
+export async function removePrefix(prefix: string, { pageSize = 100 }: { pageSize?: number } = {}): Promise<void> {
+  if (!PREFIX.test(prefix)) {
+    throw new Error(`Not a prefix: "${prefix}"`);
+  }
+  const bucket = getBucket();
+  let previous = "";
+  for (;;) {
+    const [files] = await bucket.getFiles({ prefix, autoPaginate: false, maxResults: pageSize });
+    if (files.length === 0) return;
+    const names = files.map((file) => file.name).join("\n");
+    if (names === previous) {
+      throw new Error("Removing a prefix made no progress");
+    }
+    previous = names;
+    await Promise.all(files.map((file) => file.delete({ ignoreNotFound: true })));
+  }
 }
