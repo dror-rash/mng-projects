@@ -1,6 +1,6 @@
 # Task 090: Too many wrong passwords lock sign-in to that account for a while
 
-- **Status:** in-progress
+- **Status:** in-review
 - **Milestone:** cross-cutting (security)
 - **Zone / package:** `packages/auth` (`server.ts` hooks, a small lockout module), `packages/db` (`schema.ts`: one table, one migration), `apps/shell/features/auth/login-form.tsx` (shows the message), `e2e/steps` (two new steps). Commit types `test` → `feat(auth)` / `feat(db)`.
 - **Feature file:** `docs/features/authentication.feature` (three `@wip @task:090` scenarios)
