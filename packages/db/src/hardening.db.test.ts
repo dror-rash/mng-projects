@@ -202,3 +202,12 @@ describe("coverage guards", () => {
     expect(rows.map((r) => r.fn)).toEqual([]);
   });
 });
+
+describe("rate_limit (task 089)", () => {
+  it("has an index on last_request, which Better Auth's cleanup deletes by", async () => {
+    const { rows } = await getMaintenanceDb().execute<{ definition: string }>(sql`
+      select indexdef as definition from pg_indexes where schemaname = 'public' and tablename = 'rate_limit'`);
+
+    expect(rows.some((r) => /\(last_request\)/.test(r.definition))).toBe(true);
+  });
+});
