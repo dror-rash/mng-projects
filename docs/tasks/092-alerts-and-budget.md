@@ -1,6 +1,6 @@
 # Task 092: Alerts for risky changes, errors and spend
 
-- **Status:** todo (additive; can go before the POC only if the owner wants alerts during the demo and has time to apply it, default after)
+- **Status:** in-progress
 - **Milestone:** cross-cutting (security), M11 follow-up
 - **Zone / package:** a new `infra/monitoring.tf`, `infra/variables.tf` (alert email, billing account, budget amount), `infra/terraform.tfvars.example`, `infra/README.md`. Commit type `feat(infra)`.
 - **Feature file:** none (no app behavior; `terraform plan` and one test alert by hand)
@@ -53,6 +53,7 @@ Write `monitoring.tf` with the resources above, check the log filters against re
 
 ## Progress log
 - 2026-11-08 – Drafted from the first full security review (SEC-17); owner: "start fixing the P1 gaps".
+- 2026-11-10 – Started in lane 7 (owner: "do the rest of the P1"; merge after the POC demo on 2026-11-13). Owner answers: budget USD 25/month (set in `terraform.tfvars`, not in the repo); alerts to the owner's email (in `terraform.tfvars`); other questions take their defaults.
 
 ## Parking lot
 - Uptime checks on the `main` URL.
