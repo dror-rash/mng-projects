@@ -50,6 +50,7 @@ Red: the three scenarios (today the 6th attempt with the right password succeeds
 ## Progress log
 - 2026-11-08 – Drafted from the first full security review (SEC-10); owner: "start fixing the P1 gaps".
 - 2026-11-10 – Started in lane 2, based on task 089's branch (PR #83, not merged). Owner (2026-11-10): lockout yes, 5 failures in 15 minutes lock the account for 15 minutes, message "Too many failed sign-ins. Try again in 15 minutes." Merge after the POC demo on 2026-11-13, after 089.
+- 2026-11-10 – Red: `@wip` off the three scenarios; steps for repeated wrong passwords, another locked account (`people` fixture, checks the lock over the API), and a made-up email (kept in the scenario state). All three fail because nothing locks yet (the 6th sign-in answers as before).
 
 ## Parking lot
 - Unlock by email once there is an email provider (SEC-09).

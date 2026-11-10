@@ -32,6 +32,8 @@ export type ScenarioState = {
   hiddenFields?: Record<string, Record<string, string>>;
   /** The POC flow (task 069): the other people by role ("worker", "partner user"), each in their own browser. */
   roles?: Record<string, { page: Page; projectPath?: string; visitPath?: string }>;
+  /** Sign-in lockout (task 090): an email no account has, typed again by a later step. */
+  emailWithoutAccount?: string;
 };
 
 /** Opens extra browser contexts (other people) and closes them when the scenario ends. */

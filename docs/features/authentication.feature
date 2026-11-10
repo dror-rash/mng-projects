@@ -23,7 +23,7 @@ Feature: Authentication
     Then I see the error "Invalid email or password"
 
   # Guesses are capped per account, whatever address they come from (SEC-10).
-  @wip @task:090
+  @task:090
   Scenario: Too many wrong passwords lock the account for a while
     Given an existing account
     And I am on the login page
@@ -32,7 +32,7 @@ Feature: Authentication
     When I log in with my email and password
     Then I see the error "Too many failed sign-ins. Try again in 15 minutes."
 
-  @wip @task:090
+  @task:090
   Scenario: A locked account doesn't lock other accounts
     Given an existing account
     And another account was locked by 5 wrong passwords
@@ -40,7 +40,7 @@ Feature: Authentication
     When I log in with my email and password
     Then I see my email address
 
-  @wip @task:090
+  @task:090
   Scenario: An email without an account answers the same after too many tries
     Given I am on the login page
     When I log in with an email that has no account 5 times
