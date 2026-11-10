@@ -33,8 +33,9 @@ export const PIN_HEADER =
 /**
  * Better Auth's tables: grants and no row-level security (ADR-0006). Any other public table needs it.
  * rate_limit: its rate-limit counts, shared by every instance (task 089); only Better Auth reads it.
+ * sign_in_lockout: failed sign-ins per hashed email (task 090); only the sign-in hooks in @repo/auth read it.
  */
-export const TABLES_WITHOUT_RLS = ["account", "rate_limit", "session", "user", "verification"];
+export const TABLES_WITHOUT_RLS = ["account", "rate_limit", "session", "sign_in_lockout", "user", "verification"];
 
 
 /**

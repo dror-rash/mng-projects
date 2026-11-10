@@ -230,6 +230,7 @@ export const PINS = {
     "public.project_worker": "1e10232c9f6542fd14ba2555dcbb8e21205927f39a191aff300e1fb527721702",
     "public.rate_limit": "652f462889aae25b5f96a709cecb4e8553767d8f2fc12ed5b1873260aa997885",
     "public.session": "652f462889aae25b5f96a709cecb4e8553767d8f2fc12ed5b1873260aa997885",
+    "public.sign_in_lockout": "652f462889aae25b5f96a709cecb4e8553767d8f2fc12ed5b1873260aa997885",
     "public.site": "1e10232c9f6542fd14ba2555dcbb8e21205927f39a191aff300e1fb527721702",
     "public.site_contact": "1e10232c9f6542fd14ba2555dcbb8e21205927f39a191aff300e1fb527721702",
     "public.site_visit": "1e10232c9f6542fd14ba2555dcbb8e21205927f39a191aff300e1fb527721702",
