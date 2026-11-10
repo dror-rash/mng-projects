@@ -92,9 +92,12 @@ ones: `bash infra/scripts/test-environment.sh` fails when they differ.
   with the owner, one `SET ROLE app` or `RESET ROLE` on a pooled connection would leave row-level security behind
   (ADR-0006, 2026-11-10 amendment). `provision-db-logins.mjs` creates it on `main` deploys, as `app`, before the
   role check: `LOGIN NOINHERIT`, owns nothing, its only membership is `app_user` with `SET` (no `INHERIT`, no
-  ADMIN), `CONNECT` on `app` and not on `app_preview` (whose `CONNECT` is revoked from `PUBLIC`; the preview
-  logins have their own grants), no `CONNECTION LIMIT` (as `app` before it). This part is fatal: a failure fails
-  the main deploy before any service deploys. Its password is Terraform's `db-runtime-password`. Migrations, the
+  ADMIN), `CONNECT` on `app`, no `CONNECTION LIMIT` (as `app` before it). This part is fatal: a failure fails
+  the main deploy before any service deploys. Keeping it out of `app_preview` is a best-effort preview step:
+  the preview logins and `app` get `CONNECT` grants of their own there, then `PUBLIC` and `app_runtime` lose it,
+  in one step, so if a grant can't run nothing is revoked and previews still connect. The preview verification
+  then fails until a main deploy completes it (a preview login without its own grant, or `app_runtime` able to
+  connect). Its password is Terraform's `db-runtime-password`. Migrations, the
   demo seed and provisioning keep the owner login. Local dev and CI keep one login (`DATABASE_URL`); the tests
   create a throwaway runtime login where they need one.
 - **Preview logins.** `infra/scripts/provision-db-logins.mjs` creates them on `main` deploys only, as `app`, in two
@@ -291,9 +294,14 @@ password are masked. To start over, use a new demo account (a new `DEMO_EMAIL`);
 ## Main's runtime login: rollout (task 074)
 Order matters: the deploy reads `db-runtime-password` and the services start with it, so the secret exists first.
 1. Apply Terraform (from `infra/`, `terraform plan` then `terraform apply`): it adds `db-runtime-password` and its
-   reader grants (`main`'s runtime identities and `deployer-main`) and removes nothing. The running services
+   reader grants (`main`'s runtime identities and `deployer-main`) and removes nothing. The plan also shows 6
+   in-place updates of the Cloud Run services (`scaling`): that drift is already there on `main` (task 068's
+   services), not from this change. The running services
    still use `app` and `db-password`, which they can still read.
-2. Merge. The `main` deploy migrates as `app`, creates `app_runtime` (`Database logins provisioned on app:
+2. Before merging, look at the last `main` Deploy log for `::warning::Preview login step skipped`. With one
+   there, a preview login may lack its own `CONNECT` grant on `app_preview`; that is still safe (the grants and
+   the revoke of `PUBLIC`'s run as one step, so nothing is revoked until every grant runs), but the next
+   previews fail their verification until a main deploy completes the step. Merge. The `main` deploy migrates as `app`, creates `app_runtime` (`Database logins provisioned on app:
    app_runtime owns nothing…`), runs the role check as `app_runtime` (`Runtime role check passed on app (login
    app_runtime)`), then deploys the services with `DB_USER=app_runtime` and `DB_PASSWORD=db-runtime-password`.
 3. Verify: those two log lines in the Deploy run, then sign in on the `main` URL and open the dashboard
