@@ -2,7 +2,7 @@
 
 - **Status:** in-progress (code done; waiting for the owner's Terraform change and the preview hand check)
 - **Milestone:** cross-cutting (security), M13 follow-up
-- **Zone / package:** `packages/storage` (`createUploadUrl`), `apps/dashboard/features/attachments/actions.ts` (passes the kind's limit), `infra/storage.tf` (CORS allowed headers, both buckets), `docker-compose.yml` (`fake-gcs-server -cors-headers`). No migration. Commit types `test(storage)` → `fix(storage)` / `fix(infra)`.
+- **Zone / package:** `packages/storage` (`createUploadUrl`), `apps/dashboard/features/attachments/actions.ts` (passes the kind's limit), `infra/storage.tf` (CORS allowed headers, both buckets), `docker-compose.yml` and `.github/workflows/ci.yml` (`fake-gcs-server -cors-headers`), `infra/scripts/test-workflows.sh` (the three CORS lists in step). No migration. Commit types `test(dashboard)` / `test(storage)` / `test(infra)` → `feat(storage)` / `fix(infra)` / `fix(ci)`.
 - **Feature file:** none new (see "Test plan": the visible limits are already `attachments.feature` and `reports.feature` scenarios; what changes is where the bytes are stopped)
 - **Depends on:** task 057 (storage), 059 (attachments), 064 (reports): done.
 
@@ -48,6 +48,7 @@ Red: a unit test asserting the signed URL's `X-Goog-SignedHeaders` and returned 
 - 2026-11-08 – Drafted from the first full security review (SEC-07); owner: "start fixing the P1 gaps".
 - 2026-11-10 – Started in lane 8 (owner: "do the rest of the P1"; merge after the POC demo on 2026-11-13; the owner applies the CORS Terraform before the code reaches `main`).
 - 2026-11-10 – Implemented. `createUploadUrl` requires `maxBytes` (a positive whole number) and signs `x-goog-content-length-range: 0,<maxBytes>`; `startUploadAction` passes `maxUploadBytes(kind)`; `finishUploadAction`'s check stays. Red first: the action test (`maxBytes` undefined) and the storage test (a type error, so the commit guard wouldn't take it alone: it landed with the code). Seen locally: `fake-gcs-server` answers the preflight with 403 for the new header without the `-cors-headers` change (and 3 `reports.feature` scenarios fail), 200 with it; it doesn't enforce the range (a 10-byte body under `0,5` is stored), so the confirm check stays. Verified with a second `fake-gcs-server` container on :4453; the shared container wasn't recreated. `terraform plan`: the two buckets' CORS, plus task 068's `scaling` drift. Whether Cloud Storage enforces the header on V4 signed `PUT`s is for the preview hand check below. Lane 8: unit 576 passed, `test:storage` 6, the upload scenarios 23, full e2e 323 passed (`CI=1`, 2 workers), lint, typecheck and build green.
+- 2026-11-10 – Security review fixes: `ci.yml` starts its own `fake-gcs-server`, so its `-cors-headers` gets the header too (a blocker: CI's e2e uploads would fail); `infra/scripts/test-workflows.sh` now checks that every header `createUploadUrl` sends is in all three CORS lists (red on `ci.yml` before the fix; probes for each list and for a newly signed header). Hand check: a chunked oversized PUT (3b), a widened range (7), and clearing the URL and clipboard afterwards. `createUploadUrl` without `maxBytes` is also refused at run time.
 
 ## Rollout (owner)
 1. **Before the PR's preview runs the upload scenarios, and before the code reaches `main`:** from `infra/`, `terraform plan` (expect `google_storage_bucket.files` and `google_storage_bucket.files_preview` adding `x-goog-content-length-range` to `cors.response_header`, plus task 068's six cosmetic Cloud Run `scaling` diffs), then apply it, targeted at the two buckets (`-target=google_storage_bucket.files_preview -target=google_storage_bucket.files`) or in full (the `scaling` diffs are harmless). The new list is a superset, so the code already deployed keeps working.
@@ -61,11 +62,14 @@ Keeps the URL in a shell variable; the PR gets only the commands and status code
 1. On the PR's preview, open a project, DevTools → Network → block requests to `storage.googleapis.com` ("Block request URL"), then "Add photos" with any small JPEG. The upload fails ("Couldn't add …") and the signed URL stays unused. Copy the blocked `PUT` request's URL into `URL` (`read -s URL`).
 2. `head -c 22000000 /dev/urandom > /tmp/big.jpg` (21 MB, over the 20 MB photo limit).
 3. `curl -s -o /dev/null -w '%{http_code}\n' -X PUT -H 'Content-Type: image/jpeg' -H 'x-goog-if-generation-match: 0' -H 'x-goog-content-length-range: 0,20971520' --data-binary @/tmp/big.jpg "$URL"` → expect `400`.
-4. No object: `gcloud storage objects describe "gs://<project>-files-preview/$(echo "$URL" | sed -E 's#^https://[^/]+/[^/]+/([^?]+).*#\1#')"` → not found.
+   - 3b. Same URL, the same 21 MB body sent chunked (no `Content-Length` for storage to check up front): step 3 with `-H 'Transfer-Encoding: chunked'` added → expect `400`.
+4. No object (after 3 and 3b): `gcloud storage objects describe "gs://<project>-files-preview/$(echo "$URL" | sed -E 's#^https://[^/]+/[^/]+/([^?]+).*#\1#')"` → not found.
 5. Control, same URL: `head -c 1000 /dev/urandom > /tmp/small.jpg`, then step 3 with `@/tmp/small.jpg` → expect `200` (the URL was valid; the size was the reason). The object stays unconfirmed (task 087 cleans those up; the preview bucket deletes it after 14 days).
 6. Leaving the header out: step 3 without `-H 'x-goog-content-length-range: …'`, on a fresh URL from step 1 → expect `403` (the header is signed, so a client can't drop it).
+7. Widening the range: step 3 with `-H 'x-goog-content-length-range: 0,999999999'` instead, on a fresh URL from step 1 → expect `403` (the signed value can't be changed either).
+8. Afterwards: `unset URL`, clear the clipboard (`pbcopy < /dev/null`) and remove the DevTools block; `rm /tmp/big.jpg /tmp/small.jpg`.
 
-If step 3 returns `200`, Cloud Storage doesn't enforce the header on V4 signed `PUT`s: stop, and fall back as in "Open questions".
+If step 3 or 3b returns `200`, Cloud Storage doesn't enforce the header on V4 signed `PUT`s: stop, and fall back as in "Open questions".
 
 ## Parking lot
 - A per-workspace storage quota.
