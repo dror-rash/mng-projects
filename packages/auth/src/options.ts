@@ -23,7 +23,14 @@ export function authOptions(env: Env) {
     trustedOrigins: allowPreviewOrigins ? ["https://*.run.app", "https://*.a.run.app"] : [],
     emailAndPassword: { enabled: true, minPasswordLength: 8 },
     ...rateLimitOptions(env),
-    // Must be identical in every zone, or one zone can't read another's cookie.
-    advanced: { useSecureCookies: env.NODE_ENV === "production" },
+    advanced: {
+      // Must be identical in every zone, or one zone can't read another's cookie.
+      useSecureCookies: env.NODE_ENV === "production",
+      // The client address the rate limit counts by: the header Cloud Run sets, and no other. Better Auth trusts
+      // it only with a single value; with several (a client sending its own, which Cloud Run appends to) it
+      // can't tell which to believe and counts the request in one bucket shared by all such requests on that
+      // path (review SEC-10). No trusted proxies: a future load balancer's format is SEC-20's.
+      ipAddress: { ipAddressHeaders: ["x-forwarded-for"] },
+    },
   } satisfies BetterAuthOptions;
 }
