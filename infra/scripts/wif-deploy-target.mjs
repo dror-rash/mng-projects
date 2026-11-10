@@ -33,16 +33,26 @@ function interpolate(text, repo) {
   });
 }
 
-/** Refuses any token outside the CEL subset JavaScript evaluates the same way. */
+/**
+ * Refuses any token outside the CEL subset JavaScript evaluates the same way. A claim must be compared or
+ * prefix-checked right away: a bare claim (`assertion.x && …`) is truthy in JavaScript but an error in CEL.
+ */
 function checkSubset(expr) {
   const token = /\s+|'[^'\\]*'|assertion\.[a-z_]+|\.(?:startsWith|endsWith)\(|==|!=|&&|\|\||[!?:()+]/y;
+  const tokens = [];
   let at = 0;
   while (at < expr.length) {
     token.lastIndex = at;
     const m = token.exec(expr);
     if (!m) throw new Error(`not in the supported CEL subset at: ${expr.slice(at, at + 30)}`);
+    if (m[0].trim()) tokens.push(m[0]);
     at = token.lastIndex;
   }
+  tokens.forEach((t, i) => {
+    if (t.startsWith("assertion.") && !/^(==|!=|\.startsWith\(|\.endsWith\()$/.test(tokens[i + 1] ?? "")) {
+      throw new Error(`${t} must be followed by ==, != or .startsWith(/.endsWith(`);
+    }
+  });
 }
 
 const [repo, claimsJson] = process.argv.slice(2);
