@@ -1,6 +1,6 @@
 # Task 081: `drizzle-orm` 0.45 (identifier escaping advisory)
 
-- **Status:** in-progress
+- **Status:** in-review
 - **Milestone:** cross-cutting (security)
 - **Zone / package:** `packages/db` (`package.json`), `pnpm-lock.yaml`. No schema change, no migration. Commit type `fix(db)` (or `build(db)`).
 - **Feature file:** none (no visible behavior; the existing unit, DB and e2e suites are the check)
