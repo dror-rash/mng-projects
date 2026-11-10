@@ -14,6 +14,8 @@ locals {
 
   # The headers a signed upload sends (createUploadUrl in packages/storage): the browser's preflight is
   # refused for any header not listed here, so a new signed header must be added here first (task 085).
+  # Keep three lists in step: this one, and fake-gcs-server's -cors-headers in docker-compose.yml and in
+  # .github/workflows/ci.yml (checked by infra/scripts/test-workflows.sh).
   files_cors_methods          = ["PUT", "GET"]
   files_cors_response_headers = ["Content-Type", "x-goog-if-generation-match", "x-goog-content-length-range"]
 }

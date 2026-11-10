@@ -123,11 +123,12 @@ jobs:
           infra/scripts/with-db-lock.test.mjs
       - run: bash infra/scripts/test-preview-migrate.sh
       # Files (task 057): the same local storage server as docker-compose.yml. Service containers can't take
-      # its flags, so it starts here.
+      # its flags, so it starts here. -cors-headers lists every header a signed upload sends (task 085; kept in
+      # step with docker-compose.yml and infra/storage.tf, checked by infra/scripts/test-workflows.sh).
       - run: >-
           docker run -d --name storage -p 4443:4443 -v "$PWD/packages/storage/dev-bucket:/data"
           fsouza/fake-gcs-server:1.52.2 -scheme http -port 4443 -public-host localhost:4443
-          -external-url http://localhost:4443 -data /data -cors-headers Content-Type,Content-Disposition,x-goog-if-generation-match
+          -external-url http://localhost:4443 -data /data -cors-headers Content-Type,Content-Disposition,x-goog-if-generation-match,x-goog-content-length-range
           && timeout 30 sh -c 'until curl -sf http://localhost:4443/storage/v1/b >/dev/null; do sleep 1; done'
       - run: pnpm --filter @repo/storage test:storage
       - run: pnpm test:e2e
