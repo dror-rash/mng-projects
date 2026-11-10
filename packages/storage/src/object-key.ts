@@ -12,3 +12,8 @@ export function objectKey({ workspaceId, projectId }: { workspaceId: string; pro
   }
   return `${workspaceId}/${projectId}/${crypto.randomUUID()}`;
 }
+
+/** Stub (task 086, red). */
+export function workspacePrefix(workspaceId: string): string {
+  throw new Error(`Not implemented: ${workspaceId}`);
+}

@@ -1,6 +1,6 @@
 import { getBucket } from "./client";
 
-export { objectKey } from "./object-key";
+export { objectKey, workspacePrefix } from "./object-key";
 
 // Files in object storage (task 057, ADR-0008): Google Cloud Storage deployed, fake-gcs-server locally.
 // Server-only. Browsers upload and download through short-lived signed URLs; the bytes never pass through
@@ -65,4 +65,9 @@ export async function stat(key: string): Promise<{ size: number; contentType: st
 /** Deletes `key`; a missing object is not an error. */
 export async function remove(key: string): Promise<void> {
   await getBucket().file(key).delete({ ignoreNotFound: true });
+}
+
+/** Stub (task 086, red). */
+export async function removePrefix(prefix: string, options: { pageSize?: number } = {}): Promise<void> {
+  throw new Error(`Not implemented: ${prefix} ${options.pageSize}`);
 }
