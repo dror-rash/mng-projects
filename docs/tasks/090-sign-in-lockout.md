@@ -1,6 +1,6 @@
 # Task 090: Too many wrong passwords lock sign-in to that account for a while
 
-- **Status:** todo (after the POC)
+- **Status:** in-progress
 - **Milestone:** cross-cutting (security)
 - **Zone / package:** `packages/auth` (`server.ts` hooks, a small lockout module), `packages/db` (`schema.ts`: one table, one migration), `apps/shell/features/auth/login-form.tsx` (shows the message), `e2e/steps` (two new steps). Commit types `test` → `feat(auth)` / `feat(db)`.
 - **Feature file:** `docs/features/authentication.feature` (three `@wip @task:090` scenarios)
@@ -49,6 +49,7 @@ Red: the three scenarios (today the 6th attempt with the right password succeeds
 
 ## Progress log
 - 2026-11-08 – Drafted from the first full security review (SEC-10); owner: "start fixing the P1 gaps".
+- 2026-11-10 – Started in lane 2, based on task 089's branch (PR #83, not merged). Owner (2026-11-10): lockout yes, 5 failures in 15 minutes lock the account for 15 minutes, message "Too many failed sign-ins. Try again in 15 minutes." Merge after the POC demo on 2026-11-13, after 089.
 
 ## Parking lot
 - Unlock by email once there is an email provider (SEC-09).
