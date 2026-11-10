@@ -1,6 +1,6 @@
 # Task 085: Storage refuses uploads over the size limit
 
-- **Status:** todo (after the POC)
+- **Status:** in-progress
 - **Milestone:** cross-cutting (security), M13 follow-up
 - **Zone / package:** `packages/storage` (`createUploadUrl`), `apps/dashboard/features/attachments/actions.ts` (passes the kind's limit), `infra/storage.tf` (CORS allowed headers, both buckets), `docker-compose.yml` (`fake-gcs-server -cors-headers`). No migration. Commit types `test(storage)` → `fix(storage)` / `fix(infra)`.
 - **Feature file:** none new (see "Test plan": the visible limits are already `attachments.feature` and `reports.feature` scenarios; what changes is where the bytes are stopped)
@@ -46,6 +46,7 @@ Red: a unit test asserting the signed URL's `X-Goog-SignedHeaders` and returned 
 
 ## Progress log
 - 2026-11-08 – Drafted from the first full security review (SEC-07); owner: "start fixing the P1 gaps".
+- 2026-11-10 – Started in lane 8 (owner: "do the rest of the P1"; merge after the POC demo on 2026-11-13; the owner applies the CORS Terraform before the code reaches `main`).
 
 ## Parking lot
 - A per-workspace storage quota.
