@@ -128,3 +128,4 @@ M13 tasks 062, 063 and 065 continue after the POC.
 - 2026-11-10 – Task 081 in review: `drizzle-orm` 0.45.4 (SEC-16), audit clean without the drizzle ignore entry; held until after the POC demo.
 - 2026-11-10 – Task 086 in review: deleting a workspace deletes its `<workspaceId>/` storage folder after the delete commits (SEC-08); held until after the POC demo.
 - 2026-11-10 – Task 089 in review: one sign-in rate limit across instances (counts in the database, keyed on the address Cloud Run appends; SEC-10 part 1); held until after the POC demo, merges before 088.
+- 2026-11-10 – Task 090 in review: 5 failed sign-ins to an email in 15 minutes lock it for 15 minutes (SEC-10 part 2); builds on 089; merge order after the POC demo: 089, 090, then 088 (migration renumbered).

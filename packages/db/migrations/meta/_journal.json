@@ -295,6 +295,13 @@
       "when": 1794334781374,
       "tag": "0041_rate_limit_last_request",
       "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1794336021813,
+      "tag": "0042_sign_in_lockout",
+      "breakpoints": true
     }
   ]
 }
