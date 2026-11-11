@@ -10,6 +10,7 @@ import { type FormState, invalid } from "@/features/forms/form-state";
 
 import { WORKSPACE_COOKIE } from "./current-workspace";
 import { requireWorkspaceForAction } from "./require-workspace";
+import { removeWorkspaceFiles } from "./workspace-files";
 import { confirmsWorkspaceName, parseWorkspaceName } from "./workspace-name";
 
 const ADMINS_ONLY = "Only admins can manage this workspace";
@@ -57,8 +58,11 @@ export async function renameWorkspaceAction(_prev: FormState, formData: FormData
 
 /**
  * Deletes the form's workspace and, through `ON DELETE CASCADE`, everything in it: projects (and their
- * tasks), customers (and their contacts and notes), invite links and memberships. Admins only, after
- * typing its exact name (ADR-0005). Its admin lands in their next workspace, or a new personal one.
+ * tasks, visits, readings and attachments), customers (and their sites, contacts and notes), forms, partners,
+ * invite links and memberships. Then, once that has committed, its photos, files and reports in storage
+ * (task 086, SEC-08): the folder of the row it deleted, never one from the form. Admins only, after typing
+ * its exact name (ADR-0005). Its admin lands in their next workspace, or a new personal one, even if
+ * deleting the files fails (`removeWorkspaceFiles` logs it).
  */
 export async function deleteWorkspaceAction(_prev: FormState, formData: FormData): Promise<FormState> {
   const { session, workspace } = await requireWorkspaceForAction(formData);
@@ -71,8 +75,11 @@ export async function deleteWorkspaceAction(_prev: FormState, formData: FormData
     if (!locked) return "not-an-admin";
     // Checked against the name under the lock, not the one the page showed (it may have been renamed).
     if (!confirmsWorkspaceName(formData.get("confirmName"), locked.name)) return "wrong-name";
-    await tx.delete(schema.workspace).where(eq(schema.workspace.id, workspace.id));
-    return "deleted";
+    const [deleted] = await tx
+      .delete(schema.workspace)
+      .where(eq(schema.workspace.id, workspace.id))
+      .returning({ id: schema.workspace.id });
+    return deleted ? { deletedId: deleted.id } : "not-an-admin";
   });
   if (result === "not-an-admin") {
     return { error: ADMINS_ONLY };
@@ -80,6 +87,7 @@ export async function deleteWorkspaceAction(_prev: FormState, formData: FormData
   if (result === "wrong-name") {
     return invalid(WRONG_NAME, formData, "confirmName");
   }
+  await removeWorkspaceFiles(result.deletedId);
   (await cookies()).delete(WORKSPACE_COOKIE);
   redirect("/");
 }

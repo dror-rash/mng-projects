@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { objectKey } from "./object-key";
+import { objectKey, workspacePrefix } from "./object-key";
 
 describe("objectKey", () => {
   it("puts a random id under the workspace and project, never a file name", () => {
@@ -13,5 +13,20 @@ describe("objectKey", () => {
     expect(() => objectKey({ workspaceId: "ws/1", projectId: "p-1" })).toThrow();
     expect(() => objectKey({ workspaceId: "ws-1", projectId: ".." })).toThrow();
     expect(() => objectKey({ workspaceId: "", projectId: "p-1" })).toThrow();
+  });
+});
+
+describe("workspacePrefix", () => {
+  it("is the folder every object key of the workspace starts with", () => {
+    const prefix = workspacePrefix("ws-1");
+    expect(prefix).toBe("ws-1/");
+    expect(objectKey({ workspaceId: "ws-1", projectId: "p-1" }).startsWith(prefix)).toBe(true);
+    expect(objectKey({ workspaceId: "ws-10", projectId: "p-1" }).startsWith(prefix)).toBe(false);
+  });
+
+  it("refuses ids that would change the path", () => {
+    expect(() => workspacePrefix("")).toThrow();
+    expect(() => workspacePrefix("ws/1")).toThrow();
+    expect(() => workspacePrefix("..")).toThrow();
   });
 });
