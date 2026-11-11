@@ -126,4 +126,5 @@ M13 tasks 062, 063 and 065 continue after the POC.
 - 2026-11-08 – Tasks 093 (PR #60), 082 (PR #62) and 084 (PR #61) done: SEC-42, SEC-11 (CI part) and SEC-12 fixed; SEC-43 accepted. The other P1 tasks (081, 083, 085–092) wait until after the POC; 090 and 092 need owner answers.
 - 2026-11-08 – SEC-02 fixed: the owner's ruleset protects `main` (PR required; `verify`, `e2e` and `security` must pass and be up to date; no force push or deletion). All five P0 gaps are fixed. The `production` environment follow-up is SEC-44 (P2).
 - 2026-11-10 – Task 081 in review: `drizzle-orm` 0.45.4 (SEC-16), audit clean without the drizzle ignore entry; held until after the POC demo.
+- 2026-11-10 – Task 086 in review: deleting a workspace deletes its `<workspaceId>/` storage folder after the delete commits (SEC-08); held until after the POC demo.
 - 2026-11-10 – Task 089 in review: one sign-in rate limit across instances (counts in the database, keyed on the address Cloud Run appends; SEC-10 part 1); held until after the POC demo, merges before 088.
