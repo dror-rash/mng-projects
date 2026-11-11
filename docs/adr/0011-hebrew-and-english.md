@@ -1,6 +1,6 @@
 # ADR-0011: Hebrew and English (i18n and right-to-left)
 
-- **Status:** proposed
+- **Status:** accepted (owner, 2026-11-11)
 - **Date:** 2026-11-11
 
 ## Context

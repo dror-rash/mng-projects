@@ -1,6 +1,6 @@
 # ADR-0012: Project stages and commercial records
 
-- **Status:** proposed
+- **Status:** accepted (owner, 2026-11-11)
 - **Date:** 2026-11-11
 - **Amends:** ADR-0006 (a new access rule for commercial records), ADR-0008 (no change to sites; recorded because inquiries rely on task 071's mandatory customer and site)
 
