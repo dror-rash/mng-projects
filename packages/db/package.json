@@ -18,7 +18,7 @@
     "db:studio": "dotenv -e ../../.env -- drizzle-kit studio"
   },
   "dependencies": {
-    "drizzle-orm": "^0.44.0",
+    "drizzle-orm": "^0.45.4",
     "pg": "^8.16.0"
   },
   "devDependencies": {
@@ -26,7 +26,7 @@
     "@types/node": "^22.0.0",
     "@types/pg": "^8.15.0",
     "dotenv-cli": "^7.4.0",
-    "drizzle-kit": "^0.31.0",
+    "drizzle-kit": "^0.31.11",
     "eslint": "^9.0.0",
     "typescript": "^5.9.0",
     "vitest": "^3.2.0"
