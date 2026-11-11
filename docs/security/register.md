@@ -38,7 +38,7 @@ No Critical findings. One High (SEC-01). Nothing in the review showed one worksp
 |---|---|---|---|---|---|---|
 | SEC-06 | Med | The `main` runtime connects as `app`, the database owner, and only switches to `app_user`; any SQL foothold can `RESET ROLE` and bypass row-level security | DB / infra | M | planned (task 074) | INF-3, ACC-1 |
 | SEC-07 | Med | Uploads have no enforced size cap (the signed URL has no length range) and abandoned or orphaned uploads are never cleaned up: unbounded storage cost | Files | M | planned (tasks 085, 087) | WEB-1 |
-| SEC-08 | Med | Deleting a workspace (or a cascade) leaves its photos and reports in the bucket forever (retention, erasure requests) | Files | S–M | planned (task 086) | WEB-2 |
+| SEC-08 | Med | Deleting a workspace (or a cascade) leaves its photos and reports in the bucket forever (retention, erasure requests) | Files | S–M | fixed (PR #80, task 086; residual: a failed inline delete or an upload landing after it leaves orphans until a bucket-wide sweep exists; deleted objects stay restorable to project Owners/Editors for 7 days) | WEB-2 |
 | SEC-09 | Med | No email verification and no password reset: anyone can register any address, and the real owner can't recover it; sign-up also reveals which emails have accounts | Auth | M | open (**owner decision:** email provider, or accept for the POC) | AUTH-2, AUTH-4 |
 | SEC-10 | Med | Sign-in brute force is limited only by the in-memory, per-instance rate limiter (up to 5× the budget); no account lockout | Auth | M | planned (tasks 089, 090; the shared-bucket worry is partly answered: task 068 saw a client IP on the first preview) | AUTH-3 |
 | SEC-11 | Med | No Dependabot alerts or updates, no `pnpm audit`, gitleaks or CodeQL in CI | Supply chain | S | fixed in CI (PR #62, task 082); **owner:** turn on Dependabot alerts and security updates; `security` is required by the SEC-02 ruleset | SUP-5 |
@@ -97,3 +97,4 @@ No Critical findings. One High (SEC-01). Nothing in the review showed one worksp
 - 2026-11-08 – SEC-11 fixed in CI (PR #62, task 082: audit, gitleaks, Dependabot config); the owner's alert settings stay open. SEC-15's `ci.yml` part fixed in the same PR.
 - 2026-11-08 – SEC-12 fixed (PR #61, task 084): the guard refuses the listed commands and checks lane commits in their worktree, failing closed.
 - 2026-11-08 – SEC-02 fixed by the owner's ruleset on `main` (PR required; `verify`, `e2e`, `security` required and up to date; no force push or deletion; linear history off so merge commits work). Its details are restored in the review. The `production` environment part becomes SEC-44 (P2). All P0 gaps are fixed.
+- 2026-11-10 – SEC-08 fixed (PR #80, task 086), with residuals noted on the row.
