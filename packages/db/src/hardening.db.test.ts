@@ -175,8 +175,9 @@ describe("role changes", () => {
 });
 
 describe("coverage guards", () => {
-  // Better Auth's tables: the app reads them through the pool, outside withAccess (ADR-0006).
-  const withoutRls = ["account", "session", "user", "verification"];
+  // Better Auth's tables: the app reads them through the pool, outside withAccess (ADR-0006). rate_limit holds
+  // its rate-limit counts (task 089), which only Better Auth reads.
+  const withoutRls = ["account", "rate_limit", "session", "user", "verification"];
 
   it("every table in public has row-level security, except Better Auth's", async () => {
     const { rows } = await getMaintenanceDb().execute<{ name: string }>(sql`
@@ -199,5 +200,14 @@ describe("coverage guards", () => {
       order by 1`);
 
     expect(rows.map((r) => r.fn)).toEqual([]);
+  });
+});
+
+describe("rate_limit (task 089)", () => {
+  it("has an index on last_request, which Better Auth's cleanup deletes by", async () => {
+    const { rows } = await getMaintenanceDb().execute<{ definition: string }>(sql`
+      select indexdef as definition from pg_indexes where schemaname = 'public' and tablename = 'rate_limit'`);
+
+    expect(rows.some((r) => /\(last_request\)/.test(r.definition))).toBe(true);
   });
 });

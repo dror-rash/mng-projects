@@ -30,8 +30,11 @@ import { PINS, pinMatches, readPinnable, SYSTEM_SCHEMAS } from "./rls-pins.mjs";
 export const PIN_HEADER =
   "A migration changed RLS-relevant objects: update infra/scripts/rls-pins.mjs (`node --experimental-strip-types infra/scripts/rls-pins.mjs --print`)";
 
-/** Better Auth's tables: grants and no row-level security (ADR-0006). Any other public table needs it. */
-export const TABLES_WITHOUT_RLS = ["account", "session", "user", "verification"];
+/**
+ * Better Auth's tables: grants and no row-level security (ADR-0006). Any other public table needs it.
+ * rate_limit: its rate-limit counts, shared by every instance (task 089); only Better Auth reads it.
+ */
+export const TABLES_WITHOUT_RLS = ["account", "rate_limit", "session", "user", "verification"];
 
 
 /**

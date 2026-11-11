@@ -6,6 +6,7 @@
 import { sql } from "drizzle-orm";
 import {
   type AnyPgColumn,
+  bigint,
   boolean,
   check,
   date,
@@ -71,6 +72,22 @@ export const verification = pgTable("verification", {
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
 });
+
+/**
+ * Better Auth's rate-limit counts (task 089), shared by every server instance: one row per client address and
+ * path (`key`), replaced when its window passes; Better Auth deletes rows older than its longest window then.
+ * Like the tables above it has no row-level security (ADR-0006), and the app never reads it.
+ */
+export const rateLimit = pgTable("rate_limit", {
+  id: text("id").primaryKey(),
+  key: text("key").notNull().unique(),
+  count: integer("count").notNull(),
+  // Milliseconds since the epoch (Date.now()), as Better Auth writes it.
+  lastRequest: bigint("last_request", { mode: "number" }).notNull(),
+}, (table) => [
+  // Better Auth's cleanup deletes rows older than its longest window by this column.
+  index("rate_limit_last_request_idx").on(table.lastRequest),
+]);
 
 /** Workspaces own projects, tasks and customers (ADR-0005). */
 export const workspace = pgTable("workspace", {
