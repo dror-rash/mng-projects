@@ -15,6 +15,38 @@ Build a modern, full-stack Project Management application on a Next.js multi-zon
 3. Project manager views and manages projects and tasks.
 4. User opens a project, adds tasks, and moves them from To do → In progress → Done.
 5. User keeps a list of customers (details, contact people, notes) and sees every project and open task for a customer.
+6. The office runs every job through the owner's project flow below, in Hebrew or English.
+
+## Target flow (owner, 2026-11-11)
+The main project flow the product must support. Each step is the owner's original Hebrew, then English, with the milestone that covers it.
+
+| # | Owner (Hebrew) | English | Milestone |
+|---|---|---|---|
+| 1 | פניית לקוח /פניה שלנו ללקוח | A customer inquiry, or our outreach to a customer | M15 (a project at stage Inquiry) |
+| 2 | הצעת מחיר כולל פירוט חומר וכוח אדם במידה ונדרש (יש צורך בתמחיר עלות חומרים וכ"א) | A price quote with a breakdown of materials and labour where needed (costing of materials and labour) | M16 |
+| 3 | מעקב קבלת הצעת המחיר ע"י הלקוח | Tracking the customer's acceptance of the quote | M16 (follow-ups from M15) |
+| 4 | הזמנת עבודה ע"י גורם מוסמך מטעם הלקוח וסיכום תנאי תשלום | A work order by an authorised person on the customer's side, and agreed payment terms | M15 |
+| 5 | תיאום העבודה | Scheduling the work | M20 (stage "Scheduled" from M15) |
+| 6 | איסוף ודיווח על חומרים מהספקים לפי פרויקט | Collecting and reporting materials from suppliers, per project | M18 |
+| 7 | מסירת הדוחות שהוכנו בשטח ע"י עובדי המשרד | Handing over the reports prepared in the field (read as field → office, owner's default 2026-11-11) | M17 |
+| 8 | הכנת דוחות במשרד, משלוח ללקוח ומעקב אחרי קבלת הדוח | Preparing reports in the office, sending them to the customer, tracking receipt | M17 (sending recorded by hand first) |
+| 9 | הכנת חשבון / חשבונית משלוח ללקוח ומעקב קבלת החשבון ע"י הלקוח | Preparing a bill or invoice, sending it, tracking receipt | M19 (invoices stay in the accounting system) |
+| 10 | הכנת דוח סיום עבודה | A work-completion report | M17 (stage "Closed" from M15) |
+| 11 | חוות דעת ובוררויות | Expert opinions and arbitrations | M15 (project type; same stages) |
+| 12 | מעקב אחרי טלפונים, מיילים ווטסאפים של לקוחות | Tracking customers' phone calls, emails and WhatsApp messages | M15 (logged by hand; capture later) |
+
+Owner decisions (2026-11-11):
+- The UI and customer documents are in Hebrew (right to left) and English; each user switches.
+- An inquiry is a project at stage "Inquiry"; a quick form creates the Lead customer, the site and the project.
+- Prices and costs: admins see everything, auditors read, workers and partners see neither.
+- Pipeline and communications come first.
+- Defaults taken until the owner says otherwise:
+  - step 7 is the field → office handover;
+  - sending is recorded by hand first;
+  - invoices stay in the accounting system;
+  - communications are logged by hand;
+  - materials are recorded by the office and crews, with no stock;
+  - the same stages for every project type.
 
 ## Milestones
 | # | Milestone | Outcome | Status |
@@ -32,6 +64,14 @@ Build a modern, full-stack Project Management application on a Next.js multi-zon
 | M12 | Partner Access | Admin / Auditor / Partner roles; partner companies with assigned customers; partners see only their own projects and customer names; enforced by SQL access functions and row-level security; project cancel/copy; soft delete everywhere (ADR-0006, tasks 046–052, plan `docs/superpowers/plans/2026-10-31-partner-access.md`) | done |
 | M13 | Sites & Field Data | Customers get sub-companies (one level); physical sites with on-site contacts; every project has a site; a Worker role for internal technicians; site visits, photos and files, admin-built reading forms, uploaded and generated reports; offline capture with sync and no data loss; partners and workers see their projects' sites (amends ADR-0004 and ADR-0006; ADR-0008, ADR-0009 offline; design `docs/superpowers/specs/2026-11-02-sites-and-field-data-design.md`, proposed tasks 053–065) | in progress |
 | POC | POC, deployed (2026-11-13) | One flow from customer to report on the public `run.app` URL: agent team (067), first GCP deploy (068, M11), M13 tasks 056–061 and 064, the dashboard as home with a short menu (070), every project under a customer and site in the database (071), customer → site → project pages (072), end-to-end `@poc` scenario (069), demo data on the deployed app (076). Out: offline capture (062–063), generated PDF (065), custom domain. ADR-0010 | in progress |
+| M14 | Hebrew and English | Every screen in Hebrew (right to left) and English; each user switches, the choice is saved per user; dates and numbers by language; a Hebrew font (ADR-0011, tasks 094–100, `language.feature`). Foundation 094–096 first; translating the existing screens (097–100) runs in parallel with M15 | planned |
+| M15 | Pipeline and communications | Project stages from Inquiry to Closed with history, project types (work, expert opinion, arbitration), a hand-kept communication log with follow-ups, new inquiries in one form, work orders from authorised contacts with payment terms and the order document, a project and customer timeline. Commercial records are seen by admins and auditors only (ADR-0012, tasks 101–108). Flow steps 1, 4, 11, 12 | planned |
+| M16 | Quotes | Quote lines (materials and labour) with cost and price, versions, totals with VAT, a quote document in Hebrew or English (PDF), status and follow-up (sent, accepted, rejected). Needs a money ADR (amounts, ILS, VAT) and a PDF ADR (Hebrew right to left; reused by task 065). Prices and costs follow ADR-0012: admins see and change them, auditors read, workers and partners never see them. Flow steps 2, 3 | not drafted |
+| M17 | Reports pipeline | Field → office handover of visits and reports, report type (field, office, completion), delivery to the customer recorded by hand (sent to, on, received), the generated report (task 065). Flow steps 7, 8, 10 | not drafted |
+| M18 | Suppliers and materials | Suppliers in the directory (task 040, supplier kind only), materials received per project (supplier, item, quantity, cost, delivery note) by the office and crews, actual cost against the quote. Flow step 6 | not drafted |
+| M19 | Billing | Bills and invoices issued in the accounting system, recorded on the project (number, amount, file), sent, received and paid, with an unpaid list. Flow step 9 | not drafted |
+| M20 | Scheduling | Planned work dates, scheduled visits with their crew, a week view by worker. Today a visit can't be in the future (`site-visits.feature`, task 058): this milestone changes that rule in its own `docs(features):` commit or adds planned visits as a separate record. Flow step 5 | not drafted |
+| Later | External services | Sending from the app by email (provider and custom domain; also SEC-09), capturing emails, WhatsApp Business, Israeli e-invoicing (Tax Authority allocation numbers), e-signature. Each needs an ADR | not drafted |
 
 ## Current milestone
 **POC, due 2026-11-13** (owner, 2026-11-02): deployed on GCP, demo data only, no custom domain. Order:
@@ -46,6 +86,15 @@ Build a modern, full-stack Project Management application on a Next.js multi-zon
 
 M13 tasks 062, 063 and 065 continue after the POC.
 
+**Next, after the POC (owner, 2026-11-11):**
+1. M14 foundation: 094 language switch, then 095 (saved per user) and 096 (right-to-left layout) in parallel. ADR-0011 must be accepted first.
+2. M15 from 094 on, so new screens are bilingual from the start: 101 stages first (ADR-0012 accepted first). Then:
+   - 102 type and 103 communications in parallel;
+   - then 104 follow-ups, 105 new inquiry and 106 work order;
+   - then 107 order document and 108 timeline.
+3. Alongside M15, in other lanes: M14's 097–100 (translating the existing screens), the post-POC security tasks (081, 083, 085–092), M13's 062, 063 and 065.
+4. Then M16–M20 in that order, unless the owner reorders. M17's handover and delivery tracking need no new ADR and can run in a lane alongside M16.
+
 ## Risks & open questions
 - Invite tokens will appear in Cloud Run / load balancer request logs until a log exclusion is added in `infra/` (task 028 parking lot; do it with M11).
 - CI `deploy` fails until GCP is set up (`infra/README.md`): no Workload Identity provider or project vars configured.
@@ -56,6 +105,10 @@ M13 tasks 062, 063 and 065 continue after the POC.
 - The app's database pool is set per environment with `DB_POOL_MAX` (task 075): previews 2 per instance (`preview_runtime` limit 3 × 1 × 2 + 1 = 7), `main` 4. On `db-f1-micro` (22 login connections) previews take at most 10 and `main`'s worst case (3 × 1 × 4 = 12) fills its share of 12 with no margin; more instances or real load need a bigger tier or a connection pooler (infra/README.md, "Known limits").
 - Row-level security calls an access function per row (`can_see_project` and friends, ADR-0006): fine at today's sizes, but large lists may need the policies or the functions tuned (measure before M11 load).
 - Deletes are soft, but nothing records who changed what else: an audit log is a follow-up (and purging deleted items after a retention period, design Parking lot).
+- Follow-up dates and "overdue" (M15 onwards) use UTC "today" (`todayUtc()`). For Israeli users that is the next day after 21:00 or 22:00 local time. Task 041 (time zones, ADR-0007) matters more now.
+- Hebrew wording in `language.feature` and the M15 labels are defaults the owner has to review on the preview. A wording change is a `docs(features):` commit.
+- ADR-0011 changes two CLAUDE.md conventions (value-set label helpers, form error strings become message keys). The owner edits CLAUDE.md when task 094 lands.
+- The pipeline's commercial rule (ADR-0012) hides communications, work orders and later prices from partner users on their own projects. Partner-owned projects are handled commercially by the workspace's admins.
 
 ## Change log
 - 2026-10-18 – Updated plan for Project Management app: M1 Landing & Login polish, M2 Dashboard zone.
@@ -125,3 +178,4 @@ M13 tasks 062, 063 and 065 continue after the POC.
 - 2026-11-08 – Task 084 in review: the guard refuses the SEC-12 commands (secret reads, Cloud Run changes by hand, every force and destructive push spelling, `git add -f`), checks a lane commit in its own worktree and refuses a commit whose repository it can't work out; `scripts/test-hooks.sh` (148 cases) runs in CI.
 - 2026-11-08 – Tasks 093 (PR #60), 082 (PR #62) and 084 (PR #61) done: SEC-42, SEC-11 (CI part) and SEC-12 fixed; SEC-43 accepted. The other P1 tasks (081, 083, 085–092) wait until after the POC; 090 and 092 need owner answers.
 - 2026-11-08 – SEC-02 fixed: the owner's ruleset protects `main` (PR required; `verify`, `e2e` and `security` must pass and be up to date; no force push or deletion). All five P0 gaps are fixed. The `production` environment follow-up is SEC-44 (P2).
+- 2026-11-11 – Planned the owner's 12-step project flow ("Target flow", Hebrew and English) from a gap analysis and the owner's answers: bilingual UI with a per-user switch, inquiries as projects at stage Inquiry, prices and costs for admins (auditors read), pipeline first. New milestones M14 Hebrew and English (tasks 094–100, ADR-0011) and M15 Pipeline and communications (tasks 101–108, ADR-0012), both proposed; M16–M20 and external services outlined, not drafted. Scenarios `@wip` in `language.feature`, `project-stages.feature`, `project-types.feature`, `customer-communications.feature`, `inquiries.feature`, `work-orders.feature`, `timeline.feature`.
