@@ -1,12 +1,12 @@
 import { afterAll, describe, expect, it } from "vitest";
 
-import { createDownloadUrl, createUploadUrl, objectKey, remove, stat } from "./index";
+import { createDownloadUrl, createUploadUrl, objectKey, remove, removePrefix, stat, workspacePrefix } from "./index";
 
 // Against the local fake-gcs-server (docker-compose.yml, `pnpm db:up`). Each run uses its own keys.
 
 const keys: string[] = [];
-function newKey() {
-  const key = objectKey({ workspaceId: `test-${crypto.randomUUID().slice(0, 8)}`, projectId: "p" });
+function newKey(workspaceId = `test-${crypto.randomUUID().slice(0, 8)}`, projectId = "p") {
+  const key = objectKey({ workspaceId, projectId });
   keys.push(key);
   return key;
 }
@@ -52,6 +52,25 @@ describe("signed URLs against the local server", () => {
     await upload(key, "report");
     const url = new URL(await createDownloadUrl({ key, fileName: "Site report.pdf" }));
     expect(url.searchParams.get("response-content-disposition")).toBe('attachment; filename="Site report.pdf"');
+  });
+});
+
+describe("removing a workspace's folder", () => {
+  it("removes every object under the prefix, page by page, and nothing beside it", async () => {
+    const workspace = `test-${crypto.randomUUID().slice(0, 8)}`;
+    const inside = [newKey(workspace, "p1"), newKey(workspace, "p1"), newKey(workspace, "p2")];
+    // A neighbor whose id starts with the same characters: only the trailing slash keeps it out.
+    const beside = [newKey(`${workspace}0`, "p1"), newKey(`test-${crypto.randomUUID().slice(0, 8)}`, "p1")];
+    for (const key of [...inside, ...beside]) await upload(key, "site photo");
+
+    await removePrefix(workspacePrefix(workspace), { pageSize: 2 });
+
+    for (const key of inside) expect(await stat(key)).toBeNull();
+    for (const key of beside) expect(await stat(key)).not.toBeNull();
+  });
+
+  it("succeeds for a prefix with nothing under it", async () => {
+    await expect(removePrefix(workspacePrefix(`test-${crypto.randomUUID().slice(0, 8)}`))).resolves.toBeUndefined();
   });
 });
 

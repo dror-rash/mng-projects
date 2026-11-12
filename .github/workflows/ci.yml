@@ -62,6 +62,8 @@ jobs:
       - run: bash infra/scripts/test-deploy-service.sh
       # The deploy's demo-seed step stays main-only and non-blocking (task 076).
       - run: bash infra/scripts/test-workflows.sh
+      # The alerts and the budget (task 092): channel, policies, tfvars-only variables.
+      - run: bash infra/scripts/test-monitoring.sh
       # The agents' guard hook (tasks 067, 084): refusals, look-alikes, commits in a second worktree.
       - run: bash scripts/test-hooks.sh
         # The script sets it per case too; kept here so no case can ever run lint/typecheck.
@@ -114,6 +116,8 @@ jobs:
       - run: pnpm --filter @repo/db test:db
       # The demo seed against that database (task 076): local and --deploy runs, skips and refusals.
       - run: pnpm --filter @repo/dashboard test:db
+      # The sign-in rate limit shared by server instances (task 089): two Better Auth instances, one database.
+      - run: pnpm --filter @repo/auth test:db
       # The deploy's database scripts (task 068): runtime role check, preview logins, migration lock, and the
       # whole sequence on Cloud SQL-like databases. One file at a time: they alter app_user in rolled-back
       # transactions.
