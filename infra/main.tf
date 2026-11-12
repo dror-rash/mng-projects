@@ -231,7 +231,7 @@ resource "google_iam_workload_identity_pool_provider" "github" {
     # (workflow_ref; it names the top-level workflow, so another workflow can't borrow deploy.yml's jobs):
     # - main: deploy.yml on a push to refs/heads/main;
     # - preview: deploy.yml or preview-cleanup.yml on a pull_request (workflow_ref ...@refs/..., any ref, so a closed
-    #   PR's run can't break cleanup; "@refs/" so a file named deploy.yml@x.yml doesn't match);
+    #   PR's run can't break cleanup; "@refs/" so a file named "deploy.yml", "@", "x.yml" run together doesn't match);
     # - none: everything else (ci.yml, any other file, pull_request_target, workflow_dispatch, other branches).
     # A token without the claim fails the mapping, so STS refuses it. Tested by infra/scripts/test-workflows.sh
     # (wif-deploy-target.mjs evaluates this expression; keep it on one line and in the CEL subset it accepts).
