@@ -109,7 +109,7 @@ jobs:
       #    image holds tracked files only. The cache keeps final layers only (mode=min).
       - name: Build & push example-zone
         id: build_example
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: ${{ env.BUILD_CONTEXT }}
           push: true
@@ -125,7 +125,7 @@ jobs:
 
       - name: Build & push dashboard
         id: build_dashboard
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: ${{ env.BUILD_CONTEXT }}
           push: true
@@ -150,7 +150,7 @@ jobs:
           done
       - name: Build & push shell
         id: build_shell
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: ${{ env.BUILD_CONTEXT }}
           push: true
