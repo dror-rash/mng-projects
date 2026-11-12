@@ -197,7 +197,8 @@ resource "google_cloud_run_v2_service_iam_member" "public" {
 }
 
 # ---------- GitHub Actions -> GCP (Workload Identity Federation, no JSON keys) ----------
-# Two deployers: `main` only for pushes to main, `preview` only for pull_request runs (both of this repository).
+# Two deployers: `main` only for deploy.yml on a push to main, `preview` only for deploy.yml or preview-cleanup.yml
+# on a pull_request (both of this repository; the provider's deploy_target mapping below).
 resource "google_service_account" "deployer" {
   for_each     = local.environments
   account_id   = "deployer-${each.key}"
@@ -211,6 +212,11 @@ resource "google_iam_workload_identity_pool" "github" {
   depends_on                = [google_project_service.enabled]
 }
 
+locals {
+  # The workflow files' path as GitHub's workflow_ref claim names it: <owner>/<repo>/.github/workflows/<file>@<ref>.
+  github_workflows = "${var.github_repository}/.github/workflows"
+}
+
 resource "google_iam_workload_identity_pool_provider" "github" {
   workload_identity_pool_id          = google_iam_workload_identity_pool.github.workload_identity_pool_id
   workload_identity_pool_provider_id = "github"
@@ -221,9 +227,15 @@ resource "google_iam_workload_identity_pool_provider" "github" {
     "attribute.repository" = "assertion.repository"
     "attribute.ref"        = "assertion.ref"
     "attribute.event_name" = "assertion.event_name"
-    # Which deployer a token may use: a push to main -> main, a pull_request run -> preview, else none.
-    # (pull_request_target, workflow_dispatch and other branches get neither.)
-    "attribute.deploy_target" = "assertion.event_name == 'push' && assertion.ref == 'refs/heads/main' ? 'main' : (assertion.event_name == 'pull_request' ? 'preview' : 'none')"
+    # Which deployer a token may use (task 083), by event, ref and the workflow file that started the run
+    # (workflow_ref; it names the top-level workflow, so another workflow can't borrow deploy.yml's jobs):
+    # - main: deploy.yml on a push to refs/heads/main;
+    # - preview: deploy.yml or preview-cleanup.yml on a pull_request (workflow_ref ...@refs/..., any ref, so a closed
+    #   PR's run can't break cleanup; "@refs/" so a file named "deploy.yml", "@", "x.yml" run together doesn't match);
+    # - none: everything else (ci.yml, any other file, pull_request_target, workflow_dispatch, other branches).
+    # A token without the claim fails the mapping, so STS refuses it. Tested by infra/scripts/test-workflows.sh
+    # (wif-deploy-target.mjs evaluates this expression; keep it on one line and in the CEL subset it accepts).
+    "attribute.deploy_target" = "assertion.event_name == 'push' && assertion.ref == 'refs/heads/main' && assertion.workflow_ref == '${local.github_workflows}/deploy.yml@refs/heads/main' ? 'main' : (assertion.event_name == 'pull_request' && (assertion.workflow_ref.startsWith('${local.github_workflows}/deploy.yml@refs/') || assertion.workflow_ref.startsWith('${local.github_workflows}/preview-cleanup.yml@refs/')) ? 'preview' : 'none')"
   }
 
   # Only tokens from this repository: by name and by its immutable id (a deleted and re-created repository

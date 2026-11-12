@@ -67,7 +67,7 @@ ones: `bash infra/scripts/test-environment.sh` fails when they differ.
 
 | | main | PR preview |
 |---|---|---|
-| GitHub event (Workload Identity) | push to `refs/heads/main` | `pull_request` of this repository |
+| GitHub event (Workload Identity) | `deploy.yml` on a push to `refs/heads/main` | `deploy.yml` or `preview-cleanup.yml` on a `pull_request` of this repository |
 | Deployer | `deployer-main` | `deployer-preview` |
 | Cloud Run services | `shell`, `example-zone`, `dashboard` | `shell-preview`, `example-zone-preview`, `dashboard-preview` |
 | Revisions | 100% traffic | no traffic, tag `pr-<N>`; at most 1 instance per revision (every open PR's revision can scale) |
@@ -176,6 +176,25 @@ ones: `bash infra/scripts/test-environment.sh` fails when they differ.
   `run.services.sshRoot`, `run.instances.sshRoot` and the `sshRead` ones (SSH into running instances, whose
   environment holds the database password and auth secret). Nor IAM policy changes, jobs or worker pools.
 - Workload Identity accepts only this repository, by name and by its numeric id (`github_repository_id`).
+- **Which workflow gets which deployer** (task 083). The provider's `attribute.deploy_target` reads the token's
+  event, ref and `workflow_ref` (the workflow file that started the run, `<owner>/<repo>/.github/workflows/<file>@<ref>`,
+  the repository from `github_repository`):
+
+  | Workflow file | Event | Deployer |
+  |---|---|---|
+  | `deploy.yml` | `push` to `refs/heads/main` | `deployer-main` |
+  | `deploy.yml` | `pull_request` | `deployer-preview` |
+  | `preview-cleanup.yml` | `pull_request` (closed) | `deployer-preview` |
+  | any other (`ci.yml`, a new file), or any other event or branch | | none: STS refuses the impersonation |
+
+  `workflow_ref` names the top-level workflow, so a workflow that called `deploy.yml` as a reusable workflow
+  would still be refused (`job_workflow_ref` would name `deploy.yml`). A token without the claim fails the mapping:
+  refused. The preview rule matches `…/deploy.yml@refs/` and `…/preview-cleanup.yml@refs/` (any ref; a file named
+  `deploy.yml@x.yml` doesn't match, and workflow files can't be in subdirectories). A new workflow that needs a
+  deployer means changing the mapping here. `bash infra/scripts/test-workflows.sh`
+  evaluates the mapping for sample claims (`wif-deploy-target.mjs`); keep the expression on one line, in the CEL
+  subset that script accepts. Still open (SEC-15): a same-repository PR's `deploy.yml` is the PR's own copy, so
+  `deployer-preview` trusts whoever can push a branch; fork PRs get no token.
 
 ## Runtime role check
 `infra/scripts/check-runtime-role.mjs` connects like the runtime pool (`buildPoolConfig`: the login and

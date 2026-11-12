@@ -11,7 +11,10 @@
 #    commits on main, gitleaks is pinned by version and sha256, and deploy.yml skips Dependabot pull requests
 #    (no secrets or OIDC token there) but never a push to main, and so does preview-cleanup.yml; ci.yml cancels
 #    only PR runs and drops checkout credentials; every Dependabot ecosystem has a cooldown.
-# 4) Storage CORS (task 085): every header a signed upload sends (createUploadUrl in packages/storage) is allowed
+# 4) Workload Identity (task 083): the provider's deploy_target mapping gives deployer-main only to deploy.yml on a
+#    push to main and deployer-preview only to deploy.yml or preview-cleanup.yml on a pull_request (evaluated by
+#    wif-deploy-target.mjs for sample token claims).
+# 5) Storage CORS (task 085): every header a signed upload sends (createUploadUrl in packages/storage) is allowed
 #    by the buckets' CORS (infra/storage.tf) and by fake-gcs-server in docker-compose.yml and ci.yml; otherwise
 #    the browser's preflight is refused and uploads break.
 # Text checks on the repository files (no YAML parser needed). Probes at the end run the checks on a copy with
@@ -258,6 +261,47 @@ dependabot_cooldown_everywhere() {
 }
 check "every Dependabot ecosystem has a 3-day cooldown" dependabot_cooldown_everywhere
 
+# --- Workload Identity: which workflow gets which deployer (task 083) ---
+# The provider's deploy_target mapping in infra/main.tf, evaluated for GitHub token claims (wif-deploy-target.mjs).
+# The repository is a made-up one: the mapping must take it from var.github_repository.
+WIF_REPO="acme/app"
+wif_claims() { # event, ref, workflow file (or "-" for no workflow_ref claim), [repository of the workflow_ref],
+              # [ref in the workflow_ref, default the ref claim]
+  local wr=""
+  [ "$3" = "-" ] || wr=",\"workflow_ref\":\"${4:-$WIF_REPO}/.github/workflows/$3@${5:-$2}\""
+  printf '{"repository":"%s","event_name":"%s","ref":"%s"%s}' "$WIF_REPO" "$1" "$2" "$wr"
+}
+deploy_target_is() { # expected, then wif_claims' arguments
+  local got
+  got="$(node "$ROOT/infra/scripts/wif-deploy-target.mjs" "$WIF_REPO" "$(wif_claims "${@:2}")")" || return 1
+  [ "$got" = "$1" ]
+}
+deploy_target_isnt_a_deployer() { ! deploy_target_is main "$@" && ! deploy_target_is preview "$@"; }
+check "WIF: deploy.yml on a push to main gets deployer-main" deploy_target_is main push refs/heads/main deploy.yml
+check "WIF: ci.yml on a push to main gets no deployer" deploy_target_is none push refs/heads/main ci.yml
+check "WIF: preview-cleanup.yml on a push to main gets no deployer" deploy_target_is none push refs/heads/main preview-cleanup.yml
+check "WIF: another workflow file on a push to main gets no deployer" deploy_target_is none push refs/heads/main x-deploy.yml
+check "WIF: deploy.yml of another repository's path gets no deployer" deploy_target_is none push refs/heads/main deploy.yml other/app
+check "WIF: deploy.yml on a push to another branch gets no deployer" deploy_target_is none push refs/heads/feature deploy.yml
+check "WIF: deploy.yml on workflow_dispatch gets no deployer" deploy_target_is none workflow_dispatch refs/heads/main deploy.yml
+check "WIF: deploy.yml on a pull_request gets deployer-preview" deploy_target_is preview pull_request refs/pull/7/merge deploy.yml
+check "WIF: preview-cleanup.yml on a pull_request gets deployer-preview" \
+  deploy_target_is preview pull_request refs/pull/7/merge preview-cleanup.yml
+# A workflow file may be named deploy.yml@x.yml: its workflow_ref starts with ".../deploy.yml@" too.
+check "WIF: a file named deploy.yml@x.yml on a pull_request gets no deployer" \
+  deploy_target_is none pull_request refs/pull/7/merge deploy.yml@x.yml
+check "WIF: a file named preview-cleanup.yml@x.yml on a pull_request gets no deployer" \
+  deploy_target_is none pull_request refs/pull/7/merge preview-cleanup.yml@x.yml
+# The preview rule doesn't tie the workflow_ref's ref to the ref claim (a closed PR's runs may differ).
+check "WIF: preview-cleanup.yml on a pull_request with another ref in its workflow_ref gets deployer-preview" \
+  deploy_target_is preview pull_request refs/pull/7/merge preview-cleanup.yml "" refs/pull/7/head
+check "WIF: ci.yml on a pull_request gets no deployer" deploy_target_is none pull_request refs/pull/7/merge ci.yml
+check "WIF: another workflow file on a pull_request gets no deployer" deploy_target_is none pull_request refs/pull/7/merge check.yml
+check "WIF: deploy.yml of another repository's path on a pull_request gets no deployer" \
+  deploy_target_is none pull_request refs/pull/7/merge deploy.yml other/app
+check "WIF: deploy.yml on pull_request_target gets no deployer" deploy_target_is none pull_request_target refs/heads/main deploy.yml
+check "WIF: a push to main without a workflow_ref claim gets no deployer" deploy_target_isnt_a_deployer push refs/heads/main -
+check "WIF: a pull_request without a workflow_ref claim gets no deployer" deploy_target_isnt_a_deployer pull_request refs/pull/7/merge -
 # --- Storage CORS (task 085) ---
 # The headers createUploadUrl sends: Content-Type and the keys of its extensionHeaders, lowercased.
 upload_headers() {
@@ -297,6 +341,8 @@ if [ -z "${TEST_WORKFLOWS_PROBE:-}" ]; then
     [ ! -e "$ROOT/.github/dependabot.yml" ] || cp "$ROOT/.github/dependabot.yml" "$dir/.github/"
     cp "$ROOT"/Dockerfile "$ROOT"/.dockerignore "$ROOT"/.gitignore "$dir/"
     cp "$ROOT"/infra/scripts/*.sh "$dir/infra/scripts/"
+    cp "$ROOT"/infra/scripts/*.mjs "$dir/infra/scripts/"
+    cp "$ROOT"/infra/*.tf "$dir/infra/"
     (cd "$dir" && eval "$2") || return 1
     # The change must have changed something (a probe whose edit matches nothing proves nothing).
     if [ -n "$1" ]; then
@@ -304,6 +350,7 @@ if [ -z "${TEST_WORKFLOWS_PROBE:-}" ]; then
         diff -q "$ROOT/Dockerfile" "$dir/Dockerfile" >/dev/null && diff -q "$ROOT/.dockerignore" "$dir/.dockerignore" >/dev/null &&
         diff -q "$ROOT/infra/scripts/get-cloud-sql-proxy.sh" "$dir/infra/scripts/get-cloud-sql-proxy.sh" >/dev/null &&
         diff -q "$ROOT/infra/scripts/get-gitleaks.sh" "$dir/infra/scripts/get-gitleaks.sh" >/dev/null &&
+        diff -q "$ROOT/infra/main.tf" "$dir/infra/main.tf" >/dev/null &&
         diff -q "$ROOT/.github/dependabot.yml" "$dir/.github/dependabot.yml" >/dev/null &&
         diff -q "$ROOT/docker-compose.yml" "$dir/docker-compose.yml" >/dev/null &&
         diff -q "$ROOT/infra/storage.tf" "$dir/infra/storage.tf" >/dev/null &&
@@ -392,6 +439,17 @@ if [ -z "${TEST_WORKFLOWS_PROBE:-}" ]; then
     "perl -0pi -e 's/\n    cooldown:\n      default-days: 3//' .github/dependabot.yml"
   check "probe: a workflow overriding gitleaks' URL is caught" probe "the workflows never override gitleaks" \
     "printf '      - run: GITLEAKS_URL=https://x bash infra/scripts/get-gitleaks.sh\n' >> $CIW"
+  check "probe: deployer-main without the workflow_ref check is caught" probe "WIF: ci.yml on a push to main gets no deployer" \
+    'perl -pi -e "s/ && assertion\\.workflow_ref == .[^\x27]*. \\?/ ?/" infra/main.tf'
+  check "probe: deployer-preview without the workflow file check is caught" probe "WIF: ci.yml on a pull_request gets no deployer" \
+    'perl -pi -e "s/ && \\(assertion\\.workflow_ref\\.startsWith.*?\\)\\) \\?/ ?/" infra/main.tf'
+  check "probe: a hard-coded repository in the workflow path is caught" probe "WIF: deploy.yml on a push to main gets deployer-main" \
+    'perl -pi -e "s/github_workflows = .\\$\\{var\\.github_repository\\}/github_workflows = \x22dror-rash\/mng-projects/" infra/main.tf'
+  check "probe: JavaScript-only syntax (===) in the mapping is refused" probe "WIF: deploy.yml on a push to main gets deployer-main" \
+    'perl -pi -e "s/assertion\\.event_name == .push./assertion.event_name === \x27push\x27/" infra/main.tf'
+  check "probe: a bare claim (JavaScript truthiness, a CEL error) in the mapping is refused" probe \
+    "WIF: deploy.yml on a push to main gets deployer-main" \
+    'perl -pi -e "s/= .assertion\\.event_name == .push. &&/= \x22assertion.workflow_ref \&\& assertion.event_name == \x27push\x27 \&\&/" infra/main.tf'
   check "probe: ci.yml's fake-gcs-server without x-goog-content-length-range is caught" probe \
     "ci.yml's fake-gcs-server allows every header" "perl -pi -e 's/,x-goog-content-length-range//' $CIW"
   check "probe: docker-compose.yml's fake-gcs-server without x-goog-content-length-range is caught" probe \
