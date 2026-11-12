@@ -37,7 +37,7 @@ No Critical findings. One High (SEC-01). Nothing in the review showed one worksp
 | ID | Sev | Gap | Area | Effort | Status | Source |
 |---|---|---|---|---|---|---|
 | SEC-06 | Med | The `main` runtime connects as `app`, the database owner, and only switches to `app_user`; any SQL foothold can `RESET ROLE` and bypass row-level security | DB / infra | M | partly fixed (PR #85, task 074): no SET ROLE escape; closes when the follow-up removes the transition grants on `db-password` | INF-3, ACC-1 |
-| SEC-07 | Med | Uploads have no enforced size cap (the signed URL has no length range) and abandoned or orphaned uploads are never cleaned up: unbounded storage cost | Files | M | in progress: size cap in PR #84 (task 085; the preview hand check is still to do); cleanup planned (task 087) | WEB-1 |
+| SEC-07 | Med | Uploads have no enforced size cap (the signed URL has no length range) and abandoned or orphaned uploads are never cleaned up: unbounded storage cost | Files | M | partly fixed: size cap PR #84 (task 085, after the owner's preview check), unfinished-upload cap and cleanup PR #87 (task 087); open: storage quota (SEC-48), bucket-wide sweep | WEB-1 |
 | SEC-08 | Med | Deleting a workspace (or a cascade) leaves its photos and reports in the bucket forever (retention, erasure requests) | Files | S–M | fixed (PR #80, task 086; residual: a failed inline delete or an upload landing after it leaves orphans until a bucket-wide sweep exists; deleted objects stay restorable to project Owners/Editors for 7 days) | WEB-2 |
 | SEC-09 | Med | No email verification and no password reset: anyone can register any address, and the real owner can't recover it; sign-up also reveals which emails have accounts | Auth | M | open (**owner decision:** email provider, or accept for the POC) | AUTH-2, AUTH-4 |
 | SEC-10 | Med | Sign-in brute force is limited only by the in-memory, per-instance rate limiter (up to 5× the budget); no account lockout | Auth | M | fixed (PR #83 shared limit, task 089; PR #86 lockout, task 090); accepted trade-off: anyone who knows an email can keep that account locked (owner, 2026-11-10); IPv6 counted per /64 | AUTH-3 |
@@ -75,6 +75,7 @@ No Critical findings. One High (SEC-01). Nothing in the review showed one worksp
 | SEC-47 | Low | Row-level security trusts the session setting `app.user_id`, which any connection can set itself; a SQL injection (SEC-38) could set another user's id and read as them. Consider a signed or definer-set context, or `SET LOCAL` only through a definer function | DB | M | open | task 074 review |
 | SEC-46 | Low | Better Auth's limiter counts every `/api/auth/*` path before routing, so requests to made-up paths add `rate_limit` rows; rows are pruned only when an existing key's window resets. Reject unknown auth paths in the shell's route handler before calling Better Auth | Auth | M | open | task 089 review |
 | SEC-45 | Low | The database pool has no checkout timeout and the runtime role no `statement_timeout`: with `main` capped at one instance per zone (SEC-14), a burst of slow queries makes every request on that zone wait, up to Cloud Run's 300 s | DB / infra | S | open | task 091 review |
+| SEC-48 | Low | No storage quota: confirmed uploads are unlimited per workspace, sign-up is open (SEC-09) and anyone can create workspaces, so storage cost is bounded only by the budget alert (SEC-17); a bucket-wide sweep for orphaned objects (late bodies, failed deletes, idle workspaces) is also missing | Files | M | open | task 087 review |
 
 ## P3 – information and decisions
 
@@ -108,3 +109,4 @@ No Critical findings. One High (SEC-01). Nothing in the review showed one worksp
 - 2026-11-10 – SEC-45 added from task 091's review: no pool checkout timeout or `statement_timeout` (P2).
 - 2026-11-10 – SEC-17 fixed (PR #82, task 092), live once the owner applies.
 - 2026-11-10 – SEC-07: upload size cap in PR #84 (task 085), pending the owner's Terraform run and preview hand check; cleanup is task 087.
+- 2026-11-10 – SEC-07 partly fixed (PR #84, PR #87). SEC-48 added (P2): no storage quota or bucket-wide sweep.

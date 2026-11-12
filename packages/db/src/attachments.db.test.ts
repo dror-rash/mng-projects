@@ -2,13 +2,14 @@ import { sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { getDb, withAccess } from "./client";
-import { insertSiteOf } from "./db-test-fixtures";
+import { insertCustomerWithSite, insertSiteOf } from "./db-test-fixtures";
 import { getMaintenanceDb } from "./maintenance";
 import * as schema from "./schema";
 
 // Photos and files (task 059, ADR-0008) against the migrated database: they follow their project; whoever
 // can work on it uploads as themselves; unconfirmed uploads are the uploader's alone; the uploader and admins
-// delete.
+// delete. Uploads left unconfirmed for over an hour are cleared by whoever works on a project of the
+// workspace (task 087).
 
 const run = crypto.randomUUID().slice(0, 8);
 const ids = {
@@ -30,8 +31,15 @@ const ids = {
   workerPhoto: `${run}-worker-photo`,
   pending: `${run}-pending`,
   photoB: `${run}-photo-b`,
+  otherWorkspace: `${run}-ws2`,
+  outsider: `${run}-outsider`,
+  otherCustomer: `${run}-other-customer`,
+  otherProject: `${run}-other-project`,
+  projectC: `${run}-project-c`,
+  exWorker: `${run}-ex-worker`,
+  idleWorker: `${run}-idle-worker`,
 };
-const users = [ids.admin, ids.auditor, ids.worker, ids.otherWorker, ids.pa, ids.pb];
+const users = [ids.admin, ids.auditor, ids.worker, ids.otherWorker, ids.pa, ids.pb, ids.outsider, ids.exWorker, ids.idleWorker];
 
 async function as<T extends Record<string, unknown>>(userId: string, query: ReturnType<typeof sql>) {
   const result = await withAccess(userId, () => getDb().execute<T>(query));
@@ -60,7 +68,10 @@ const insertAttachment = (
 beforeAll(async () => {
   const db = getMaintenanceDb();
   await db.insert(schema.user).values(users.map((id) => ({ id, name: id, email: `${id}@example.test` })));
-  await db.insert(schema.workspace).values({ id: ids.workspace, name: `Attachments ${run}` });
+  await db.insert(schema.workspace).values([
+    { id: ids.workspace, name: `Attachments ${run}` },
+    { id: ids.otherWorkspace, name: `Other attachments ${run}` },
+  ]);
   await db.insert(schema.partner).values([
     { id: ids.partnerA, workspaceId: ids.workspace, name: "Partner A" },
     { id: ids.partnerB, workspaceId: ids.workspace, name: "Partner B" },
@@ -72,6 +83,9 @@ beforeAll(async () => {
     { workspaceId: ids.workspace, userId: ids.otherWorker, role: "worker" },
     { workspaceId: ids.workspace, userId: ids.pa, role: "partner", partnerId: ids.partnerA },
     { workspaceId: ids.workspace, userId: ids.pb, role: "partner", partnerId: ids.partnerB },
+    { workspaceId: ids.otherWorkspace, userId: ids.outsider, role: "admin" },
+    { workspaceId: ids.workspace, userId: ids.exWorker, role: "worker" },
+    { workspaceId: ids.workspace, userId: ids.idleWorker, role: "worker" },
   ]);
   await db.insert(schema.organization).values({ id: ids.acme, workspaceId: ids.workspace, name: "Acme Ltd" });
   await db.insert(schema.customerPartner).values([
@@ -82,9 +96,13 @@ beforeAll(async () => {
   await db.insert(schema.project).values([
     { id: ids.projectA, name: "A", workspaceId: ids.workspace, ...at, visibility: "partner", partnerId: ids.partnerA },
     { id: ids.projectB, name: "B", workspaceId: ids.workspace, ...at, visibility: "partner", partnerId: ids.partnerB },
+    { id: ids.projectC, name: "C", workspaceId: ids.workspace, ...at },
   ]);
+  const other = await insertCustomerWithSite(ids.otherWorkspace, ids.otherCustomer);
+  await db.insert(schema.project).values({ id: ids.otherProject, name: "Other", workspaceId: ids.otherWorkspace, ...other });
   await db.execute(sql`insert into project_worker (project_id, user_id, workspace_id) values
-    (${ids.projectA}, ${ids.worker}, ${ids.workspace}), (${ids.projectA}, ${ids.otherWorker}, ${ids.workspace})`);
+    (${ids.projectA}, ${ids.worker}, ${ids.workspace}), (${ids.projectA}, ${ids.otherWorker}, ${ids.workspace}),
+    (${ids.projectA}, ${ids.exWorker}, ${ids.workspace}), (${ids.projectC}, ${ids.worker}, ${ids.workspace})`);
   await db.execute(sql`insert into site_visit (id, project_id, visited_on, created_by) values
     (${ids.visitA}, ${ids.projectA}, current_date, ${ids.admin}), (${ids.visitB}, ${ids.projectB}, current_date, ${ids.admin})`);
   await db.execute(insertAttachment(ids.adminPhoto, ids.projectA, ids.admin, { visitId: ids.visitA }));
@@ -95,7 +113,7 @@ beforeAll(async () => {
 
 afterAll(async () => {
   const db = getMaintenanceDb();
-  await db.execute(sql`delete from workspace where id = ${ids.workspace}`);
+  await db.execute(sql`delete from workspace where id in (${ids.workspace}, ${ids.otherWorkspace})`);
   await db.execute(sql`delete from "user" where id in (${sql.join(users.map((u) => sql`${u}`), sql`, `)})`);
 });
 
@@ -178,8 +196,101 @@ describe("who uploads, confirms and deletes", () => {
   it("can't call the attachment functions as PUBLIC", async () => {
     const { rows } = await getMaintenanceDb().execute<{ ok: boolean }>(
       sql`select has_function_privilege('public', 'can_change_attachment(text, text)', 'EXECUTE')
-             or has_function_privilege('public', 'delete_attachment(text)', 'EXECUTE') as ok`,
+             or has_function_privilege('public', 'delete_attachment(text)', 'EXECUTE')
+             or has_function_privilege('public', 'clear_stale_uploads(text)', 'EXECUTE') as ok`,
     );
     expect(rows[0]?.ok).toBe(false);
+  });
+});
+
+describe("clearing stale uploads", () => {
+  /** An upload in `workspace`'s `project`, recorded `minutes` ago. */
+  const upload = (
+    id: string,
+    { workspace = ids.workspace, project = ids.projectA, by = ids.worker as string | null, minutes = 61, confirmed = false, deleted = false } = {},
+  ) =>
+    getMaintenanceDb().execute(
+      sql`insert into attachment (id, workspace_id, project_id, kind, storage_key, file_name, content_type, size_bytes, uploaded_by, created_at, confirmed_at, deleted_at)
+          values (${id}, ${workspace}, ${project}, 'photo', ${`${workspace}/${project}/${id}`}, 'panel.jpg', 'image/jpeg', 10, ${by},
+                  localtimestamp - make_interval(mins => ${minutes}),
+                  ${confirmed ? sql`localtimestamp` : sql`null`}, ${deleted ? sql`localtimestamp` : sql`null`})`,
+    );
+  const clear = (user: string, project: string) =>
+    as<{ key: string }>(user, sql`select clear_stale_uploads(${project}) as key`).then((rows) => rows.map((r) => r.key).sort());
+  const remaining = (prefix: string) =>
+    getMaintenanceDb()
+      .execute<{ id: string }>(sql`select id from attachment where id like ${`${prefix}%`} order by id`)
+      .then(({ rows }) => rows.map((r) => r.id));
+  const keyOf = (id: string, project = ids.projectA, workspace = ids.workspace) => `${workspace}/${project}/${id}`;
+
+  it("deletes the workspace's uploads left unconfirmed for over an hour, whoever left them, and returns their keys", async () => {
+    const p = `${run}-stale1-`;
+    await upload(`${p}mine`);
+    await upload(`${p}other-partner`, { project: ids.projectB, by: ids.pb });
+    await upload(`${p}deleted-uploader`, { by: null });
+    await upload(`${p}recent`, { minutes: 59 });
+    await upload(`${p}old-confirmed`, { confirmed: true, minutes: 600 });
+    await upload(`${p}old-deleted`, { confirmed: true, deleted: true, minutes: 600 });
+    await upload(`${p}other-workspace`, { workspace: ids.otherWorkspace, project: ids.otherProject, by: ids.outsider });
+
+    expect(await clear(ids.otherWorker, ids.projectA)).toEqual(
+      [keyOf(`${p}mine`), keyOf(`${p}other-partner`, ids.projectB), keyOf(`${p}deleted-uploader`)].sort(),
+    );
+    expect(await remaining(p)).toEqual([`${p}old-confirmed`, `${p}old-deleted`, `${p}other-workspace`, `${p}recent`]);
+    await getMaintenanceDb().execute(sql`delete from attachment where id like ${`${p}%`}`);
+  });
+
+  it("clears nothing for someone who can't work on the project", async () => {
+    const p = `${run}-stale2-`;
+    await upload(`${p}a`);
+    await upload(`${p}b`, { project: ids.projectB, by: ids.pb });
+
+    expect(await clear(ids.auditor, ids.projectA)).toEqual([]);
+    expect(await clear(ids.pa, ids.projectB)).toEqual([]);
+    expect(await clear(ids.outsider, ids.projectA)).toEqual([]);
+    expect(await clear(ids.worker, `${run}-made-up`)).toEqual([]);
+    expect(await remaining(p)).toEqual([`${p}a`, `${p}b`]);
+
+    expect(await clear(ids.pb, ids.projectB)).toEqual([keyOf(`${p}a`), keyOf(`${p}b`, ids.projectB)].sort());
+  });
+
+  it("cuts off at an hour whatever the session's time zone", async () => {
+    const p = `${run}-stale5-`;
+    await upload(`${p}recent`, { minutes: 30 });
+    await upload(`${p}stale`, { minutes: 61 });
+    // 14 hours ahead of UTC: a cutoff in local time would take the recent one too.
+    const keys = await withAccess(ids.worker, async () => {
+      await getDb().execute(sql`set local timezone = 'Pacific/Kiritimati'`);
+      const { rows } = await getDb().execute<{ key: string }>(sql`select clear_stale_uploads(${ids.projectA}) as key`);
+      return rows.map((r) => r.key);
+    });
+
+    expect(keys).toEqual([keyOf(`${p}stale`)]);
+    expect(await remaining(p)).toEqual([`${p}recent`]);
+    await getMaintenanceDb().execute(sql`delete from attachment where id like ${`${p}%`}`);
+  });
+
+  it("clears nothing for a worker taken off the crew, or on no crew", async () => {
+    const p = `${run}-stale3-`;
+    await upload(`${p}a`);
+    await getMaintenanceDb().execute(sql`delete from project_worker where project_id = ${ids.projectA} and user_id = ${ids.exWorker}`);
+
+    expect(await clear(ids.exWorker, ids.projectA)).toEqual([]);
+    expect(await clear(ids.idleWorker, ids.projectA)).toEqual([]);
+    expect(await remaining(p)).toEqual([`${p}a`]);
+    await getMaintenanceDb().execute(sql`delete from attachment where id like ${`${p}%`}`);
+  });
+
+  it("clears nothing through a deleted project, for its crew worker or an admin", async () => {
+    const p = `${run}-stale4-`;
+    await upload(`${p}a`);
+    await upload(`${p}c`, { project: ids.projectC, by: ids.admin });
+    await getMaintenanceDb().execute(sql`update project set deleted_at = now() where id = ${ids.projectC}`);
+
+    expect(await clear(ids.worker, ids.projectC)).toEqual([]);
+    expect(await clear(ids.admin, ids.projectC)).toEqual([]);
+    expect(await remaining(p)).toEqual([`${p}a`, `${p}c`]);
+    await getMaintenanceDb().execute(sql`update project set deleted_at = null where id = ${ids.projectC}`);
+    await getMaintenanceDb().execute(sql`delete from attachment where id like ${`${p}%`}`);
   });
 });

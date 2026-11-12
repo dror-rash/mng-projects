@@ -114,8 +114,6 @@ jobs:
       - run: pnpm db:migrate
       # Row-level security against the migrated database (task 047).
       - run: pnpm --filter @repo/db test:db
-      # The demo seed against that database (task 076): local and --deploy runs, skips and refusals.
-      - run: pnpm --filter @repo/dashboard test:db
       # The sign-in rate limit shared by server instances (task 089): two Better Auth instances, one database.
       - run: pnpm --filter @repo/auth test:db
       # The deploy's database scripts (task 068): runtime role check, preview logins, migration lock, and the
@@ -135,6 +133,9 @@ jobs:
           -external-url http://localhost:4443 -data /data -cors-headers Content-Type,Content-Disposition,x-goog-if-generation-match,x-goog-content-length-range
           && timeout 30 sh -c 'until curl -sf http://localhost:4443/storage/v1/b >/dev/null; do sleep 1; done'
       - run: pnpm --filter @repo/storage test:storage
+      # The dashboard's database tests: the demo seed (task 076: local and --deploy runs, skips and refusals), and
+      # unfinished uploads (task 087), which also need the storage server above.
+      - run: pnpm --filter @repo/dashboard test:db
       - run: pnpm test:e2e
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         if: ${{ !cancelled() }}

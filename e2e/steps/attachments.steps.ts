@@ -43,7 +43,29 @@ export async function addFile(page: Page, button: string, file: ReturnType<typeo
 
 When("I add the photo {string} with {string}", async ({ page }, name: string, button: string) => {
   await addFile(page, button, fileOf(name));
-  await expect(section(page).getByRole("img", { name, exact: true })).toBeVisible();
+  // The photo shows, or the upload was refused (a scenario then checks the error).
+  await expect(section(page).getByRole("img", { name, exact: true }).or(uploadError(page)).first()).toBeVisible();
+});
+
+// Each upload starts (the server records it), then every request after the start is cut off: the file's PUT
+// to storage and the confirm call. So each stays recorded and unconfirmed (task 087). The page is then
+// reloaded with the connection back, so no error of a dropped upload is left on it.
+When("my connection drops during {int} photo uploads", async ({ page }, count: number) => {
+  await page.route("**/*", async (route) => {
+    const request = route.request();
+    const body = request.postData();
+    const confirm = request.method() === "POST" && body?.includes('"attachmentId"') && !body.includes('"fileName"');
+    if (request.method() === "PUT" || confirm) await route.abort("internetdisconnected");
+    else await route.continue();
+  });
+  for (let i = 1; i <= count; i++) {
+    const name = `dropped-${i}.jpg`;
+    await page.getByLabel("Add photos", { exact: true }).setInputFiles(fileOf(name));
+    await expect(uploadError(page)).toHaveText(`Couldn't add ${name}. Try again.`);
+  }
+  await page.unrouteAll();
+  await page.reload();
+  await expect(section(page)).toContainText("No photos or files yet.");
 });
 
 When("I add the file {string} with {string}", async ({ page }, name: string, button: string) => {
