@@ -62,6 +62,8 @@ jobs:
       - run: bash infra/scripts/test-deploy-service.sh
       # The deploy's demo-seed step stays main-only and non-blocking (task 076).
       - run: bash infra/scripts/test-workflows.sh
+      # The alerts and the budget (task 092): channel, policies, tfvars-only variables.
+      - run: bash infra/scripts/test-monitoring.sh
       # The agents' guard hook (tasks 067, 084): refusals, look-alikes, commits in a second worktree.
       - run: bash scripts/test-hooks.sh
         # The script sets it per case too; kept here so no case can ever run lint/typecheck.

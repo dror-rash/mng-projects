@@ -1,8 +1,8 @@
 # Infrastructure (GCP)
 
 Terraform for: Artifact Registry, one Cloud Run service per zone (`shell`, `example-zone`, `dashboard`), runtime
-service accounts per zone and environment, Cloud SQL, Secret Manager, the file buckets, a log exclusion, and
-GitHub Actions → GCP auth via Workload Identity Federation (no long-lived keys).
+service accounts per zone and environment, Cloud SQL, Secret Manager, the file buckets, a log exclusion, email
+alerts and a monthly budget, and GitHub Actions → GCP auth via Workload Identity Federation (no long-lived keys).
 
 Every resource is regional in `var.region` (required; this project uses `me-west1`, Tel Aviv): Cloud Run,
 Artifact Registry (`<region>-docker.pkg.dev`), Cloud SQL and the buckets.
@@ -25,7 +25,7 @@ gcloud storage buckets update gs://<PROJECT_ID>-tfstate --versioning
 
 cd infra
 cp backend.hcl.example backend.hcl            # edit
-cp terraform.tfvars.example terraform.tfvars  # edit (region = "me-west1")
+cp terraform.tfvars.example terraform.tfvars  # edit (region = "me-west1", alert_email, billing_account, monthly_budget)
 terraform init -backend-config=backend.hcl
 terraform plan
 terraform apply
@@ -277,6 +277,45 @@ refuses (a warning, nothing written) unless the account is the admin and only me
 A refusal or failure never fails the deploy (`continue-on-error`). The log shows counts only; the email and
 password are masked. To start over, use a new demo account (a new `DEMO_EMAIL`); there is no reseed from CI.
 
+## Alerts and budget
+`infra/monitoring.tf` (task 092, register SEC-17). Everything emails one channel, the owner's address
+(`alert_email`). `alert_email`, `billing_account` and `monthly_budget` have no default: they are set in the
+git-ignored `terraform.tfvars` only (`terraform.tfvars.example` has placeholders), and the address and billing
+account are `sensitive`, so `terraform plan` prints neither. `bash infra/scripts/test-monitoring.sh` (in
+`pnpm test:infra` and CI) checks all of this, with probes.
+
+| Alert | Fires on | What to do first |
+|---|---|---|
+| IAM policy changed | any `SetIamPolicy` (project, service account, secret, Cloud Run service, repository) or bucket `setIamPermissions` in the Admin Activity audit log; at most one email per 5 minutes | expected after your own `terraform apply`. Otherwise: check the principal and binding in the log entry, remove it, then `terraform plan` for other drift |
+| Service-account key created | `CreateServiceAccountKey` or `UploadServiceAccountKey`; at most one per 5 minutes | the project uses no keys: delete the key (`gcloud iam service-accounts keys list/delete`), then remove the access of whoever made it |
+| Cloud Run service changed outside CI | a service created, replaced, updated or deleted (Admin API v1 or v2) by anyone but `deployer-main` and `deployer-preview`; at most one per 5 minutes | expected after your own `terraform apply`. Otherwise: check the principal, route traffic back to the last CI revision (or re-run the last Deploy on `main`), remove that principal's access |
+| Security config changed | by anyone, deployers included: a Workload Identity pool or provider created, updated, deleted or undeleted; a custom role likewise; an HMAC key created; a secret version added, disabled or destroyed, or a secret deleted; a Cloud SQL user created, updated or deleted, or the instance updated; a Cloud Run job created, replaced or updated; a log sink or exclusion created, updated or deleted; a bucket's settings updated; an alert policy or notification channel updated or deleted (silencing these alerts); at most one per 5 minutes | expected after your own `terraform apply`. Otherwise: check the method and principal, undo it (`terraform plan` shows the drift), remove that principal's access; for a new secret version or SQL password, rotate the secret |
+| main: more than 5% 5xx responses | 5xx / all requests above 5% **and** at least 3 5xx responses in a 5-minute window, for the same `main` service (`shell`, `example-zone`, `dashboard`) | the service's error logs; if the latest deploy caused it, route traffic back to the previous revision or revert on `main`. `too many connections` points at the next alert |
+| Cloud SQL: connections above 80% | backends of all databases above 17.6 (80% of `db-f1-micro`'s 22 login connections) for 5 minutes | `pg_stat_activity` by user and database as `app`; previews take at most 10 (Known limits). Lower `main`'s `max_instances` or move to a bigger tier. The threshold follows `db_tier` through `local.sql_max_connections`; a tier missing there fails the plan (precondition), so add its limit with the tier change |
+| Budget | 50%, 90% and 100% of `monthly_budget` (USD, this project's current monthly spend) | the billing report by service; Cloud SQL is most of the normal spend |
+
+- The log alerts read the Admin Activity audit log (always on, free); the filters were checked against the
+  project's own entries (the deployers' `ReplaceService` calls fall outside the Cloud Run alert, your own
+  Terraform `CreateService` calls inside it). The method regexes are `local.log_alert_methods` and
+  `local.security_config_methods`, written with `[.]` for dots and no backslashes: a Terraform heredoc keeps a
+  backslash as written, and Cloud Logging then reads `\\.` as a literal backslash and matches nothing.
+  `test-monitoring.sh` runs each regex against method names it must and must not match.
+- The Cloud Run alert leaves out the two deployers, so a misused deployer (say, `deployer-main` deploying
+  something odd from a push to `main`) is not reported there; Workload Identity and the `main` ruleset are the
+  guard. It also relies on CI impersonating the deployer service accounts (the audit entry's `principalEmail` is
+  the account). If CI moves to direct Workload Identity access (a `principal://` subject), every deploy would alert
+  until the exclusion changes.
+- The budget emails the billing account's admins as well as the channel. Its currency must be the billing
+  account's (USD). It uses a second `google` provider (`google.billing`) that sends the project as quota project,
+  which the Billing Budget API needs with user credentials. Creating it needs Billing Account Administrator (or
+  Costs Manager) on the billing account; if your account lacks it, `apply` fails on `google_billing_budget.monthly`
+  only (task 092 moves the budget to a follow-up then).
+- The deployers hold no Monitoring or Billing role, so they can't change or silence the alerts; anyone who
+  updates or deletes a policy or the channel is reported by "Security config changed".
+- Once the budget exists, `terraform plan` refreshes it, which needs at least Billing Account Viewer (or Costs
+  Manager) on the billing account. Without it, plan with `-refresh=false`, or `-target` the resources you change.
+- Alerts for previews, uptime checks and chat/paging channels are out of scope (task 092's parking lot).
+
 ## Known limits / follow-ups
 - Connections on `db-f1-micro` (22 for logins; task 075): previews at most 10 (`preview_runtime` 3 × 1 × 2 + 1 =
   7, `preview_owner` 3), `main` 12 (`MAIN_DB_CONNECTIONS` in `environment.sh`). That fills all 22 with no margin.
@@ -313,4 +352,8 @@ password are masked. To start over, use a new demo account (a new `DEMO_EMAIL`);
 ## Monthly cost (POC, `me-west1`)
 Cloud SQL is most of it (about US$11–14). Cloud Run scales to zero; buckets, logs and the registry stay within
 or near the free tiers at POC volume. The preview identities, deployers and secrets add nothing at this size (five
-secret versions in all, within Secret Manager's 6 free; service accounts are free). Target: about US$15/month.
+secret versions in all, within Secret Manager's 6 free; service accounts are free). Budgets, the email channel
+and the log-match alerts on the audit log are free; Cloud Monitoring's alerting charge (US$0.10 a month per
+condition, plus a little per time series it reads, if in effect on your billing account) would add about US$0.70 a
+month for the seven alert conditions. Target: about US$15/month; the budget (task 092) warns at 50/90/100% of
+`monthly_budget`.
