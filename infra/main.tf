@@ -20,8 +20,8 @@ locals {
   environments = {
     main = {
       db_name          = "app"
-      db_login         = "app" # the runtime switches to app_user on connect (ADR-0006)
-      db_secret        = "db-password"
+      db_login         = "app_runtime" # created by infra/scripts/provision-db-logins.mjs; owns nothing (task 074)
+      db_secret        = "db-runtime-password"
       migrate_login    = "app" # the Cloud SQL user below
       migrate_secret   = "db-password"
       auth_secret      = "better-auth-secret"
@@ -47,11 +47,18 @@ locals {
   # Every secret: the database passwords and the auth secrets of both environments.
   secret_names = toset(flatten([for env in values(local.environments) : [env.db_secret, env.migrate_secret, env.auth_secret]]))
 
-  # Which database passwords each deployer reads. Main provisions the preview logins (it sets their
-  # passwords), so it reads theirs too; previews never read db-password. No deployer reads an auth secret.
+  # Which database passwords each deployer reads. Main provisions its runtime login and the preview logins (it
+  # sets their passwords), so it reads theirs too; previews never read main's. No deployer reads an auth secret.
   deployer_secrets = {
-    main    = distinct([local.environments.main.migrate_secret, local.environments.preview.migrate_secret, local.environments.preview.db_secret])
+    main    = distinct([local.environments.main.migrate_secret, local.environments.main.db_secret, local.environments.preview.migrate_secret, local.environments.preview.db_secret])
     preview = distinct([local.environments.preview.migrate_secret, local.environments.preview.db_secret])
+  }
+
+  # Task 074, transition only: main's runtime identities keep reading the owner's password until the first main
+  # deploy with app_runtime is verified, so the running revisions (DB_PASSWORD=db-password) keep starting and a
+  # revert of that deploy still works. Remove it then (infra/README.md, "Main's runtime login").
+  runtime_transition_secrets = {
+    main = [local.environments.main.migrate_secret]
   }
 
   # One runtime identity and one Cloud Run service per zone and environment, keyed "<zone>/<environment>".
@@ -319,10 +326,10 @@ resource "google_sql_database" "databases" {
   instance = google_sql_database_instance.main.name
 }
 
-# Main's owner login: runs main's migrations, provisions the preview logins, and is main's runtime login
-# (switching to app_user, ADR-0006). The preview logins (preview_owner, preview_runtime) are created by
+# Main's owner login: runs main's migrations and seeds, and provisions the other logins. The runtime logins
+# (app_runtime for main, task 074; preview_runtime) and preview_owner are created by
 # infra/scripts/provision-db-logins.mjs on main deploys, not here: Cloud SQL makes every API-created user a
-# member of cloudsqlsuperuser, which owns the databases.
+# member of cloudsqlsuperuser, which owns the databases. Only their passwords are generated here.
 resource "google_sql_user" "app" {
   name     = local.environments.main.migrate_login
   instance = google_sql_database_instance.main.name
@@ -352,12 +359,15 @@ resource "google_secret_manager_secret_version" "secret" {
   secret_data = each.value.result
 }
 
-# Each runtime identity reads its own environment's database password and auth secret, nothing else.
-# Every zone of an environment shares them (any zone can validate a session).
+# Each runtime identity reads its own environment's database password and auth secret, nothing else (plus,
+# for now, runtime_transition_secrets). Every zone of an environment shares them (any zone can validate a session).
 resource "google_secret_manager_secret_iam_member" "runtime_reads_secrets" {
   for_each = merge([
     for key, runtime in local.runtimes : {
-      for secret in [local.environments[runtime.environment].db_secret, local.environments[runtime.environment].auth_secret] :
+      for secret in concat(
+        [local.environments[runtime.environment].db_secret, local.environments[runtime.environment].auth_secret],
+        lookup(local.runtime_transition_secrets, runtime.environment, []),
+      ) :
       "${key}/${secret}" => { runtime = key, secret = secret }
     }
   ]...)

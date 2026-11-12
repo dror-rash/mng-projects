@@ -75,18 +75,31 @@ ones: `bash infra/scripts/test-environment.sh` fails when they differ.
 | Runtime identity | `<zone>-runtime` | `<zone>-preview` |
 | Database | `app` | `app_preview` |
 | Migrations run as | `app` (Terraform's Cloud SQL user) | `preview_owner` |
-| Runtime login (switches to `app_user`) | `app` (task 074 plans its own) | `preview_runtime` |
-| Secrets | `db-password`, `better-auth-secret` | `db-preview-owner-password`, `db-preview-password`, `better-auth-secret-preview` |
+| Runtime login (switches to `app_user`) | `app_runtime` (task 074) | `preview_runtime` |
+| Secrets | `db-password`, `db-runtime-password`, `better-auth-secret` | `db-preview-owner-password`, `db-preview-password`, `better-auth-secret-preview` |
 | Files bucket | `<PROJECT_ID>-files` | `<PROJECT_ID>-files-preview` |
 
-- Each runtime identity reads only its environment's runtime database password and auth secret.
+- Each runtime identity reads only its environment's runtime database password and auth secret (and, until the
+  rollout below is finished, `main`'s also `db-password`: `runtime_transition_secrets` in `main.tf`).
   `deploy-service.sh` sets the revision's identity, env vars, secrets and Cloud SQL instance with `--set-*`, so a
   revision never inherits the other environment's.
 - Each deployer deploys only to its environment's services, pushes only to its environment's repository and acts
   only as its environment's runtime identities. The preview shell is built with the preview zones' tagged URLs;
   `main` services never get preview revisions. `deployer-preview` reads only the two preview
-  database passwords. `deployer-main` reads `db-password` and, because it provisions the preview logins, their two
-  passwords. No deployer reads an auth secret.
+  database passwords. `deployer-main` reads `db-password` and, because it provisions `app_runtime` and the preview
+  logins, their three passwords. No deployer reads an auth secret.
+- **Main's runtime login (task 074).** `main`'s services connect as `app_runtime`, not as the owner login `app`:
+  with the owner, one `SET ROLE app` or `RESET ROLE` on a pooled connection would leave row-level security behind
+  (ADR-0006, 2026-11-10 amendment). `provision-db-logins.mjs` creates it on `main` deploys, as `app`, before the
+  role check: `LOGIN NOINHERIT`, owns nothing, its only membership is `app_user` with `SET` (no `INHERIT`, no
+  ADMIN), `CONNECT` on `app`, no `CONNECTION LIMIT` (as `app` before it). This part is fatal: a failure fails
+  the main deploy before any service deploys. Keeping it out of `app_preview` is a best-effort preview step:
+  the preview logins and `app` get `CONNECT` grants of their own there, then `PUBLIC` and `app_runtime` lose it,
+  in one step, so if a grant can't run nothing is revoked and previews still connect. The preview verification
+  then fails until a main deploy completes it (a preview login without its own grant, or `app_runtime` able to
+  connect). Its password is Terraform's `db-runtime-password`. Migrations, the
+  demo seed and provisioning keep the owner login. Local dev and CI keep one login (`DATABASE_URL`); the tests
+  create a throwaway runtime login where they need one.
 - **Preview logins.** `infra/scripts/provision-db-logins.mjs` creates them on `main` deploys only, as `app`, in two
   parts:
   - **Main side**, on a connection to `app` (PR code can't write there), bounded by `lock_timeout` (30 s;
@@ -200,6 +213,8 @@ ones: `bash infra/scripts/test-environment.sh` fails when they differ.
 `infra/scripts/check-runtime-role.mjs` connects like the runtime pool (`buildPoolConfig`: the login and
 `-c role=app_user`) and fails the deploy unless (ADR-0006: row-level security isn't forced):
 - `current_user = app_user`, and the login may `SET ROLE app_user`;
+- the login (`session_user`) isn't, and can't `SET ROLE` to, the owner of the public tables or of the database
+  (task 074). So it **fails on purpose when the runtime connects as the owner login** (`app` or `preview_owner`);
 - `app_user` is no superuser and has no `BYPASSRLS` or `TEMPORARY` (migration 0025);
 - `app_user` owns no public table and isn't a member of any table's owner;
 - row-level security is on for every public table except Better Auth's (`account`, `session`, `user`, `verification`);
@@ -296,6 +311,29 @@ refuses (a warning, nothing written) unless the account is the admin and only me
 A refusal or failure never fails the deploy (`continue-on-error`). The log shows counts only; the email and
 password are masked. To start over, use a new demo account (a new `DEMO_EMAIL`); there is no reseed from CI.
 
+## Main's runtime login: rollout (task 074)
+Order matters: the deploy reads `db-runtime-password` and the services start with it, so the secret exists first.
+1. Apply Terraform (from `infra/`, `terraform plan` then `terraform apply`): it adds `db-runtime-password` and its
+   reader grants (`main`'s runtime identities and `deployer-main`) and removes nothing. The plan also shows 6
+   in-place updates of the Cloud Run services (`scaling`): that drift is already there on `main` (task 068's
+   services), not from this change. The running services
+   still use `app` and `db-password`, which they can still read.
+2. Before merging, look at the last `main` Deploy log for `::warning::Preview login step skipped`. With one
+   there, a preview login may lack its own `CONNECT` grant on `app_preview`; that is still safe (the grants and
+   the revoke of `PUBLIC`'s run as one step, so nothing is revoked until every grant runs), but the next
+   previews fail their verification until a main deploy completes the step. Merge. The `main` deploy migrates as `app`, creates `app_runtime` (`Database logins provisioned on app:
+   app_runtime owns nothing…`), runs the role check as `app_runtime` (`Runtime role check passed on app (login
+   app_runtime)`), then deploys the services with `DB_USER=app_runtime` and `DB_PASSWORD=db-runtime-password`.
+3. Verify: those two log lines in the Deploy run, then sign in on the `main` URL and open the dashboard
+   (projects and customers load). `@smoke` runs on previews only, so this check is by hand.
+4. Then drop `runtime_transition_secrets` from `main.tf` in a follow-up PR and apply it (3 IAM grants destroyed:
+   `main`'s runtime identities no longer read `db-password`).
+
+Revert (before step 4): revert the PR. The next `main` deploy goes back to `app`/`db-password`, which the runtime
+identities can still read. `app_runtime` stays in the database, unused and harmless (it owns nothing and can
+only become `app_user`); dropping it is a task of its own, never a hand edit. If the deploy fails at provisioning or the
+role check, nothing is deployed: the old revision keeps serving as `app`.
+
 ## Alerts and budget
 `infra/monitoring.tf` (task 092, register SEC-17). Everything emails one channel, the owner's address
 (`alert_email`). `alert_email`, `billing_account` and `monthly_budget` have no default: they are set in the
@@ -370,8 +408,9 @@ account are `sensitive`, so `terraform plan` prints neither. `bash infra/scripts
 
 ## Monthly cost (POC, `me-west1`)
 Cloud SQL is most of it (about US$11–14). Cloud Run scales to zero; buckets, logs and the registry stay within
-or near the free tiers at POC volume. The preview identities, deployers and secrets add nothing at this size (five
-secret versions in all, within Secret Manager's 6 free; service accounts are free). Budgets, the email channel
+or near the free tiers at POC volume. The preview identities, deployers and secrets add nothing at this size (six
+secret versions in all since task 074's `db-runtime-password`, exactly Secret Manager's 6 free; a seventh costs
+about US$0.06/month; service accounts are free). Budgets, the email channel
 and the log-match alerts on the audit log are free; Cloud Monitoring's alerting charge (US$0.10 a month per
 condition, plus a little per time series it reads, if in effect on your billing account) would add about US$0.70 a
 month for the seven alert conditions. Target: about US$15/month; the budget (task 092) warns at 50/90/100% of

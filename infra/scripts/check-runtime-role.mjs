@@ -2,6 +2,10 @@
 // Runtime role check (task 068, ADR-0006): after `db:migrate`, open a connection exactly as the runtime pool
 // does (the environment's runtime login, `-c role=app_user` from buildPoolConfig) and fail unless
 //   - current_user is app_user, and the login may SET ROLE app_user;
+//   - the login (session_user) isn't, and can't SET ROLE to, the owner of the public tables or of the database
+//     (task 074): a `SET ROLE <owner>` or `RESET ROLE` on a pooled connection would leave row-level security
+//     behind. So the check fails on purpose when the runtime connects as the owner login. Nor can it SET ROLE
+//     to any role but itself and app_user;
 //   - app_user isn't a superuser and hasn't BYPASSRLS;
 //   - app_user owns no public table and isn't a member of any table's owner (owners bypass row-level
 //     security, which isn't forced);
@@ -70,6 +74,36 @@ export async function checkRuntimeRole(client, role = RUNTIME_ROLE) {
   if (rolsuper !== false) failures.push(`${role} is a superuser`);
   if (rolbypassrls !== false) failures.push(`${role} has BYPASSRLS`);
   if (canTemp !== false) failures.push(`${role} has TEMPORARY on the database (migration 0025's REVOKE didn't apply)`);
+
+  // The owners the login must not be or become (task 074). pg_has_role(…, 'SET') is the rule SET ROLE applies;
+  // a login always may SET ROLE itself, so the owner login fails here too.
+  const owners = await client.query(
+    `select o.kind, pg_catalog.pg_get_userbyid(o.owner)::text as owner, s.login,
+            o.owner = s.oid as is_login, pg_catalog.pg_has_role(s.oid, o.owner, 'SET') as can_set
+     from (select distinct 'the tables' as kind, c.relowner as owner
+             from pg_catalog.pg_class c join pg_catalog.pg_namespace n on n.oid = c.relnamespace
+            where n.nspname = 'public' and c.relkind in ('r', 'p')
+           union all
+           select 'the database ' || d.datname::text, d.datdba from pg_catalog.pg_database d
+            where d.datname = pg_catalog.current_database()) o,
+          (select r.oid, r.rolname::text as login from pg_catalog.pg_roles r where r.rolname = pg_catalog."session_user"()) s
+     order by 1, 2`,
+  );
+  for (const { kind, owner, login, is_login: isLogin, can_set: canSet } of owners.rows) {
+    if (isLogin) failures.push(`the login (session_user) "${login}" owns ${kind}: the runtime must connect as its own login, not the owner (task 074)`);
+    else if (canSet) failures.push(`the login (session_user) "${login}" can SET ROLE "${owner}", which owns ${kind}`);
+  }
+  // And nothing else to become: the runtime logins' only membership is app_user (task 074 review).
+  const others = await client.query(
+    `select pg_catalog."session_user"()::text as login, pg_catalog.string_agg(r.rolname::text, ', ' order by r.rolname) as roles
+     from pg_catalog.pg_roles r
+     where pg_catalog.pg_has_role(pg_catalog."session_user"(), r.oid, 'SET')
+       and r.rolname <> pg_catalog."session_user"() and r.rolname <> $1::text`,
+    [role],
+  );
+  if (others.rows[0].roles) {
+    failures.push(`the login (session_user) "${others.rows[0].login}" can SET ROLE to roles other than itself and ${role}: ${others.rows[0].roles}`);
+  }
 
   const tables = await client.query(
     `select c.relname::text as name,
@@ -179,7 +213,7 @@ async function main() {
       return;
     }
     console.log(
-      `Runtime role check passed on ${rows[0].db} (login ${rows[0].login}): current_user = ${RUNTIME_ROLE}, no superuser/BYPASSRLS/TEMPORARY, owns no table, RLS on, nothing around it, probe sees no workspace.`,
+      `Runtime role check passed on ${rows[0].db} (login ${rows[0].login}): current_user = ${RUNTIME_ROLE}, the login can't SET ROLE to an owner, no superuser/BYPASSRLS/TEMPORARY, owns no table, RLS on, nothing around it, probe sees no workspace.`,
     );
   } finally {
     await client.end();
