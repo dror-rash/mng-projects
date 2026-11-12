@@ -5,6 +5,7 @@
 set -u
 DIR="$(cd "$(dirname "$0")" && pwd)"
 MAIN_TF="$DIR/../main.tf"
+VARIABLES_TF="$DIR/../variables.tf"
 pass=0; fail=0
 expect() { # name, expected, actual
   if [ -n "$2" ] && [ "$2" = "$3" ]; then pass=$((pass+1)); echo "ok   - $1"; else fail=$((fail+1)); echo "FAIL - $1 (expected '$2', got '$3')"; fi
@@ -22,6 +23,26 @@ tf_env() { # env, key
     block && $0 ~ "^    \\}" { block = 0 }
     block && $1 == key { gsub(/"/, "", $3); print $3; exit }
   ' "$MAIN_TF"
+}
+
+# The default of a Terraform variable in variables.tf: a number, or the number of strings in a list.
+tf_default() { # name
+  awk -v name="$1" '
+    $0 ~ "^variable \"" name "\" \\{" { inside = 1; next }
+    inside && /^\}/ { exit }
+    inside && $1 == "default" {
+      sub(/^[^=]*=[ ]*/, "")
+      if ($0 ~ /^\[/) { print gsub(/"[^"]*"/, ""); exit }
+      print $0; exit
+    }
+  ' "$VARIABLES_TF"
+}
+
+# "mapped" when a main.tf gives each service's revision max_instance_count from local.runtimes' max_instances, and
+# that is var.preview_max_instances for previews and var.max_instances for main; "unmapped" otherwise.
+max_instances_mapping() { # main.tf
+  if grep -qE '^ +max_instances += +pair\[1\] == "preview" \? var\.preview_max_instances : var\.max_instances *$' "$1" &&
+     grep -qE '^ +max_instance_count += +each\.value\.max_instances *$' "$1"; then echo mapped; else echo unmapped; fi
 }
 
 # Previews and main never share.
@@ -73,6 +94,27 @@ expect "the fixed names agree with the per-environment ones" \
   "$(in_env true '$MAIN_DB_NAME $PREVIEW_DB_NAME $MAIN_OWNER_LOGIN $MAIN_RUNTIME_LOGIN $PREVIEW_OWNER_LOGIN $PREVIEW_RUNTIME_LOGIN')"
 expect "main's runtime names are the fixed ones (provision-db-logins.mjs reads those)" \
   "$(in_env false '$MAIN_RUNTIME_LOGIN $MAIN_RUNTIME_PASSWORD_SECRET')" "$(in_env false '$DB_LOGIN $DB_PASSWORD_SECRET')"
+
+# main's connection budget (task 091, SEC-14): every zone at its maximum instances, each with a full pool, fits
+# main's share of db-f1-micro's login connections. Above it, a burst scales the zones until new connections fail.
+zones="$(tf_default zones)"; max_instances="$(tf_default max_instances)"
+main_pool="$(in_env false '$MAIN_DB_POOL_MAX')"; main_share="$(in_env false '$MAIN_DB_CONNECTIONS')"
+expect "reads the zones and main's max_instances from variables.tf" yes \
+  "$(printf '%s %s' "$zones" "$max_instances" | grep -qE '^[0-9]+ [0-9]+$' && echo yes || echo no)"
+main_worst=$(( ${zones:-0} * ${max_instances:-0} * ${main_pool:-0} ))
+expect "main's worst case ($zones zones x $max_instances instances x pool $main_pool = $main_worst) fits its $main_share connections" \
+  yes "$( [ -n "$main_share" ] && [ "$main_worst" -le "$main_share" ] && echo yes || echo no)"
+
+# The budget only holds if main.tf gives main var.max_instances and previews var.preview_max_instances (an
+# override in terraform.tfvars is a blind spot: change the default instead). Probes: a hard-coded or swapped
+# mapping must fail the check.
+PROBE_DIR="$(mktemp -d)"; trap 'rm -rf "$PROBE_DIR"' EXIT
+expect "main.tf maps main to var.max_instances and previews to var.preview_max_instances" mapped \
+  "$(max_instances_mapping "$MAIN_TF")"
+sed 's/var\.preview_max_instances : var\.max_instances/var.preview_max_instances : 5/' "$MAIN_TF" > "$PROBE_DIR/hardcoded.tf"
+expect "probe: a hard-coded main maximum fails the mapping check" unmapped "$(max_instances_mapping "$PROBE_DIR/hardcoded.tf")"
+sed 's/var\.preview_max_instances : var\.max_instances/var.max_instances : var.preview_max_instances/' "$MAIN_TF" > "$PROBE_DIR/swapped.tf"
+expect "probe: a swapped mapping fails the mapping check" unmapped "$(max_instances_mapping "$PROBE_DIR/swapped.tf")"
 
 echo "$pass passed, $fail failed"
 [ "$fail" -eq 0 ]

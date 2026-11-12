@@ -56,7 +56,7 @@ import { Client, pinSearchPath, withPinnedSearchPath } from "./pg-safe.mjs";
  *   - zones: 3; previewInstances: every open PR's tagged revision can scale to 1 instance per zone
  *     (preview_max_instances is per revision; provider 6.50 has no service-wide maximum);
  *   - roleCheck: check-runtime-role.mjs's one connection as preview_runtime at deploy time;
- *   - mainPoolMax: main's pool, for its worst case (3 zones × 1 busy instance at POC traffic × 4 = 12).
+ *   - mainPoolMax: main's pool, for its worst case (3 zones × 1 instance (max_instances, task 091) × 4 = 12).
  */
 export const CONNECTION_BUDGET = {
   zones: 3,
@@ -72,7 +72,7 @@ export const CONNECTION_BUDGET = {
  *     Assumed: one preview tested at a time. A second at once may hit this limit and fail its own e2e
  *     ("too many connections for role"), never main.
  *   preview_owner: one PR migrating (lock + migration = 2) and another waiting on the lock (1) = 3.
- * Previews take at most 10; main keeps 12, its worst case (3 zones × 1 busy instance × 4 = 12).
+ * Previews take at most 10; main keeps 12 (MAIN_DB_CONNECTIONS in environment.sh), its worst case (3 × 1 × 4 = 12).
  */
 const { zones, previewInstances, previewPoolMax, roleCheck } = CONNECTION_BUDGET;
 export const CONNECTION_LIMITS = { previewOwner: 3, previewRuntime: zones * previewInstances * previewPoolMax + roleCheck };

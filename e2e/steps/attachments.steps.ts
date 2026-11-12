@@ -97,6 +97,38 @@ export async function expectDownloadAs(page: Page, href: string, fileName: strin
   expect(download.status()).toBe(200);
 }
 
+// --- Deleting a workspace deletes its files (task 086, SEC-08) ---------------------------------------------
+
+/** Follows the attachment's address to the signed storage URL it redirects to, as someone copying the link would. */
+async function signedUrlOf(page: Page, name: string) {
+  const response = await page.request.get(await hrefOf(page, name), { maxRedirects: 0 });
+  expect(response.status()).toBe(307);
+  const url = response.headers().location!;
+  expect((await page.request.get(url)).status()).toBe(200);
+  return url;
+}
+
+Given(
+  "I copy the download links of the photo {string} and the file {string}",
+  async ({ page, state }, photo: string, file: string) => {
+    state.copiedDownloadUrls = [await signedUrlOf(page, photo), await signedUrlOf(page, file)];
+  },
+);
+
+Then("the copied download links no longer open", async ({ page, state }) => {
+  expect(state.copiedDownloadUrls).toHaveLength(2);
+  for (const url of state.copiedDownloadUrls!) {
+    expect((await page.request.get(url)).status(), new URL(url).pathname).toBe(404);
+  }
+});
+
+Then("the copied download links still open", async ({ page, state }) => {
+  expect(state.copiedDownloadUrls).toHaveLength(2);
+  for (const url of state.copiedDownloadUrls!) {
+    expect((await page.request.get(url)).status(), new URL(url).pathname).toBe(200);
+  }
+});
+
 // --- The leak suite's two-partner workspace (partner-access.steps.ts) --------------------------------------
 
 /** The admin's upload, stored for real and written to the database as confirmed (its id: "<name>:attachment"). */
@@ -110,7 +142,7 @@ export async function adminAttachment(
   const workspaceId = idOf(state, "workspace");
   const { mimeType, buffer } = fileOf(name);
   const key = objectKey({ workspaceId, projectId });
-  const { url, headers } = await createUploadUrl({ key, contentType: mimeType });
+  const { url, headers } = await createUploadUrl({ key, contentType: mimeType, maxBytes: buffer.length });
   const upload = await fetch(url, { method: "PUT", headers, body: buffer });
   expect(upload.ok).toBe(true);
   const id = crypto.randomUUID();

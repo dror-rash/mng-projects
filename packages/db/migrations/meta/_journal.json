@@ -281,6 +281,34 @@
       "when": 1793898788354,
       "tag": "0039_readings_append_only",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1794333635676,
+      "tag": "0040_rate_limit",
+      "breakpoints": true
+    },
+    {
+      "idx": 41,
+      "version": "7",
+      "when": 1794334781374,
+      "tag": "0041_rate_limit_last_request",
+      "breakpoints": true
+    },
+    {
+      "idx": 42,
+      "version": "7",
+      "when": 1794336021813,
+      "tag": "0042_sign_in_lockout",
+      "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1794504133589,
+      "tag": "0043_user_delete_keeps_authored",
+      "breakpoints": true
     }
   ]
 }

@@ -10,6 +10,8 @@ locals {
     "sqladmin.googleapis.com",
     "storage.googleapis.com",
     "logging.googleapis.com",
+    "monitoring.googleapis.com",
+    "billingbudgets.googleapis.com",
   ]
 
   # Main and PR previews share the project and the Cloud SQL instance, nothing else: each has its own deployer,

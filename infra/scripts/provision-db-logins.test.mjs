@@ -276,10 +276,10 @@ test("limits preview_runtime to 3 zones x 1 instance x the preview pool (2), plu
   assert.equal(CONNECTION_LIMITS.previewRuntime, 3 * 1 * 2 + 1);
 });
 
-test("leaves main enough of db-f1-micro's 22 login connections for its worst case (3 zones x 1 instance x 4)", () => {
+test("leaves main the share environment.sh documents (MAIN_DB_CONNECTIONS) of db-f1-micro's 22 login connections", () => {
+  // test-environment.sh checks main's zones x max_instances x pool against this share (task 091).
   const mainShare = 22 - CONNECTION_LIMITS.previewOwner - CONNECTION_LIMITS.previewRuntime;
-  const mainWorst = 3 * 1 * CONNECTION_BUDGET.mainPoolMax;
-  assert.ok(mainWorst <= mainShare, `main's worst case ${mainWorst} > its share ${mainShare}`);
+  assert.equal(String(mainShare), fromEnvironmentSh("MAIN_DB_CONNECTIONS"));
 });
 
 test("verification fails while preview_runtime keeps an older limit (until a main deploy provisions it)", async () => {

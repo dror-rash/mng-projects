@@ -1,8 +1,8 @@
 # Infrastructure (GCP)
 
 Terraform for: Artifact Registry, one Cloud Run service per zone (`shell`, `example-zone`, `dashboard`), runtime
-service accounts per zone and environment, Cloud SQL, Secret Manager, the file buckets, a log exclusion, and
-GitHub Actions → GCP auth via Workload Identity Federation (no long-lived keys).
+service accounts per zone and environment, Cloud SQL, Secret Manager, the file buckets, a log exclusion, email
+alerts and a monthly budget, and GitHub Actions → GCP auth via Workload Identity Federation (no long-lived keys).
 
 Every resource is regional in `var.region` (required; this project uses `me-west1`, Tel Aviv): Cloud Run,
 Artifact Registry (`<region>-docker.pkg.dev`), Cloud SQL and the buckets.
@@ -25,7 +25,7 @@ gcloud storage buckets update gs://<PROJECT_ID>-tfstate --versioning
 
 cd infra
 cp backend.hcl.example backend.hcl            # edit
-cp terraform.tfvars.example terraform.tfvars  # edit (region = "me-west1")
+cp terraform.tfvars.example terraform.tfvars  # edit (region = "me-west1", alert_email, billing_account, monthly_budget)
 terraform init -backend-config=backend.hcl
 terraform plan
 terraform apply
@@ -127,9 +127,10 @@ ones: `bash infra/scripts/test-environment.sh` fails when they differ.
     the first previews failed `@smoke` with `too many connections for role "preview_runtime"`.)
   - `preview_owner` 3: one PR migrating (lock + migration) and one waiting on the lock.
   - Previews take at most 7 + 3 = 10 of `db-f1-micro`'s 22 login connections (25, 3 reserved); `main` keeps
-    22 − 10 = 12, and its worst case is 3 zones × 1 busy instance × 4 (`DB_POOL_MAX=4`) = 12: it fits at steady
-    state with no margin (see Known limits). `app` has no `CONNECTION LIMIT`, and operator sessions (`psql`,
-    `db:studio`) and a main deploy's own migrate/provisioning connections come out of `main`'s 12.
+    22 − 10 = 12 (`MAIN_DB_CONNECTIONS`), and its worst case is 3 zones × 1 instance (`max_instances`) × 4
+    (`DB_POOL_MAX=4`) = 12: it fits with no margin (see Known limits; `test-environment.sh` checks it). `app`
+    has no `CONNECTION LIMIT`, and operator sessions (`psql`, `db:studio`) and a main deploy's own
+    migrate/provisioning connections come out of `main`'s 12.
   - A change to these limits reaches previews only after a main deploy (main provisions, previews only verify):
     until then every preview deploy fails its verification (`preview_runtime's connection limit is 6, not 7`).
     Merge such a change, let the main deploy finish, then rerun or rebase open PRs. Open PRs based on the older
@@ -314,16 +315,73 @@ identities can still read. `app_runtime` stays in the database, unused and harml
 only become `app_user`); dropping it is a task of its own, never a hand edit. If the deploy fails at provisioning or the
 role check, nothing is deployed: the old revision keeps serving as `app`.
 
+## Alerts and budget
+`infra/monitoring.tf` (task 092, register SEC-17). Everything emails one channel, the owner's address
+(`alert_email`). `alert_email`, `billing_account` and `monthly_budget` have no default: they are set in the
+git-ignored `terraform.tfvars` only (`terraform.tfvars.example` has placeholders), and the address and billing
+account are `sensitive`, so `terraform plan` prints neither. `bash infra/scripts/test-monitoring.sh` (in
+`pnpm test:infra` and CI) checks all of this, with probes.
+
+| Alert | Fires on | What to do first |
+|---|---|---|
+| IAM policy changed | any `SetIamPolicy` (project, service account, secret, Cloud Run service, repository) or bucket `setIamPermissions` in the Admin Activity audit log; at most one email per 5 minutes | expected after your own `terraform apply`. Otherwise: check the principal and binding in the log entry, remove it, then `terraform plan` for other drift |
+| Service-account key created | `CreateServiceAccountKey` or `UploadServiceAccountKey`; at most one per 5 minutes | the project uses no keys: delete the key (`gcloud iam service-accounts keys list/delete`), then remove the access of whoever made it |
+| Cloud Run service changed outside CI | a service created, replaced, updated or deleted (Admin API v1 or v2) by anyone but `deployer-main` and `deployer-preview`; at most one per 5 minutes | expected after your own `terraform apply`. Otherwise: check the principal, route traffic back to the last CI revision (or re-run the last Deploy on `main`), remove that principal's access |
+| Security config changed | by anyone, deployers included: a Workload Identity pool or provider created, updated, deleted or undeleted; a custom role likewise; an HMAC key created; a secret version added, disabled or destroyed, or a secret deleted; a Cloud SQL user created, updated or deleted, or the instance updated; a Cloud Run job created, replaced or updated; a log sink or exclusion created, updated or deleted; a bucket's settings updated; an alert policy or notification channel updated or deleted (silencing these alerts); at most one per 5 minutes | expected after your own `terraform apply`. Otherwise: check the method and principal, undo it (`terraform plan` shows the drift), remove that principal's access; for a new secret version or SQL password, rotate the secret |
+| main: more than 5% 5xx responses | 5xx / all requests above 5% **and** at least 3 5xx responses in a 5-minute window, for the same `main` service (`shell`, `example-zone`, `dashboard`) | the service's error logs; if the latest deploy caused it, route traffic back to the previous revision or revert on `main`. `too many connections` points at the next alert |
+| Cloud SQL: connections above 80% | backends of all databases above 17.6 (80% of `db-f1-micro`'s 22 login connections) for 5 minutes | `pg_stat_activity` by user and database as `app`; previews take at most 10 (Known limits). Lower `main`'s `max_instances` or move to a bigger tier. The threshold follows `db_tier` through `local.sql_max_connections`; a tier missing there fails the plan (precondition), so add its limit with the tier change |
+| Budget | 50%, 90% and 100% of `monthly_budget` (USD, this project's current monthly spend) | the billing report by service; Cloud SQL is most of the normal spend |
+
+- The log alerts read the Admin Activity audit log (always on, free); the filters were checked against the
+  project's own entries (the deployers' `ReplaceService` calls fall outside the Cloud Run alert, your own
+  Terraform `CreateService` calls inside it). The method regexes are `local.log_alert_methods` and
+  `local.security_config_methods`, written with `[.]` for dots and no backslashes: a Terraform heredoc keeps a
+  backslash as written, and Cloud Logging then reads `\\.` as a literal backslash and matches nothing.
+  `test-monitoring.sh` runs each regex against method names it must and must not match.
+- The Cloud Run alert leaves out the two deployers, so a misused deployer (say, `deployer-main` deploying
+  something odd from a push to `main`) is not reported there; Workload Identity and the `main` ruleset are the
+  guard. It also relies on CI impersonating the deployer service accounts (the audit entry's `principalEmail` is
+  the account). If CI moves to direct Workload Identity access (a `principal://` subject), every deploy would alert
+  until the exclusion changes.
+- The budget emails the billing account's admins as well as the channel. Its currency must be the billing
+  account's (USD). It uses a second `google` provider (`google.billing`) that sends the project as quota project,
+  which the Billing Budget API needs with user credentials. Creating it needs Billing Account Administrator (or
+  Costs Manager) on the billing account; if your account lacks it, `apply` fails on `google_billing_budget.monthly`
+  only (task 092 moves the budget to a follow-up then).
+- The deployers hold no Monitoring or Billing role, so they can't change or silence the alerts; anyone who
+  updates or deletes a policy or the channel is reported by "Security config changed".
+- Once the budget exists, `terraform plan` refreshes it, which needs at least Billing Account Viewer (or Costs
+  Manager) on the billing account. Without it, plan with `-refresh=false`, or `-target` the resources you change.
+- Alerts for previews, uptime checks and chat/paging channels are out of scope (task 092's parking lot).
+
 ## Known limits / follow-ups
 - Connections on `db-f1-micro` (22 for logins; task 075): previews at most 10 (`preview_runtime` 3 × 1 × 2 + 1 =
-  7, `preview_owner` 3), `main` 12 (3 zones × 1 busy instance × `DB_POOL_MAX=4`). That fills all 22 with no
-  margin, and counts one busy instance per zone: `main` can scale to 5 instances per zone (5 × 3 × 4 = 60), and a
-  main deploy briefly adds its own (migration lock + migration 2, then provisioning 2, then the role check 1,
-  then the demo seed 1) while the old revision still serves. Idle pool connections close after 10 s (`pg`'s
-  default). That timer runs between requests because CPU is always allocated
-  (`run.googleapis.com/cpu-throttling: false`, checked on `dashboard-preview` and `shell`), so an older
-  revision's instances (the previous push of the same PR, or `main`'s old revision during a rollout) release their connections within about 10 s of their last request.
-  So this only bites under real load. Before real load: a bigger tier or a connection pooler, or lower `max_instances`.
+  7, `preview_owner` 3), `main` 12 (`MAIN_DB_CONNECTIONS` in `environment.sh`). That fills all 22 with no margin.
+- `main` runs at most 1 instance per zone (`max_instances`, task 091, SEC-14), so its worst case is 3 zones × 1 ×
+  `DB_POOL_MAX=4` = 12, its share. (It was 5 per zone: 5 × 3 × 4 = 60 against 12, so a burst of traffic, signed in
+  or not, could scale the zones until new connections failed and every database page errored for everyone.)
+  `test-environment.sh` fails when zones × `max_instances` (`variables.tf`) × `MAIN_DB_POOL_MAX` exceeds
+  `MAIN_DB_CONNECTIONS`, or when `main.tf` stops giving `main` `var.max_instances` (and previews
+  `var.preview_max_instances`); `provision-db-logins.test.mjs` fails when that share and the preview limits
+  disagree. The test reads the variable's default: **change the default, don't override it in
+  `terraform.tfvars`**, or the budget goes unchecked.
+- What a burst does now: one instance per zone takes up to about 80 requests in flight (Cloud Run's default
+  concurrency); beyond that Cloud Run queues briefly and then answers 429. Inside the instance, requests past the
+  pool's 4 connections wait for one, and nothing times that wait out today (no checkout timeout in
+  `pool-config.ts`), so a slow query backs up every page of that zone until the request itself times out. So a
+  burst means slow pages and 429s for some visitors rather than "too many connections" for everyone: degraded,
+  not unlimited. The trade-off: no second instance for redundancy, and a cold start serves the first request after
+  scale-to-zero. Raise `max_instances` only with more connections: a bigger tier (the test reads the new
+  `MAIN_DB_CONNECTIONS`) or a connection pooler; or drop a zone that needs no database (task 074 asks it of
+  `example-zone`). 2 × pool 2 would give redundancy at the same 12 (task 091, question 1).
+- What the cap doesn't cover: it is per revision. During a `main` deploy the old revision's instance and the new
+  one overlap in each zone (up to 2 × 3 × 4 = 24 for a moment), on top of the deploy's own connections as the owner
+  login (migration lock + migration 2, then provisioning 2, then the role check 1, then the demo seed 1). Idle
+  pool connections close after 10 s (`pg`'s default). That timer runs between requests because CPU is always
+  allocated (`run.googleapis.com/cpu-throttling: false`, checked on `dashboard-preview` and `shell`), so the old
+  revision's instances (and a PR's previous push) release their connections within about 10 s of their last
+  request once traffic moves. So the overlap only bites under load during a deploy; a pooler or a `CONNECTION
+  LIMIT` on the runtime login (task 074) closes it.
 - Services are public (`allUsers`). If org policy forbids that, put a load balancer with IAP in front.
 - Previews share the production project and Cloud SQL instance. Use a separate project for staging if data
   isolation must not depend on database grants.
@@ -333,4 +391,8 @@ role check, nothing is deployed: the old revision keeps serving as `app`.
 Cloud SQL is most of it (about US$11–14). Cloud Run scales to zero; buckets, logs and the registry stay within
 or near the free tiers at POC volume. The preview identities, deployers and secrets add nothing at this size (six
 secret versions in all since task 074's `db-runtime-password`, exactly Secret Manager's 6 free; a seventh costs
-about US$0.06/month; service accounts are free). Target: about US$15/month.
+about US$0.06/month; service accounts are free). Budgets, the email channel
+and the log-match alerts on the audit log are free; Cloud Monitoring's alerting charge (US$0.10 a month per
+condition, plus a little per time series it reads, if in effect on your billing account) would add about US$0.70 a
+month for the seven alert conditions. Target: about US$15/month; the budget (task 092) warns at 50/90/100% of
+`monthly_budget`.

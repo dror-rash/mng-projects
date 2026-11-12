@@ -1,3 +1,8 @@
 project_id        = "my-gcp-project"
 region            = "me-west1"
 github_repository = "my-org/my-repo"
+
+# Alerts and budget (task 092)
+alert_email     = "owner@example.com"
+billing_account = "000000-000000-000000"
+monthly_budget  = 25
