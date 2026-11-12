@@ -17,7 +17,11 @@ PREVIEW_RUNTIME_PASSWORD_SECRET="db-preview-password"
 # Database connections per instance (DB_POOL_MAX, packages/db pool-config.ts; task 075). Cloud SQL's 22 login
 # connections are shared: provision-db-logins.mjs derives preview_runtime's CONNECTION LIMIT from the preview
 # size (its test fails when they differ), and infra/README.md shows the arithmetic.
-MAIN_DB_POOL_MAX="4"                                     # 3 zones x 1 busy instance x 4 = 12
+# main's share: the 22 less previews' limits (preview_runtime 7 + preview_owner 3). provision-db-logins.test.mjs
+# fails when it and those limits differ; test-environment.sh fails when main's zones x max_instances (variables.tf)
+# x MAIN_DB_POOL_MAX exceeds it (task 091).
+MAIN_DB_CONNECTIONS="12"
+MAIN_DB_POOL_MAX="4"                                     # 3 zones x 1 instance (max_instances) x 4 = 12
 PREVIEW_DB_POOL_MAX="2"                                  # 3 zones x 1 instance x 2 = 6 per active preview
 
 if [ "${IS_PR:-false}" = "true" ]; then
@@ -56,4 +60,4 @@ service_name() { echo "${1}${SERVICE_SUFFIX}"; }
 export DEPLOY_ENV DB_NAME DB_MIGRATE_LOGIN DB_MIGRATE_PASSWORD_SECRET DB_LOGIN DB_PASSWORD_SECRET DB_POOL_MAX AUTH_SECRET_NAME \
   FILES_BUCKET RUNTIME_SA_SUFFIX SERVICE_SUFFIX IMAGE_REPOSITORY MAIN_DB_NAME PREVIEW_DB_NAME MAIN_OWNER_LOGIN MAIN_OWNER_PASSWORD_SECRET \
   PREVIEW_OWNER_LOGIN PREVIEW_OWNER_PASSWORD_SECRET PREVIEW_RUNTIME_LOGIN PREVIEW_RUNTIME_PASSWORD_SECRET \
-  MAIN_DB_POOL_MAX PREVIEW_DB_POOL_MAX
+  MAIN_DB_POOL_MAX PREVIEW_DB_POOL_MAX MAIN_DB_CONNECTIONS

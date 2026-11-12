@@ -102,7 +102,7 @@ Feature: Workspaces
     Then I see the error "Workspace name must be 100 characters or fewer"
 
   # Files live in storage, outside the database (ADR-0008): deleting a workspace deletes them too (SEC-08).
-  @wip @task:086
+  @task:086 @slow
   Scenario: Deleting a workspace deletes its photos and files
     Given I am signed in with an existing account
     And I create a workspace named "Acme Team"
@@ -116,7 +116,7 @@ Feature: Workspaces
     When I delete the workspace "Acme Team"
     Then the copied download links no longer open
 
-  @wip @task:086
+  @task:086 @slow
   Scenario: Deleting a workspace keeps another workspace's files
     Given I am signed in with an existing account
     And I have a customer "Acme Ltd" with status "Active" and tags "retail"

@@ -10,7 +10,7 @@ The one list of known security gaps and their status. The process that feeds it 
 |---|---|---|---|---|
 | P0 – fix now | 0 | 0 | 5 | 0 |
 | P1 – before real customer data on `main` | 2 | 9 | 3 | 0 |
-| P2 – hardening | 16 | 0 | 0 | 1 |
+| P2 – hardening | 17 | 0 | 0 | 1 |
 | P3 – info / decide | 8 | 0 | 0 | 0 |
 
 No Critical findings. One High (SEC-01). Nothing in the review showed one workspace's data reaching another through the app: every page, route handler and server action checks access on the server, and row-level security is on for every app table.
@@ -38,17 +38,19 @@ No Critical findings. One High (SEC-01). Nothing in the review showed one worksp
 |---|---|---|---|---|---|---|
 | SEC-06 | Med | The `main` runtime connects as `app`, the database owner, and only switches to `app_user`; any SQL foothold can `RESET ROLE` and bypass row-level security | DB / infra | M | planned (task 074) | INF-3, ACC-1 |
 | SEC-07 | Med | Uploads have no enforced size cap (the signed URL has no length range) and abandoned or orphaned uploads are never cleaned up: unbounded storage cost | Files | M | planned (tasks 085, 087) | WEB-1 |
-| SEC-08 | Med | Deleting a workspace (or a cascade) leaves its photos and reports in the bucket forever (retention, erasure requests) | Files | S–M | planned (task 086) | WEB-2 |
+| SEC-08 | Med | Deleting a workspace (or a cascade) leaves its photos and reports in the bucket forever (retention, erasure requests) | Files | S–M | fixed (PR #80, task 086; residual: a failed inline delete or an upload landing after it leaves orphans until a bucket-wide sweep exists; deleted objects stay restorable to project Owners/Editors for 7 days) | WEB-2 |
 | SEC-09 | Med | No email verification and no password reset: anyone can register any address, and the real owner can't recover it; sign-up also reveals which emails have accounts | Auth | M | open (**owner decision:** email provider, or accept for the POC) | AUTH-2, AUTH-4 |
-| SEC-10 | Med | Sign-in brute force is limited only by the in-memory, per-instance rate limiter (up to 5× the budget); no account lockout | Auth | M | planned (tasks 089, 090; the shared-bucket worry is partly answered: task 068 saw a client IP on the first preview) | AUTH-3 |
+| SEC-10 | Med | Sign-in brute force is limited only by the in-memory, per-instance rate limiter (up to 5× the budget); no account lockout | Auth | M | fixed (PR #83 shared limit, task 089; PR #86 lockout, task 090); accepted trade-off: anyone who knows an email can keep that account locked (owner, 2026-11-10); IPv6 counted per /64 | AUTH-3 |
 | SEC-11 | Med | No Dependabot alerts or updates, no `pnpm audit`, gitleaks or CodeQL in CI | Supply chain | S | fixed in CI (PR #62, task 082); **owner:** turn on Dependabot alerts and security updates; `security` is required by the SEC-02 ruleset | SUP-5 |
 | SEC-12 | Med | Agent guard gaps: `gcloud secrets versions access`, `gcloud beta run deploy`, `git push origin +main`, `git add -f .env` and `git -c … commit` all pass; commits in lane worktrees skip the commit checks | Tooling | M | fixed (PR #61, task 084; owner limits stay with SEC-02 and SEC-13) | SUP-2, SUP-3 |
 | SEC-13 | Med | The auto-mode environment in `~/.claude/settings.json` describes another, private repo; agent sessions hold the owner's `gcloud` and `gh` (`gist`, `repo`) credentials | Tooling | S | open (**owner:** project-level auto-mode context and deny rules; a less-privileged gcloud config for agents) | SUP-2 |
 | SEC-14 | Low | `main` can scale to 5 instances × 3 zones × 4 connections against a 12-connection database; unauthenticated traffic can cause "too many connections" outages | Infra | S | planned (task 091) | INF-8 |
 | SEC-15 | Low | Fork PRs from anyone with one merged PR run edited workflows without approval; `ci.yml` has no `permissions:`; WIF doesn't check which workflow asks for a token | CI/CD | S | `ci.yml` part fixed (PR #62, task 082); planned (task 083, WIF); **owner:** fork approval for all outside contributors | INF-11, INF-12 |
-| SEC-16 | Low | `drizzle-orm` 0.44.7 has a High SQL-injection advisory (identifiers); not reachable today, and Better Auth expects ≥0.45.2 | Supply chain | S | planned (task 081); GHSA-gpj5-g38j-94v9 ignored in `pnpm.auditConfig.ignoreGhsas` until task 081 (remove it there) | WEB-5, SUP-6 |
+| SEC-16 | Low | `drizzle-orm` 0.44.7 has a High SQL-injection advisory (identifiers); not reachable today, and Better Auth expects ≥0.45.2 | Supply chain | S | planned (task 081); task 081 bumps `drizzle-orm` to 0.45.4 (`drizzle-kit` 0.31.11) and removes GHSA-gpj5-g38j-94v9 from `pnpm.auditConfig.ignoreGhsas` | WEB-5, SUP-6 |
 | SEC-42 | Low | `postcss` 8.4.31, pinned by `next`, has two High advisories (GHSA-6g55-p6wh-862q, GHSA-r28c-9q8g-f849; fixed in ≥ 8.5.18); build-time only, but `pnpm audit --prod` (task 082) fails on them | Supply chain | S | fixed (PR #60, task 093) | task 082 audit |
 | SEC-17 | Low | No alerting at all (IAM changes, deploys outside CI, 5xx, DB connections) and no budget alert | Infra | M | planned (task 092) | INF-5 |
+| SEC-18 | Low | Deleting a user who uploaded a file or recorded a visit fails (`attachment_check`, `site_visit_keep_project`), so an erasure request or a compromised account can't be deleted | DB | S | fixed (PR #81, task 088) | ACC-3 |
+| SEC-17 | Low | No alerting at all (IAM changes, deploys outside CI, 5xx, DB connections) and no budget alert | Infra | M | fixed (PR #82, task 092; live once the owner applies) | INF-5 |
 | SEC-18 | Low | Deleting a user who uploaded a file or recorded a visit fails (`attachment_check`, `site_visit_keep_project`), so an erasure request or a compromised account can't be deleted | DB | S | planned (task 088; the visit half was noted in task 061) | ACC-3 |
 
 ## P2 – hardening
@@ -72,6 +74,8 @@ No Critical findings. One High (SEC-01). Nothing in the review showed one worksp
 | SEC-33 | Low | The leak suite misses 9 scenarios: the members page (partner, worker), admin-only forms posted by partners and workers, own partner page, parent id in the page source, sub-company site refusal, files after unassigning, readings after a project delete | Access | M | open (to the planner) | ACC report §2 |
 | SEC-43 | Low | `tinypool` 1.1.1 has two Critical prototype-pollution advisories (GHSA-5gmw-xhrv-c9v3, GHSA-85c8-ppgw-ccpr); it comes in through `better-auth`'s optional `vitest` peer, so `pnpm audit --prod` lists it, but only the test runner loads it | Supply chain | S | accepted (owner, 2026-11-08) until a vitest upgrade brings `tinypool` ≥2.1.2; both ignored in `pnpm.auditConfig.ignoreGhsas` | task 082 audit |
 | SEC-44 | Low | The `main` deploy runs on push in parallel with CI and isn't tied to a GitHub `production` environment; WIF doesn't require `assertion.environment == 'production'` for `main`. PRs must pass `verify`, `e2e` and `security` before merge (SEC-02), so only tested code reaches `main` | CI/CD | S | open (with task 083) | SEC-02 follow-up |
+| SEC-46 | Low | Better Auth's limiter counts every `/api/auth/*` path before routing, so requests to made-up paths add `rate_limit` rows; rows are pruned only when an existing key's window resets. Reject unknown auth paths in the shell's route handler before calling Better Auth | Auth | M | open | task 089 review |
+| SEC-45 | Low | The database pool has no checkout timeout and the runtime role no `statement_timeout`: with `main` capped at one instance per zone (SEC-14), a burst of slow queries makes every request on that zone wait, up to Cloud Run's 300 s | DB / infra | S | open | task 091 review |
 
 ## P3 – information and decisions
 
@@ -97,3 +101,9 @@ No Critical findings. One High (SEC-01). Nothing in the review showed one worksp
 - 2026-11-08 – SEC-11 fixed in CI (PR #62, task 082: audit, gitleaks, Dependabot config); the owner's alert settings stay open. SEC-15's `ci.yml` part fixed in the same PR.
 - 2026-11-08 – SEC-12 fixed (PR #61, task 084): the guard refuses the listed commands and checks lane commits in their worktree, failing closed.
 - 2026-11-08 – SEC-02 fixed by the owner's ruleset on `main` (PR required; `verify`, `e2e`, `security` required and up to date; no force push or deletion; linear history off so merge commits work). Its details are restored in the review. The `production` environment part becomes SEC-44 (P2). All P0 gaps are fixed.
+- 2026-11-10 – SEC-08 fixed (PR #80, task 086), with residuals noted on the row.
+- 2026-11-10 – SEC-10: shared limit fixed (PR #83, task 089), lockout is task 090. SEC-46 added (P2) from task 089's review: unknown auth paths add rate-limit rows.
+- 2026-11-10 – SEC-10 fixed by PR #83 (task 089) and PR #86 (task 090); the nuisance lockout is the owner's accepted trade-off.
+- 2026-11-10 – SEC-18 fixed (PR #81, task 088).
+- 2026-11-10 – SEC-45 added from task 091's review: no pool checkout timeout or `statement_timeout` (P2).
+- 2026-11-10 – SEC-17 fixed (PR #82, task 092), live once the owner applies.
