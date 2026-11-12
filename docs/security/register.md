@@ -49,7 +49,7 @@ No Critical findings. One High (SEC-01). Nothing in the review showed one worksp
 | SEC-16 | Low | `drizzle-orm` 0.44.7 has a High SQL-injection advisory (identifiers); not reachable today, and Better Auth expects ≥0.45.2 | Supply chain | S | planned (task 081); task 081 bumps `drizzle-orm` to 0.45.4 (`drizzle-kit` 0.31.11) and removes GHSA-gpj5-g38j-94v9 from `pnpm.auditConfig.ignoreGhsas` | WEB-5, SUP-6 |
 | SEC-42 | Low | `postcss` 8.4.31, pinned by `next`, has two High advisories (GHSA-6g55-p6wh-862q, GHSA-r28c-9q8g-f849; fixed in ≥ 8.5.18); build-time only, but `pnpm audit --prod` (task 082) fails on them | Supply chain | S | fixed (PR #60, task 093) | task 082 audit |
 | SEC-17 | Low | No alerting at all (IAM changes, deploys outside CI, 5xx, DB connections) and no budget alert | Infra | M | planned (task 092) | INF-5 |
-| SEC-18 | Low | Deleting a user who uploaded a file or recorded a visit fails (`attachment_check`, `site_visit_keep_project`), so an erasure request or a compromised account can't be deleted | DB | S | planned (task 088; the visit half was noted in task 061) | ACC-3 |
+| SEC-18 | Low | Deleting a user who uploaded a file or recorded a visit fails (`attachment_check`, `site_visit_keep_project`), so an erasure request or a compromised account can't be deleted | DB | S | fixed (PR #81, task 088) | ACC-3 |
 
 ## P2 – hardening
 
@@ -102,4 +102,5 @@ No Critical findings. One High (SEC-01). Nothing in the review showed one worksp
 - 2026-11-10 – SEC-08 fixed (PR #80, task 086), with residuals noted on the row.
 - 2026-11-10 – SEC-10: shared limit fixed (PR #83, task 089), lockout is task 090. SEC-46 added (P2) from task 089's review: unknown auth paths add rate-limit rows.
 - 2026-11-10 – SEC-10 fixed by PR #83 (task 089) and PR #86 (task 090); the nuisance lockout is the owner's accepted trade-off.
+- 2026-11-10 – SEC-18 fixed (PR #81, task 088).
 - 2026-11-10 – SEC-45 added from task 091's review: no pool checkout timeout or `statement_timeout` (P2).
