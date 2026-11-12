@@ -130,3 +130,4 @@ M13 tasks 062, 063 and 065 continue after the POC.
 - 2026-11-10 – Task 089 in review: one sign-in rate limit across instances (counts in the database, keyed on the address Cloud Run appends; SEC-10 part 1); held until after the POC demo, merges before 088.
 - 2026-11-10 – Task 090 in review: 5 failed sign-ins to an email in 15 minutes lock it for 15 minutes (SEC-10 part 2); builds on 089; merge order after the POC demo: 089, 090, then 088 (migration renumbered).
 - 2026-11-10 – Task 088 in review: a user who uploaded files or recorded visits can be deleted; their rows stay with the author cleared (SEC-18). Migration 0040 is renumbered after task 089 merges.
+- 2026-11-10 – Task 091 in review: `main` capped at 1 instance per zone (3 × 1 × 4 = 12 connections, SEC-14); the owner applies after the POC demo. SEC-45 (pool timeouts) added to the register.
