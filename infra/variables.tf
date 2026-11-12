@@ -43,8 +43,9 @@ variable "preview_max_instances" {
 }
 
 variable "max_instances" {
-  type    = number
-  default = 5
+  description = "Maximum Cloud Run instances per main service (previews use preview_max_instances). Bounded by main's database connections: zones x max_instances x MAIN_DB_POOL_MAX must fit MAIN_DB_CONNECTIONS (infra/scripts/environment.sh; test-environment.sh fails otherwise), today 3 x 1 x 4 = 12. Past capacity, requests wait for the pool or get 429s instead of exhausting connections. Change this default rather than overriding it in terraform.tfvars: the test reads the default, so an override escapes it. Raise it only with more connections (a bigger Cloud SQL tier or a pooler; infra/README.md, Known limits)."
+  type        = number
+  default     = 1
 }
 
 variable "db_tier" {
@@ -57,4 +58,37 @@ variable "db_deletion_protection" {
   description = "Block terraform destroy of the database instance."
   type        = bool
   default     = true
+}
+
+# ---------- Alerts and budget (task 092): set in terraform.tfvars only, never in the repo ----------
+variable "alert_email" {
+  description = "Address the alerts and the budget notifications go to (the owner's)."
+  type        = string
+  sensitive   = true
+
+  validation {
+    condition     = can(regex("^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$", var.alert_email))
+    error_message = "alert_email must be an email address."
+  }
+}
+
+variable "billing_account" {
+  description = "Billing account the project is linked to, as XXXXXX-XXXXXX-XXXXXX (gcloud billing projects describe <PROJECT_ID>). The budget lives there."
+  type        = string
+  sensitive   = true
+
+  validation {
+    condition     = can(regex("^[0-9A-F]{6}-[0-9A-F]{6}-[0-9A-F]{6}$", var.billing_account))
+    error_message = "billing_account must look like 000000-000000-000000 (six hex digits, three times)."
+  }
+}
+
+variable "monthly_budget" {
+  description = "Monthly budget of the project in USD (whole dollars). Alerts at 50%, 90% and 100% of it."
+  type        = number
+
+  validation {
+    condition     = var.monthly_budget > 0 && floor(var.monthly_budget) == var.monthly_budget
+    error_message = "monthly_budget must be a whole number of dollars above 0."
+  }
 }

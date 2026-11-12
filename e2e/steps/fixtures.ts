@@ -20,6 +20,8 @@ export type ScenarioState = {
   /** A customer in a workspace other than the one a later step works in. */
   foreignCustomerUrl?: string;
   keptUrl?: string;
+  /** Signed storage URLs of attachments (task 086), copied before a later step changes the workspace. */
+  copiedDownloadUrls?: string[];
   /** Partner-access scenarios: the ids of records written to the database, by name (projects, tasks, people, …). */
   ids?: Record<string, string>;
   /** Accounts that sign in only when a step needs them ("admin", "auditor"), and their pages once they have. */
@@ -32,6 +34,8 @@ export type ScenarioState = {
   hiddenFields?: Record<string, Record<string, string>>;
   /** The POC flow (task 069): the other people by role ("worker", "partner user"), each in their own browser. */
   roles?: Record<string, { page: Page; projectPath?: string; visitPath?: string }>;
+  /** Sign-in lockout (task 090): an email no account has, typed again by a later step. */
+  emailWithoutAccount?: string;
 };
 
 /** Opens extra browser contexts (other people) and closes them when the scenario ends. */
