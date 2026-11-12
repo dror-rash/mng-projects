@@ -1,6 +1,6 @@
 # Task 090: Too many wrong passwords lock sign-in to that account for a while
 
-- **Status:** in-review
+- **Status:** done (PR #86)
 - **Milestone:** cross-cutting (security)
 - **Zone / package:** `packages/auth` (`server.ts` hooks, a small lockout module), `packages/db` (`schema.ts`: one table, one migration), `apps/shell/features/auth/login-form.tsx` (shows the message), `e2e/steps` (two new steps). Commit types `test` → `feat(auth)` / `feat(db)`.
 - **Feature file:** `docs/features/authentication.feature` (three `@wip @task:090` scenarios)
@@ -53,6 +53,7 @@ Red: the three scenarios (today the 6th attempt with the right password succeeds
 - 2026-11-10 – Red: `@wip` off the three scenarios; steps for repeated wrong passwords, another locked account (`people` fixture, checks the lock over the API), and a made-up email (kept in the scenario state). All three fail because nothing locks yet (the 6th sign-in answers as before).
 - 2026-11-10 – Red unit and DB tests (`3bc543f`: the rule with a fake clock, the plugin through Better Auth's memory adapter, the database store across two instances, the hardening exception and index); the module was a throwing stub so the commit typechecks. Green: `sign_in_lockout` (migration 0042, no RLS, default grants, index on `removable_after`; added to `check-runtime-role.mjs` and `rls-pins.mjs`) and the `signInLockout()` plugin in `packages/auth/src/sign-in-lockout.ts`, added in `authOptions`. Choices: every attempt is counted *before* the password check (locked row), so parallel guesses can't slip past the count; a success deletes the row, so a success before the limit resets the count and an attempt counts as a failure unless it succeeds. The lock runs 15 minutes from the 5th failure (later attempts are refused without being counted, so they don't extend it). Cleanup deletes rows past `removable_after` (end of window or lock) on every write. The login form needed no change: it already shows the API error `message`. Nuisance lockout (see Security notes) stays as the owner accepted. Checks: auth unit 62 (without `DATABASE_URL`), auth DB 11, `@repo/db` DB 152, `pnpm test` all green, `@task:090` e2e 3/3, full e2e (`CI=1`, 2 workers) 326 passed, lint, typecheck, build, `check-runtime-role` and its 32 tests.
 - 2026-11-10 – Security review fixes (no blockers): the store locks its row in the upsert (`on conflict (key) do update set key = excluded.key returning *`); before, `insert … do nothing` then `select … for update` lost attempts when another attempt's cleanup deleted the expired row in between (red DB test holds the row, waits until three attempts block behind it via `pg_locks`, deletes it; red 3/3 runs, green 3/3). The HMAC covers a purpose label (`sign-in-lockout\0` + email). Documented that rotating `BETTER_AUTH_SECRET` resets all counts. The cleanup stays on every write (one indexed delete; 1-in-N not worth the extra rule).
+- 2026-11-12 – Merged (PR #86) after task 089, once the owner lifted the pre-demo hold (2026-11-11); migration 0042. SEC-10 fixed.
 
 ## Parking lot
 - Unlock by email once there is an email provider (SEC-09).

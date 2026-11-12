@@ -1,6 +1,6 @@
 # Task 091: `main` can't scale past its database connections
 
-- **Status:** in-review
+- **Status:** done (PR #78); live once the owner applies (owner steps 2–5 below)
 - **Milestone:** cross-cutting (security), M11 follow-up
 - **Zone / package:** `infra/variables.tf` (`max_instances`), `infra/scripts/test-environment.sh` (a budget check), `infra/README.md` ("Known limits"). Commit type `fix(infra)`.
 - **Feature file:** none (no app behavior; a script test and `terraform plan`)
@@ -48,6 +48,7 @@ Red: the budget check in the script test. Then the default, the description, the
 - 2026-11-10 – Started in lane 5 (owner: "do the rest of the P1"; build now, merge after the POC demo on 2026-11-13). Q1 default (1 instance × pool 4).
 - 2026-11-10 – Red: `test-environment.sh` checks zones (3, `variables.tf`) × `max_instances` (`variables.tf`) × `MAIN_DB_POOL_MAX` (4, `environment.sh`) against the new `MAIN_DB_CONNECTIONS` (12, `environment.sh`); `provision-db-logins.test.mjs` ties that share to 22 − the preview limits. Failed with 3 × 5 × 4 = 60 > 12. Green: `max_instances` default 1 with a description. `terraform plan`: 0 add, 6 change, 0 destroy (`max_instance_count 5 -> 1` on the three `main` services; the other changes are the known service-level `scaling` drift, present without this change too). `pnpm test:infra` passes. Today the `main` services show max 5, concurrency 80. Waits for the owner's apply (steps above).
 - 2026-11-10 – Review fixes. Plan re-run from lane 5's `infra/` (the earlier saved plan was overwritten by lane 4's): 0 add, 6 change, 0 destroy, `max_instance_count 5 -> 1` on `dashboard`, `example-zone` and `shell`, the rest the known `scaling` drift. `test-environment.sh` also checks that `main.tf` maps `main` to `var.max_instances` and previews to `var.preview_max_instances` (red without the check; probes with a hard-coded and a swapped mapping fail it). Variable description and README: change the default, don't override it in `terraform.tfvars`. README: the cap is per revision (deploy overlap), requests past the pool wait with no checkout timeout, 429s past about 80 in flight. Owner step 2: task 083's provider change if it isn't applied.
+- 2026-11-12 – Merged (PR #78) after the owner lifted the pre-demo hold (2026-11-11). Not applied yet: owner steps 2–5 below (task 083's provider change is already applied). SEC-14 counts as fixed in the register, live once applied.
 
 ## Owner steps (after the POC demo on 2026-11-13)
 1. Merge the PR once `verify` passes (no app change; the `main` deploy that follows changes nothing on its own: deploys keep the template's scaling).

@@ -1,6 +1,6 @@
 # Task 081: `drizzle-orm` 0.45 (identifier escaping advisory)
 
-- **Status:** in-review
+- **Status:** done (PR #77)
 - **Milestone:** cross-cutting (security)
 - **Zone / package:** `packages/db` (`package.json`), `pnpm-lock.yaml`. No schema change, no migration. Commit type `fix(db)` (or `build(db)`).
 - **Feature file:** none (no visible behavior; the existing unit, DB and e2e suites are the check)
@@ -47,6 +47,7 @@ Red: `pnpm audit --prod --json` lists the advisory (paste it in the PR). Bump bo
 - 2026-11-10 – Started in lane 1 (owner: "do the rest of the P1"; build now, merge after the POC demo on 2026-11-13).
 - 2026-11-10 – Red: `drizzle-orm` 0.44.7 (three paths: `@repo/db`, and `better-auth`/`@better-auth/*` peers), `drizzle-kit` 0.31.11 installed (range `^0.31.0`). With GHSA-gpj5-g38j-94v9 taken out of `ignoreGhsas`, `pnpm audit --prod --audit-level=high` exits 1: "high – Drizzle ORM has SQL injection via improperly escaped SQL identifiers – drizzle-orm <0.45.2 – packages__db>drizzle-orm"; "8 vulnerabilities found, Severity: 5 moderate | 1 high | 2 critical (2 ignored)".
 - 2026-11-10 – Green: `drizzle-orm` `^0.45.4`, `drizzle-kit` `^0.31.11` (0.31.11 shipped with orm 0.45.3; the latest kit). `pnpm why drizzle-orm` shows only 0.45.4; `pnpm install` prints no peer warning. Ignore entry removed; the audit exits 0: "7 vulnerabilities found, Severity: 5 moderate | 2 critical (2 ignored)". `pnpm db:generate`: "No schema changes, nothing to migrate", and no snapshot change. Release notes 0.45.0–0.45.4: `$onUpdate` with `SQL`, subqueries in select fields, bun-sql date mapping, pg-native Pool detection, `algorythm` typo, identifier escaping (0.45.2), Netlify driver (0.45.3), postgres-js prepare (0.45.4); none touches our code (no `$onUpdate`, `algorythm`, bun-sql, Netlify or postgres-js; `sql.identifier`/aliases get constants). No code changes needed.
+- 2026-11-12 – Merged (PR #77) after the owner lifted the pre-demo hold (2026-11-11). SEC-16 fixed.
 
 ## Parking lot
 - `pnpm.overrides` for the dev-only advisory chain (review SEC-16 "Other audit hits").

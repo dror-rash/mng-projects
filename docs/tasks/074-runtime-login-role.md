@@ -1,6 +1,6 @@
 # Task 074: A separate runtime login for the database
 
-- **Status:** in-review
+- **Status:** done (PR #85); follow-up task 109 removes the transition grants
 - **Milestone:** M11 Deploy to GCP (follow-up)
 - **Zone / package:** `infra/`, `.github/workflows/`, `packages/db`, `docs/adr/`
 - **Feature file:** none (no visible behavior); checked by the runtime role check and DB tests
@@ -49,6 +49,7 @@ Answered by task 068's design (2026-11-04): the grant runs in a deploy script (`
 - 2026-11-10 – Red (`b7cebcc`, tests only on top of `49cf0d0`'s code, lane 1 database): `test-environment.sh` 43 passed, 5 failed (main's names); node tests (`check-runtime-role`, `provision-db-logins`) 59 passed, 13 failed of 72 (no `app_runtime`, no owner check); `test-preview-migrate.sh` 24 passed, 5 failed.
 - 2026-11-10 – Green (`f60498f`): `app_runtime` provisioned on main deploys, the role check fails when the login is or can become an owner, `environment.sh` and Terraform (`db-runtime-password`, `runtime_transition_secrets`), ADR-0006 amendment, README rollout. `pnpm test:infra` all green (48, 14, 74, 29, 103), `test:db` 149, e2e 323 passed. `terraform plan`: 7 to add, nothing destroyed; the 6 in-place Cloud Run `scaling` updates are drift already on `main`.
 - 2026-11-10 – Security review (no blockers). Fixes: the preview logins' `CONNECT` grants on `app_preview` and the revoke of `PUBLIC`'s run as one best-effort step, grants first (a skipped grant no longer locks previews out), and the preview verification needs their own grants, not `PUBLIC`'s; the role check also fails when the login can `SET ROLE` to any role but itself and `app_user`. Red: 4 failed of 76 node tests; green: `pnpm test:infra` 48, 14, 78, 29, 103.
+- 2026-11-12 – Merged (PR #85) after the owner lifted the pre-demo hold (2026-11-11). The owner applied the `db-runtime-password` secret and grants; `main` now runs as `app_runtime` (deploy log: "Runtime role check passed on app (login app_runtime)"). Rollout step 4 (drop `runtime_transition_secrets`) is task 109; SEC-06 stays partly fixed until it's applied.
 
 ## Follow-up
 - Rollout step 4 (`infra/README.md`, "Main's runtime login: rollout"): remove `runtime_transition_secrets` from `infra/main.tf` in a separate small PR within a week of the rollout, and apply it (3 IAM grants removed). Until then a compromised `main` container can still read `db-password`, the owner's password, so SEC-06 stays partly open.

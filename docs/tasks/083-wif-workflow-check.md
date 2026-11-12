@@ -1,6 +1,6 @@
 # Task 083: Only the deploy workflows can get a deployer token
 
-- **Status:** in-review
+- **Status:** done (PR #79; applied by the owner, hand check PR #91)
 - **Milestone:** cross-cutting (security)
 - **Zone / package:** `infra/main.tf` (Workload Identity provider), `infra/README.md`. Commit type `fix(infra)`.
 - **Feature file:** none (no app behavior; `terraform plan` and a hand check on a preview)
@@ -54,6 +54,7 @@ Read a real token's claims from a deploy run's debug output (claim names only, n
   4. Hand check: push a temporary `.github/workflows/wif-check.yml` (`on: pull_request`, top-level `permissions: {contents: read, id-token: write}`, one job, one step: `google-github-actions/auth` at the SHA `deploy.yml` pins, with `workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}`, `service_account: ${{ vars.GCP_DEPLOYER_SA_PREVIEW }}`, `token_format: access_token` and `create_credentials_file: false`; nothing else, no secrets). Expect its run to fail at the auth step with `iam.serviceAccounts.getAccessToken` denied. Put the run link in the PR, then delete the file in its own commit before merge.
   5. Merge. Expect `preview-cleanup.yml` (the PR's close) to pass and the first `main` **Deploy** run to pass; watch its auth step.
 - **Revert path** (a deploy can't authenticate): before merge, `git switch main`, then `terraform plan -target=google_iam_workload_identity_pool_provider.github -out=tfplan` and `terraform apply tfplan` restore the old mapping. After merge, `git revert` the `fix(infra)` commit on a branch, the same targeted plan and apply from it, re-run the failed deploy, and merge the revert. Either way the change fails closed: until reverted, deploys fail at auth and nothing is deployed. Between step 2 and the merge, **no other infra applies from `main`**: an apply from `main` would put the old mapping back (and the next apply from this branch would narrow it again).
+- 2026-11-12 – Applied by the owner and merged (PR #79). Hand check in PR #91: a non-deploy workflow was refused `getAccessToken`, and `deploy.yml` still authenticates. SEC-15's WIF part fixed; fork approval for outside contributors stays an owner setting.
 
 ## Parking lot
 - Require the `production` environment claim for `deployer-main` once SEC-02 adds the environment.
