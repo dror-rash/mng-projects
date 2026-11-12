@@ -1,0 +1,17 @@
+# Temporary hand check for task 083 (PR #79): a workflow that is not deploy.yml asks for a preview deployer token.
+# Expected: refused (iam.serviceAccounts.getAccessToken denied). Never merged; the PR is closed after the run.
+name: wif-check
+on: pull_request
+permissions:
+  contents: read
+  id-token: write
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2.1.13
+        with:
+          workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
+          service_account: ${{ vars.GCP_DEPLOYER_SA_PREVIEW }}
+          token_format: access_token
+          create_credentials_file: false
