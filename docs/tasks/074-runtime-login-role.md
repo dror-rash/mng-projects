@@ -53,7 +53,7 @@ Answered by task 068's design (2026-11-04): the grant runs in a deploy script (`
 
 ## Follow-up
 - Rollout step 4 (`infra/README.md`, "Main's runtime login: rollout"): remove `runtime_transition_secrets` from `infra/main.tf` in a separate small PR within a week of the rollout, and apply it (3 IAM grants removed). Until then a compromised `main` container can still read `db-password`, the owner's password, so SEC-06 stays partly open.
-- The comment on `RUNTIME_ROLE` in `packages/db/src/pool-config.ts` still says the login is the owner; it needs updating (the infra agent may not edit `packages/`).
+- ~~The comment on `RUNTIME_ROLE` in `packages/db/src/pool-config.ts` still says the login is the owner.~~ Done in PR #85 (the orchestrator edited it in the lane).
 
 ## Parking lot
 - (none yet)
