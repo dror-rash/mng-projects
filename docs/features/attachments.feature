@@ -101,7 +101,7 @@ Feature: Photos and files
     Then it is not found, the same as a made-up photo address
 
   # An upload left unfinished (a dropped connection) is cleared after an hour; until then it counts (SEC-07).
-  @wip @task:087
+  @task:087
   Scenario: Too many unfinished uploads are refused
     Given I am on the "Panel upgrade" project page
     And my connection drops during 10 photo uploads

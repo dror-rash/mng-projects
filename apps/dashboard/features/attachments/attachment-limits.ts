@@ -84,3 +84,15 @@ export function uploadRefusal(kind: AttachmentKind, contentType: string, sizeByt
   if (sizeBytes > limits.maxBytes) return limits.sizeError;
   return null;
 }
+
+/**
+ * At most this many uploads of one person in one workspace may be unfinished (recorded, not yet confirmed)
+ * at a time (task 087). The uploader sends files one at a time, so a normal user has one in progress plus
+ * any their connection dropped; those count until they're cleared, an hour after they started.
+ */
+export const MAX_UNFINISHED_UPLOADS = 10;
+
+/** Why a person with `unfinished` unconfirmed uploads in a workspace may not start another, or null (task 087). */
+export function unfinishedUploadsRefusal(unfinished: number): string | null {
+  return unfinished >= MAX_UNFINISHED_UPLOADS ? "Too many uploads in progress. Try again later." : null;
+}
