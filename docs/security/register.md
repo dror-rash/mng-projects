@@ -37,8 +37,8 @@ No Critical findings. One High (SEC-01). Nothing in the review showed one worksp
 | ID | Sev | Gap | Area | Effort | Status | Source |
 |---|---|---|---|---|---|---|
 | SEC-06 | Med | The `main` runtime connects as `app`, the database owner, and only switches to `app_user`; any SQL foothold can `RESET ROLE` and bypass row-level security | DB / infra | M | planned (task 074) | INF-3, ACC-1 |
-| SEC-07 | Med | Uploads have no enforced size cap (the signed URL has no length range) and abandoned or orphaned uploads are never cleaned up: unbounded storage cost | Files | M | planned (tasks 085, 087) | WEB-1 |
 | SEC-08 | Med | Deleting a workspace (or a cascade) leaves its photos and reports in the bucket forever (retention, erasure requests) | Files | S–M | fixed (PR #80, task 086; residual: a failed inline delete or an upload landing after it leaves orphans until a bucket-wide sweep exists; deleted objects stay restorable to project Owners/Editors for 7 days) | WEB-2 |
+| SEC-07 | Med | Uploads have no enforced size cap (the signed URL has no length range) and abandoned or orphaned uploads are never cleaned up: unbounded storage cost | Files | M | in progress: size cap in PR #84 (task 085; the preview hand check is still to do); cleanup planned (task 087) | WEB-1 |
 | SEC-09 | Med | No email verification and no password reset: anyone can register any address, and the real owner can't recover it; sign-up also reveals which emails have accounts | Auth | M | open (**owner decision:** email provider, or accept for the POC) | AUTH-2, AUTH-4 |
 | SEC-10 | Med | Sign-in brute force is limited only by the in-memory, per-instance rate limiter (up to 5× the budget); no account lockout | Auth | M | fixed (PR #83 shared limit, task 089; PR #86 lockout, task 090); accepted trade-off: anyone who knows an email can keep that account locked (owner, 2026-11-10); IPv6 counted per /64 | AUTH-3 |
 | SEC-11 | Med | No Dependabot alerts or updates, no `pnpm audit`, gitleaks or CodeQL in CI | Supply chain | S | fixed in CI (PR #62, task 082); **owner:** turn on Dependabot alerts and security updates; `security` is required by the SEC-02 ruleset | SUP-5 |
@@ -48,10 +48,8 @@ No Critical findings. One High (SEC-01). Nothing in the review showed one worksp
 | SEC-15 | Low | Fork PRs from anyone with one merged PR run edited workflows without approval; `ci.yml` has no `permissions:`; WIF doesn't check which workflow asks for a token | CI/CD | S | `ci.yml` part fixed (PR #62, task 082); planned (task 083, WIF); **owner:** fork approval for all outside contributors | INF-11, INF-12 |
 | SEC-16 | Low | `drizzle-orm` 0.44.7 has a High SQL-injection advisory (identifiers); not reachable today, and Better Auth expects ≥0.45.2 | Supply chain | S | planned (task 081); task 081 bumps `drizzle-orm` to 0.45.4 (`drizzle-kit` 0.31.11) and removes GHSA-gpj5-g38j-94v9 from `pnpm.auditConfig.ignoreGhsas` | WEB-5, SUP-6 |
 | SEC-42 | Low | `postcss` 8.4.31, pinned by `next`, has two High advisories (GHSA-6g55-p6wh-862q, GHSA-r28c-9q8g-f849; fixed in ≥ 8.5.18); build-time only, but `pnpm audit --prod` (task 082) fails on them | Supply chain | S | fixed (PR #60, task 093) | task 082 audit |
-| SEC-17 | Low | No alerting at all (IAM changes, deploys outside CI, 5xx, DB connections) and no budget alert | Infra | M | planned (task 092) | INF-5 |
-| SEC-18 | Low | Deleting a user who uploaded a file or recorded a visit fails (`attachment_check`, `site_visit_keep_project`), so an erasure request or a compromised account can't be deleted | DB | S | fixed (PR #81, task 088) | ACC-3 |
+| SEC-18 | Low | Deleting a user who uploaded a file or recorded a visit fails (`attachment_check`, `site_visit_keep_project`), so an erasure request or a compromised account can't be deleted | DB | S | fixed (PR #90, task 088) | ACC-3 |
 | SEC-17 | Low | No alerting at all (IAM changes, deploys outside CI, 5xx, DB connections) and no budget alert | Infra | M | fixed (PR #82, task 092; live once the owner applies) | INF-5 |
-| SEC-18 | Low | Deleting a user who uploaded a file or recorded a visit fails (`attachment_check`, `site_visit_keep_project`), so an erasure request or a compromised account can't be deleted | DB | S | planned (task 088; the visit half was noted in task 061) | ACC-3 |
 
 ## P2 – hardening
 
@@ -104,6 +102,7 @@ No Critical findings. One High (SEC-01). Nothing in the review showed one worksp
 - 2026-11-10 – SEC-08 fixed (PR #80, task 086), with residuals noted on the row.
 - 2026-11-10 – SEC-10: shared limit fixed (PR #83, task 089), lockout is task 090. SEC-46 added (P2) from task 089's review: unknown auth paths add rate-limit rows.
 - 2026-11-10 – SEC-10 fixed by PR #83 (task 089) and PR #86 (task 090); the nuisance lockout is the owner's accepted trade-off.
-- 2026-11-10 – SEC-18 fixed (PR #81, task 088).
+- 2026-11-10 – SEC-18 fixed (PR #90, task 088).
 - 2026-11-10 – SEC-45 added from task 091's review: no pool checkout timeout or `statement_timeout` (P2).
 - 2026-11-10 – SEC-17 fixed (PR #82, task 092), live once the owner applies.
+- 2026-11-10 – SEC-07: upload size cap in PR #84 (task 085), pending the owner's Terraform run and preview hand check; cleanup is task 087.
