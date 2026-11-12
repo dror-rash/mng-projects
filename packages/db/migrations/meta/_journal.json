@@ -302,6 +302,13 @@
       "when": 1794336021813,
       "tag": "0042_sign_in_lockout",
       "breakpoints": true
+    },
+    {
+      "idx": 43,
+      "version": "7",
+      "when": 1794504133589,
+      "tag": "0043_user_delete_keeps_authored",
+      "breakpoints": true
     }
   ]
 }

@@ -101,7 +101,7 @@ export const PINS = {
   },
   functions: {
     "public.access_role(text,text)": "e2b10131f703b552aa86408102e3fdb96488ed05413abbb77b09d9f10e19050c",
-    "public.attachment_check()": "7ad4966fc6f7a7297bf8ec3b2e985c2abf10645c6b630915945ce0050b5a00c7",
+    "public.attachment_check()": "00f251bbf30aa56159fa39403e200ac2e7d5965b032611c5dc548b8bd7e7680c",
     "public.can_change_attachment(text,text)": "ca4790624c9e1119b966de313993f772761cfb1067832e0667fcf183720fcf9e",
     "public.can_change_customer(text,text)": "53af7733c45470729e515d5cff3e0b76d9a3d6e04a02661b121a43ec160d086a",
     "public.can_change_form_template(text,text)": "4eb706bb2ff3f1694b80ef6e0e3bd37f9febd8f6b8c1747f91905dc8c179f7ee",
@@ -139,11 +139,11 @@ export const PINS = {
     "public.project_worker_check()": "23f4e4deeb363a6a0b95f8e3fd7cd0e8ebe8f616a1c18b1f529286fba4d6a7b2",
     "public.project_worker_clear_assignments()": "72ba55687805261b3c2b67964079b6606577f6235c5b4d320b8b5ed7fae28072",
     "public.restore_project(text)": "60e9f63bf3902a33145a2779d73128594436d9283c55bf910cb772ebb9fb8c7d",
-    "public.site_visit_keep_project()": "b2447fe1592b6d9e126f6780e6ad3e7ee598b2d7c4448838d3064b16f7f2944c",
+    "public.site_visit_keep_project()": "82b0279831ec946f119d0d3ba15e62e156a13a8da6495d2b104e6a1ee26464e1",
     "public.workspace_member_leave_crews()": "45f770c4dc7558da824d462da126b66a34a09e85173d950c0953727d2c60bc43",
   },
   triggers: {
-    "public.attachment attachment_check public.attachment_check()": "e9481e10fee3e956d25a1a0d3c6758dea42bacf1d732f03462f2ae615b6a0959",
+    "public.attachment attachment_check public.attachment_check()": "3f2ebd35f6a77405fb706744a236249a31f57f51228bb46dd4b43005d7ed264b",
     "public.form_field form_field_check public.form_field_check()": "03ae931c5f7fa501b610856d0c85e526e1eb6dc778f7fde62c34e5498edfa9b5",
     "public.form_template form_template_check public.form_template_check()": "935db77ec7bc4eddbac8b006ead5ab94db2cad8ccbf9203560f13cb098e1a5e2",
     "public.form_template form_template_publish public.form_template_publish()": "963a4ca89d547d8e48b4ef27de62013605c3ed182a6d9acb3643cc26d89179bc",
@@ -152,7 +152,7 @@ export const PINS = {
     "public.project project_site_check public.project_site_check()": "506ded4277182003c6c55ed46f7c0316337b6db6077c2c103f730d05f53a02c5",
     "public.project_worker project_worker_check public.project_worker_check()": "79ab02b733339d9025786977e9fd253ce5e68bd7c92761b38d00fb937d942346",
     "public.project_worker project_worker_clear_assignments public.project_worker_clear_assignments()": "8815012b00657f533d90706b72599ff75262a1a3e3e022497b905eabbf8e70bd",
-    "public.site_visit site_visit_keep_project public.site_visit_keep_project()": "47178f8e196c2c523244cfb6cd60c3ddde3987475c3e08fd76a98edfb5a81980",
+    "public.site_visit site_visit_keep_project public.site_visit_keep_project()": "993f07b01cfd85d0ace05a7ca3a542744b50117258a0350303013e7e5cbd519d",
     "public.workspace_member workspace_member_leave_crews public.workspace_member_leave_crews()": "fa3e985a4b611ce5e3da1b43efdb9d6a48a508c052cc33b81b6586b4a68d26de",
   },
   policies: {
