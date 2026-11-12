@@ -31,7 +31,7 @@
     "@repo/config": "workspace:*",
     "@storybook/react-vite": "^9.1.21",
     "@tailwindcss/postcss": "^4.3.4",
-    "@testing-library/jest-dom": "^6.10.0",
+    "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.3",
     "@testing-library/user-event": "^14.6.8",
     "@types/node": "^22.0.0",
