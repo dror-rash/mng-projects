@@ -75,6 +75,7 @@ No Critical findings. One High (SEC-01). Nothing in the review showed one worksp
 | SEC-43 | Low | `tinypool` 1.1.1 has two Critical prototype-pollution advisories (GHSA-5gmw-xhrv-c9v3, GHSA-85c8-ppgw-ccpr); it comes in through `better-auth`'s optional `vitest` peer, so `pnpm audit --prod` lists it, but only the test runner loads it | Supply chain | S | accepted (owner, 2026-11-08) until a vitest upgrade brings `tinypool` ≥2.1.2; both ignored in `pnpm.auditConfig.ignoreGhsas` | task 082 audit |
 | SEC-44 | Low | The `main` deploy runs on push in parallel with CI and isn't tied to a GitHub `production` environment; WIF doesn't require `assertion.environment == 'production'` for `main`. PRs must pass `verify`, `e2e` and `security` before merge (SEC-02), so only tested code reaches `main` | CI/CD | S | open (with task 083) | SEC-02 follow-up |
 | SEC-46 | Low | Better Auth's limiter counts every `/api/auth/*` path before routing, so requests to made-up paths add `rate_limit` rows; rows are pruned only when an existing key's window resets. Reject unknown auth paths in the shell's route handler before calling Better Auth | Auth | M | open | task 089 review |
+| SEC-45 | Low | The database pool has no checkout timeout and the runtime role no `statement_timeout`: with `main` capped at one instance per zone (SEC-14), a burst of slow queries makes every request on that zone wait, up to Cloud Run's 300 s | DB / infra | S | open | task 091 review |
 
 ## P3 – information and decisions
 
@@ -104,4 +105,5 @@ No Critical findings. One High (SEC-01). Nothing in the review showed one worksp
 - 2026-11-10 – SEC-10: shared limit fixed (PR #83, task 089), lockout is task 090. SEC-46 added (P2) from task 089's review: unknown auth paths add rate-limit rows.
 - 2026-11-10 – SEC-10 fixed by PR #83 (task 089) and PR #86 (task 090); the nuisance lockout is the owner's accepted trade-off.
 - 2026-11-10 – SEC-18 fixed (PR #81, task 088).
+- 2026-11-10 – SEC-45 added from task 091's review: no pool checkout timeout or `statement_timeout` (P2).
 - 2026-11-10 – SEC-17 fixed (PR #82, task 092), live once the owner applies.
