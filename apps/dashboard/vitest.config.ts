@@ -14,6 +14,8 @@ export default defineConfig({
   },
   test: {
     include: ["features/**/*.test.{ts,tsx}"],
+    // Database tests run with `test:db` (vitest.db.config.ts).
+    exclude: ["features/**/*.db.test.ts"],
     // Logic tests run in Node; component tests opt into jsdom with `// @vitest-environment jsdom`.
     setupFiles: ["./vitest.setup.ts"],
   },
