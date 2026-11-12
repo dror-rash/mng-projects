@@ -1,4 +1,4 @@
-import { expect } from "@playwright/test";
+import { expect, type Page } from "@playwright/test";
 
 import { authPost, Given, origin, pacer, SIGN_IN_PATH, SIGN_UP_PATH, Then, When } from "./fixtures";
 
@@ -90,4 +90,49 @@ Then("I am sent to the login page to return to {string}", async ({ page }, next:
 
 Then("I am on the dashboard", async ({ page }) => {
   await expect(page).toHaveURL((url) => url.origin === new URL(origin).origin && url.pathname === "/dashboard");
+});
+
+// Sign-in lockout (task 090). AUTH_DISABLE_RATE_LIMIT is on for the test servers; the lockout counts per account,
+// not per address, so it applies all the same.
+const WRONG_PASSWORD = "not-the-password-123";
+const LOCKED_MESSAGE = "Too many failed sign-ins. Try again in 15 minutes.";
+
+/** Submits the login form and waits for the sign-in answer, so repeated tries are each counted before the next. */
+async function logInOnce(page: Page, email: string, password: string) {
+  await page.getByLabel("Email").fill(email);
+  await page.getByLabel("Password").fill(password);
+  await pacer.wait(SIGN_IN_PATH);
+  await Promise.all([
+    page.waitForResponse((response) => new URL(response.url()).pathname === SIGN_IN_PATH),
+    page.getByRole("button", { name: "Log in" }).click(),
+  ]);
+  await expect(page.getByRole("button", { name: "Log in" })).toBeEnabled();
+}
+
+When("I log in with the wrong password {int} times", async ({ page, account }, times: number) => {
+  for (let i = 0; i < times; i++) await logInOnce(page, account.email, WRONG_PASSWORD);
+});
+
+Given("another account was locked by {int} wrong passwords", async ({ people }, times: number) => {
+  const other = await people.newPerson();
+  const credentials = { email: `other-${crypto.randomUUID()}@example.com`, password: "correct-horse-battery" };
+  expect((await authPost(other.request, SIGN_UP_PATH, { name: "Other Person", ...credentials })).ok()).toBeTruthy();
+  for (let i = 0; i < times; i++) {
+    expect((await authPost(other.request, SIGN_IN_PATH, { email: credentials.email, password: WRONG_PASSWORD })).ok()).toBeFalsy();
+  }
+  // The lock is in place: even the right password is refused, with the message the login form shows.
+  const locked = await authPost(other.request, SIGN_IN_PATH, credentials);
+  expect(locked.ok()).toBeFalsy();
+  expect((await locked.json()).message).toBe(LOCKED_MESSAGE);
+});
+
+When("I log in with an email that has no account {int} times", async ({ page, state }, times: number) => {
+  state.emailWithoutAccount = `nobody-${crypto.randomUUID()}@example.com`;
+  for (let i = 0; i < times; i++) await logInOnce(page, state.emailWithoutAccount, WRONG_PASSWORD);
+});
+
+When("I log in with that email once more", async ({ page, state }) => {
+  const email = state.emailWithoutAccount;
+  if (!email) throw new Error("No earlier step typed an email without an account");
+  await logInOnce(page, email, WRONG_PASSWORD);
 });
