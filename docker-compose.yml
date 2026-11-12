@@ -19,10 +19,11 @@ services:
       retries: 10
 
   # Files (task 057): fake-gcs-server speaks the GCS JSON and XML APIs; it doesn't check signatures. The
-  # dev bucket comes from /data/<bucket>. Browsers upload straight to it, so CORS is open.
+  # dev bucket comes from /data/<bucket>. Browsers upload straight to it, so CORS is open; -cors-headers lists
+  # the headers a signed upload sends (like infra/storage.tf). It doesn't enforce x-goog-content-length-range.
   storage:
     image: fsouza/fake-gcs-server:1.52.2
-    command: ["-scheme", "http", "-port", "4443", "-public-host", "localhost:4443", "-external-url", "http://localhost:4443", "-data", "/data", "-cors-headers", "Content-Type,Content-Disposition,x-goog-if-generation-match"]
+    command: ["-scheme", "http", "-port", "4443", "-public-host", "localhost:4443", "-external-url", "http://localhost:4443", "-data", "/data", "-cors-headers", "Content-Type,Content-Disposition,x-goog-if-generation-match,x-goog-content-length-range"]
     ports:
       - "4443:4443"
     volumes:

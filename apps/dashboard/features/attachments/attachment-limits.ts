@@ -71,6 +71,11 @@ export function acceptFor(kind: AttachmentKind): string {
   return LIMITS[kind].types.join(",");
 }
 
+/** The largest upload of `kind`, in bytes: signed into the upload URL, so storage refuses anything larger (task 085). */
+export function maxUploadBytes(kind: AttachmentKind): number {
+  return LIMITS[kind].maxBytes;
+}
+
 /** Why an upload of `kind` with this content type and size is refused, or null when it fits. */
 export function uploadRefusal(kind: AttachmentKind, contentType: string, sizeBytes: number): string | null {
   const limits = LIMITS[kind];
