@@ -32,7 +32,10 @@
       ]
     },
     "overrides": {
-      "next>postcss": "^8.5.18"
+      "next>postcss": "^8.5.18",
+      "next-intl>use-intl": "4.14.9",
+      "next-intl>icu-minify": "4.14.9",
+      "use-intl>icu-minify": "4.14.9"
     }
   },
   "devDependencies": {
