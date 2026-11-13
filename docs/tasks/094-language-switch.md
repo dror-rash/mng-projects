@@ -79,7 +79,20 @@ The owner and their staff work in Hebrew, and each user should be able to switch
 - 2026-11-11 – Drafted with `language.feature` (`@wip`) from the owner's decision (bilingual, per-user switch).
 - 2026-11-13: started in lane 1 (feat/language-switch); scope clarified (menu labels only; shell switch moved to 097).
 - 2026-11-13: acceptance steps written (`e2e/steps/language.steps.ts`), `@wip` off the five `@task:094` scenarios; red run: no "Language" radio group in the dashboard header, and `<html>` has no `dir`.
+- 2026-11-13: implemented (green):
+  - `@repo/i18n`: locale helpers, `localeFromRequest`, `./server` (`requestLocale`, `createRequestConfig`), `./catalogue` (`catalogueDifferences`);
+  - `LanguageSwitch` in `packages/ui`, with stories (English, Hebrew, right to left), and `packages/ui/messages`;
+  - both zones on `next-intl` 4.14.9 (exact; `use-intl` and `icu-minify` kept at 4.14.9 by overrides), `<html lang dir>` from the server, catalogues with parity tests;
+  - the menu labels (`navFor` returns keys), the login heading, and the switch in the dashboard header. The header's controls now wrap at 360px.
+- 2026-11-13: two fixes to the red commit's test code, no scenario changed:
+  - `my browser prefers` used `setExtraHTTPHeaders`, which Chromium replaces with its own Accept-Language (`en-US`), so it now rewrites the header with `context.route`;
+  - the switch's radios were `sr-only`, which Playwright (and a pointer) can't click, so they now lie transparent over their labels.
+- 2026-11-13: the switch's name is "Language" in English and "שפה / Language" in Hebrew. Scenario 2 finds the group by "Language" on a Hebrew page, and keeping the English word helps anyone find the switch. For the owner to confirm with the other Hebrew wording.
+- 2026-11-13: e2e status in lane 1. Every upload scenario fails, and so do some readings scenarios at random. The same happens on the commit before this task (487eec1: 10 of 22 failed in `readings` + `attachments`). Cause: the shared storage container answers CORS preflights with 403 (its bucket was recreated at 18:02 UTC), and the machine is under load (load average about 17).
+- 2026-11-13: final runs in lane 1: unit 651 passed; `@task:094` e2e 5/5; full e2e 299 passed, 35 failed (uploads, plus timeouts that move from run to run). Rerun alone, `workspace-switching`, `workspaces`, `task-assignees`, `soft-delete` and `task-details` gave 44 passed; the only 2 failures were uploads. lint, typecheck, build and build-storybook pass.
 
 ## Parking lot
 - A third language.
 - Language-specific email templates (no email yet).
+- The example zone keeps `<html lang="en">` without `dir` (not a user-facing zone).
+- `next-intl` 4.14 brings `@swc/core` and `@parcel/watcher` (native) for its message extractor, which we don't use. Revisit if a later release makes them optional.
