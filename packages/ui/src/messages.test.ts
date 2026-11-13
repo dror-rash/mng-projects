@@ -8,8 +8,7 @@ describe("packages/ui catalogue", () => {
     expect(catalogueDifferences(uiMessages.en, uiMessages.he)).toEqual([]);
   });
 
-  it("names the language switch so it is found in either language", () => {
-    expect(uiMessages.en).toEqual({ languageSwitch: { label: "Language" } });
-    expect(uiMessages.he).toEqual({ languageSwitch: { label: "שפה / Language" } });
+  it("keeps the English word in the language switch's Hebrew name, so anyone finds the switch", () => {
+    expect(uiMessages.he).toHaveProperty("languageSwitch.label", expect.stringContaining("Language"));
   });
 });

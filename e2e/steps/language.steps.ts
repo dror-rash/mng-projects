@@ -6,7 +6,9 @@ import { Given, origin, Then, When } from "./fixtures";
 
 // The server picks the language from the Accept-Language header, so the browser sends that header from now on.
 // Chromium replaces an extra Accept-Language header with its own (from the context's `locale`), so the header is
-// rewritten on the way out instead. Context-level, so steps that route a page (page.route) are unaffected.
+// rewritten on the way out instead. Page routes run first: a page.route handler that calls route.continue() sends
+// the request on without this context route, so those requests carry the browser's own Accept-Language. Combine
+// this step with page.route steps only if the handler adds the header itself.
 Given("my browser prefers {string}", async ({ context }, locale: string) => {
   await context.route("**/*", (route) =>
     route.continue({ headers: { ...route.request().headers(), "accept-language": locale } }),

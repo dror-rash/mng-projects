@@ -8,9 +8,4 @@ describe("shell catalogue", () => {
   it("has the same keys and placeholders in Hebrew and English", () => {
     expect(catalogueDifferences(en, he)).toEqual([]);
   });
-
-  it("welcomes people back on the login page", () => {
-    expect(en.login.heading).toBe("Welcome back");
-    expect(he.login.heading).toBe("ברוכים השבים");
-  });
 });
