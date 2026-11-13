@@ -118,6 +118,7 @@ export const PINS = {
     "public.can_see_site(text,text)": "50616e9460e5e47796ba3117cadc5c34add0f137c23cea2e76b11c8cfaa1c14e",
     "public.can_work_on_project(text,text)": "27ff63048a91edcc3726b93b4d8dffc10be3a0133ab67329f6eb960325b56ff6",
     "public.clear_assignments(text,text)": "80e4a9bd6501b2dfc4786aeeebe6981ebe7976cd6b7858a5dddfc711e1ad07c8",
+    "public.clear_stale_uploads(text)": "0c73e1f3e56e9c29c156b7dff42cbcefbc68d6cef810541862a0e110d3f9405d",
     "public.clear_unseen_assignments(text,text)": "11f0cf494f7c62abe8fb44bb10da47336dd4940efdae53cf016d60082743a584",
     "public.create_workspace(text,text)": "88fabcdf87acf09592933a4eddef0ddc1ec019418ea88c1b6a45d980a5affaae",
     "public.delete_attachment(text)": "f22f2f891130371452066cb2a14c213d82e7d2c491c7c67d6b5f726b05b90d0e",

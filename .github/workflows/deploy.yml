@@ -34,17 +34,17 @@ jobs:
     # Also bounds the wait for another PR's migration (with-db-lock.mjs).
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # Each environment has its own deployer; Workload Identity only lets a push to main use deployer-main
       # and a pull_request run use deployer-preview (infra/main.tf, attribute.deploy_target).
-      - uses: google-github-actions/auth@c200f3691d83b41bf9bbd8638997a462592937ed # v2.1.13
+      - uses: google-github-actions/auth@7c6bc770dae815cd3e89ee6cdf493a5fab2cc093 # v3.0.0
         with:
           workload_identity_provider: ${{ vars.GCP_WIF_PROVIDER }}
           service_account: ${{ github.event_name == 'pull_request' && vars.GCP_DEPLOYER_SA_PREVIEW || vars.GCP_DEPLOYER_SA_MAIN }}
       - uses: google-github-actions/setup-gcloud@e427ad8a34f8676edf47cf7d7925499adf3eb74f # v2.2.1
       - run: gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
-      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
 
       # Names per environment (services, image repository, database, logins, secrets) come from
       # infra/scripts/environment.sh only.
@@ -54,11 +54,12 @@ jobs:
           . infra/scripts/environment.sh
           echo "registry=${REGION}-docker.pkg.dev/${PROJECT}/${IMAGE_REPOSITORY}" >> "$GITHUB_OUTPUT"
 
-      # 0) Database. main: migrate `app` as its owner, then provision the preview logins. Previews never touch
-      #    `app` or its owner login: verify the preview logins, migrate `app_preview` as preview_owner. Both:
+      # 0) Database. main: migrate `app` as its owner, then provision app_runtime and the preview logins.
+      #    Previews never touch `app` or its owner login: verify the preview logins, migrate `app_preview` as
+      #    preview_owner. Both:
       #    the runtime role check as the environment's runtime login.
       - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version-file: .nvmrc
           cache: pnpm
@@ -81,12 +82,14 @@ jobs:
           if [ "$DEPLOY_ENV" = "main" ]; then
             # Under a lock: two deploys never migrate one database at once.
             DATABASE_URL="$MIGRATE_URL" run_node infra/scripts/with-db-lock.mjs "migrate-$DB_NAME" -- pnpm db:migrate
-            # The preview logins and database grants (idempotent): roles and database grants on a connection to
-            # `app` (PR code can't write there), the schema grant and the migration lock on `app_preview`.
+            # Main's runtime login (task 074), the preview logins and database grants (idempotent): roles and
+            # database grants on a connection to `app` (PR code can't write there), the schema grant and the
+            # migration lock on `app_preview`. RUNTIME_PASSWORD is app_runtime's (environment.sh).
             PREVIEW_OWNER_PASSWORD="$(secret "$PREVIEW_OWNER_PASSWORD_SECRET")"; mask "$PREVIEW_OWNER_PASSWORD"
             PREVIEW_RUNTIME_PASSWORD="$(secret "$PREVIEW_RUNTIME_PASSWORD_SECRET")"; mask "$PREVIEW_RUNTIME_PASSWORD"
             MAIN_DATABASE_URL="$MIGRATE_URL" \
             DATABASE_URL="$(db_url "$MAIN_OWNER_LOGIN" "$MIGRATE_PASSWORD" "$PREVIEW_DB_NAME")" \
+            MAIN_RUNTIME_PASSWORD="$RUNTIME_PASSWORD" \
             PREVIEW_OWNER_PASSWORD="$PREVIEW_OWNER_PASSWORD" PREVIEW_RUNTIME_PASSWORD="$PREVIEW_RUNTIME_PASSWORD" \
               run_node infra/scripts/provision-db-logins.mjs
           else
@@ -94,8 +97,9 @@ jobs:
             DATABASE_URL="$MIGRATE_URL" run_node infra/scripts/provision-db-logins.mjs --verify-only
             DATABASE_URL="$MIGRATE_URL" run_node infra/scripts/with-db-lock.mjs "migrate-$DB_NAME" -- pnpm db:migrate
           fi
-          # As the environment's runtime login with `-c role=app_user`: fails the deploy unless row-level
-          # security really applies (ADR-0006: it isn't forced).
+          # As the environment's runtime login (app_runtime or preview_runtime) with `-c role=app_user`: fails the
+          # deploy unless row-level security really applies (ADR-0006: it isn't forced) and the login can't
+          # SET ROLE to an owner (task 074; so it fails as the owner login).
           DATABASE_URL="$(db_url "$DB_LOGIN" "$RUNTIME_PASSWORD" "$DB_NAME")" run_node infra/scripts/check-runtime-role.mjs
           kill %1 || true
 
@@ -105,7 +109,7 @@ jobs:
       #    image holds tracked files only. The cache keeps final layers only (mode=min).
       - name: Build & push example-zone
         id: build_example
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: ${{ env.BUILD_CONTEXT }}
           push: true
@@ -121,7 +125,7 @@ jobs:
 
       - name: Build & push dashboard
         id: build_dashboard
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: ${{ env.BUILD_CONTEXT }}
           push: true
@@ -146,7 +150,7 @@ jobs:
           done
       - name: Build & push shell
         id: build_shell
-        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
         with:
           context: ${{ env.BUILD_CONTEXT }}
           push: true

@@ -10,20 +10,31 @@ const UPLOAD_SECONDS = 15 * 60;
 const DOWNLOAD_SECONDS = 5 * 60;
 
 /**
- * A signed `PUT` URL for `key` and the headers the upload must send: its content type, and
+ * A signed `PUT` URL for `key` and the headers the upload must send: its content type,
  * `x-goog-if-generation-match: 0`, so the URL only creates the object and can't replace it after the app
- * has checked it. It can't limit the size: check the upload with `stat` and `remove` what doesn't fit.
+ * has checked it, and `x-goog-content-length-range: 0,<maxBytes>`, so Cloud Storage refuses a body larger
+ * than `maxBytes` (400) before storing anything. The headers are signed: a client can't drop or change them.
+ * The local fake server doesn't enforce the range, so still check the upload with `stat` afterwards.
  */
 export async function createUploadUrl({
   key,
   contentType,
+  maxBytes,
   expiresInSeconds = UPLOAD_SECONDS,
 }: {
   key: string;
   contentType: string;
+  /** The largest body the URL accepts, in bytes. Required: there is no unlimited upload URL. */
+  maxBytes: number;
   expiresInSeconds?: number;
 }): Promise<{ url: string; headers: Record<string, string> }> {
-  const extensionHeaders = { "x-goog-if-generation-match": "0" };
+  if (!Number.isSafeInteger(maxBytes) || maxBytes <= 0) {
+    throw new Error("maxBytes must be a positive whole number of bytes");
+  }
+  const extensionHeaders = {
+    "x-goog-if-generation-match": "0",
+    "x-goog-content-length-range": `0,${maxBytes}`,
+  };
   const [url] = await getBucket()
     .file(key)
     .getSignedUrl({ version: "v4", action: "write", contentType, extensionHeaders, expires: Date.now() + expiresInSeconds * 1000 });

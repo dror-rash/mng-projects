@@ -51,10 +51,13 @@ expect "main uses the main database"                   app                      
 expect "previews migrate as the preview owner login"   preview_owner               "$(in_env true '$DB_MIGRATE_LOGIN')"
 expect "main migrates as the owner login"              app                         "$(in_env false '$DB_MIGRATE_LOGIN')"
 expect "previews' runtime logs in as preview_runtime"  preview_runtime             "$(in_env true '$DB_LOGIN')"
-expect "main's runtime logs in as the owner login"     app                         "$(in_env false '$DB_LOGIN')"
+expect "main's runtime logs in as app_runtime (task 074)" app_runtime             "$(in_env false '$DB_LOGIN')"
+expect "main's runtime never logs in as the owner login" different \
+  "$( [ "$(in_env false '$DB_LOGIN')" != "$(in_env false '$DB_MIGRATE_LOGIN')" ] && echo different || echo same)"
 expect "previews never read db-password"               db-preview-owner-password   "$(in_env true '$DB_MIGRATE_PASSWORD_SECRET')"
 expect "previews read the preview runtime password"    db-preview-password         "$(in_env true '$DB_PASSWORD_SECRET')"
-expect "main reads the owner's password"               db-password                 "$(in_env false '$DB_PASSWORD_SECRET')"
+expect "main's runtime reads its own password"        db-runtime-password         "$(in_env false '$DB_PASSWORD_SECRET')"
+expect "main still migrates with the owner's password" db-password                 "$(in_env false '$DB_MIGRATE_PASSWORD_SECRET')"
 expect "previews get their own auth secret"            better-auth-secret-preview  "$(in_env true '$AUTH_SECRET_NAME')"
 expect "main gets the main auth secret"                better-auth-secret          "$(in_env false '$AUTH_SECRET_NAME')"
 expect "previews use the preview bucket"               demo-project-files-preview  "$(in_env true '$FILES_BUCKET')"
@@ -87,8 +90,10 @@ for pair in "true preview" "false main"; do
   expect "$env: image repository matches Terraform"  "$(tf_env "$env" image_repository)" "$(in_env "$is_pr" '$IMAGE_REPOSITORY')"
 done
 expect "the fixed names agree with the per-environment ones" \
-  "app app_preview app preview_owner preview_runtime" \
-  "$(in_env true '$MAIN_DB_NAME $PREVIEW_DB_NAME $MAIN_OWNER_LOGIN $PREVIEW_OWNER_LOGIN $PREVIEW_RUNTIME_LOGIN')"
+  "app app_preview app app_runtime preview_owner preview_runtime" \
+  "$(in_env true '$MAIN_DB_NAME $PREVIEW_DB_NAME $MAIN_OWNER_LOGIN $MAIN_RUNTIME_LOGIN $PREVIEW_OWNER_LOGIN $PREVIEW_RUNTIME_LOGIN')"
+expect "main's runtime names are the fixed ones (provision-db-logins.mjs reads those)" \
+  "$(in_env false '$MAIN_RUNTIME_LOGIN $MAIN_RUNTIME_PASSWORD_SECRET')" "$(in_env false '$DB_LOGIN $DB_PASSWORD_SECRET')"
 
 # main's connection budget (task 091, SEC-14): every zone at its maximum instances, each with a full pool, fits
 # main's share of db-f1-micro's login connections. Above it, a burst scales the zones until new connections fail.

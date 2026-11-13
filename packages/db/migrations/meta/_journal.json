@@ -309,6 +309,13 @@
       "when": 1794504133589,
       "tag": "0043_user_delete_keeps_authored",
       "breakpoints": true
+    },
+    {
+      "idx": 44,
+      "version": "7",
+      "when": 1794513038217,
+      "tag": "0044_unfinished_uploads",
+      "breakpoints": true
     }
   ]
 }
