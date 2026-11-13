@@ -5,8 +5,12 @@ import { Given, origin, Then, When } from "./fixtures";
 // Languages (task 094, ADR-0011). The choice is the `locale` cookie; without it the server reads Accept-Language.
 
 // The server picks the language from the Accept-Language header, so the browser sends that header from now on.
+// Chromium replaces an extra Accept-Language header with its own (from the context's `locale`), so the header is
+// rewritten on the way out instead. Context-level, so steps that route a page (page.route) are unaffected.
 Given("my browser prefers {string}", async ({ context }, locale: string) => {
-  await context.setExtraHTTPHeaders({ "Accept-Language": locale });
+  await context.route("**/*", (route) =>
+    route.continue({ headers: { ...route.request().headers(), "accept-language": locale } }),
+  );
 });
 
 Given("my language cookie is set to {string}", async ({ context }, value: string) => {
