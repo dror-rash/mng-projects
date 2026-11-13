@@ -1,6 +1,6 @@
 # Task 094: Language switch (Hebrew and English foundation)
 
-- **Status:** todo
+- **Status:** in-progress
 - **Milestone:** M14 Hebrew and English
 - **Zone / package:** new `packages/i18n`, `packages/ui`, `apps/shell`, `apps/dashboard`, `e2e`
 - **Feature file:** `docs/features/language.feature` (`@task:094`)
@@ -20,10 +20,10 @@ The owner and their staff work in Hebrew, and each user should be able to switch
   - catalogues `messages/en.json` and `messages/he.json`, plus `packages/ui/messages/…`;
   - a catalogue-parity unit test per catalogue (same keys, same ICU placeholders).
 - **`LanguageSwitch`** in `packages/ui` (a radio group named "Language" showing "English" and "עברית"; Storybook: English chosen, Hebrew chosen, in RTL):
-  - in the shell header (login and sign-up) and the dashboard header (`AppHeader`), next to the theme toggle;
+  - in the dashboard header (`AppHeader`), next to the theme toggle. The shell (login and sign-up) has no header or theme toggle yet; its switch comes with task 097;
   - choosing a language sets the cookie (one year, `SameSite=Lax`, path `/`) and refreshes the page.
 - **Translated in this task:**
-  - the dashboard header and menu ("Overview" סקירה, "All projects" כל הפרויקטים, "Customers" לקוחות);
+  - the three dashboard menu link labels only ("Overview" סקירה, "All projects" כל הפרויקטים, "Customers" לקוחות). "Log out", the nav label "Dashboard", the "Theme" group, the workspace switcher label and "in another workspace" stay English until task 098 ("Log out" is `SignOutButton`, task 097; the switcher is also in 099's scope). The e2e steps find them by those names, and their Hebrew wording isn't approved yet;
   - the language switch itself;
   - the login page heading ("Welcome back" ברוכים השבים).
 
@@ -38,6 +38,8 @@ The owner and their staff work in Hebrew, and each user should be able to switch
 
 ## Out of scope
 - Saving the choice per user (task 095).
+- The language switch on the login and sign-up pages (task 097).
+- The rest of the dashboard header: the nav label, theme group and "in another workspace" (task 098), "Log out" (097), the workspace switcher (099).
 - Mirroring the layout and fonts (task 096; pages may look wrong in Hebrew until then).
 - Translating pages beyond the header, menu and login heading (097–100).
 
@@ -75,6 +77,7 @@ The owner and their staff work in Hebrew, and each user should be able to switch
 
 ## Progress log
 - 2026-11-11 – Drafted with `language.feature` (`@wip`) from the owner's decision (bilingual, per-user switch).
+- 2026-11-13: started in lane 1 (feat/language-switch); scope clarified (menu labels only; shell switch moved to 097).
 
 ## Parking lot
 - A third language.
