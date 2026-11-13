@@ -22,7 +22,9 @@
     "./theme-toggle": "./src/components/theme-toggle.tsx",
     "./confirm-by-name": "./src/components/confirm-by-name.tsx",
     "./contact-row": "./src/components/contact-row.tsx",
-    "./table": "./src/components/table.tsx"
+    "./table": "./src/components/table.tsx",
+    "./language-switch": "./src/components/language-switch.tsx",
+    "./messages": "./src/messages.ts"
   },
   "scripts": {
     "lint": "eslint .",
@@ -32,6 +34,7 @@
     "build-storybook": "storybook build"
   },
   "dependencies": {
+    "@repo/i18n": "workspace:*",
     "@radix-ui/react-slot": "^1.2.0",
     "@radix-ui/react-tooltip": "^1.4.1",
     "class-variance-authority": "^0.7.1",

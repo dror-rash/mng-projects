@@ -1,7 +1,10 @@
 import { SignOutButton } from "@repo/auth/components";
+import { parseLocale } from "@repo/i18n";
 import { Button } from "@repo/ui/button";
+import { LanguageSwitch } from "@repo/ui/language-switch";
 import { parseTheme, THEME_COOKIE } from "@repo/ui/theme";
 import { ThemeToggle } from "@repo/ui/theme-toggle";
+import { getLocale, getTranslations } from "next-intl/server";
 import { cookies } from "next/headers";
 import Link from "next/link";
 
@@ -29,6 +32,7 @@ export async function AppHeader({
 }) {
   const theme = parseTheme((await cookies()).get(THEME_COOKIE)?.value);
   const nav = navFor(role);
+  const [locale, t, ui] = await Promise.all([getLocale(), getTranslations("nav"), getTranslations("ui.languageSwitch")]);
 
   return (
     <header className="border-b bg-card">
@@ -57,13 +61,14 @@ export async function AppHeader({
         >
           {nav.map((item) => (
             <Button key={item.href} asChild variant="ghost" size="sm">
-              <Link href={item.href}>{item.label}</Link>
+              <Link href={item.href}>{t(item.labelKey)}</Link>
             </Button>
           ))}
         </nav>
-        {/* Only the email gives way when space is short: never the workspace name. */}
-        <div className="ml-auto flex min-w-0 items-center gap-2">
+        {/* Only the email gives way when space is short: never the workspace name. Below xl the controls wrap. */}
+        <div className="ms-auto flex min-w-0 flex-wrap items-center justify-end gap-2 xl:flex-nowrap">
           <span className="hidden min-w-0 max-w-56 truncate text-sm text-muted-foreground xl:inline">{email}</span>
+          <LanguageSwitch locale={parseLocale(locale)} label={ui("label")} />
           <ThemeToggle theme={theme} />
           <SignOutButton />
         </div>

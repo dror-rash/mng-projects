@@ -15,6 +15,7 @@ The first screens a Hebrew-speaking user meets are the login and sign-up pages.
   - the inline field errors and the auth errors as the user sees them: "Invalid email or password", the lockout message if task 090 has landed, "Enter a valid email address", the password length message;
   - Better Auth error codes are mapped to catalogue keys, never shown raw.
 - **`SignOutButton`** ("Log out" התנתקות).
+- **The language switch on the login and sign-up pages** (moved from task 094 on 2026-11-13): `LanguageSwitch` from `packages/ui`, placed at the top end of both pages (the shell has no header or theme toggle); it sets the `locale` cookie and refreshes, like the dashboard's.
 - **Messages** in `apps/shell/messages/{en,he}.json` and `packages/ui/messages/…`; the parity test passes.
 
 ## Out of scope
@@ -42,6 +43,7 @@ Move the strings into keys page by page; the error map is unit tested (`auth-err
 
 ## Progress log
 - 2026-11-11 – Drafted with `language.feature` (`@wip`).
+- 2026-11-13 – Scope: the shell's language switch moved here from task 094. No scenario chooses the language on the login page yet; Storybook covers the switch.
 
 ## Parking lot
 - Gendered Hebrew forms (the default is plural/neutral wording).

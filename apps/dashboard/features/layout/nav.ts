@@ -1,12 +1,13 @@
 import type { WorkspaceRole } from "@/features/access/roles";
 import { canSeeCustomers } from "@/features/access/scope";
 
-export type NavItem = { href: string; label: string };
+/** `labelKey` is a key in the `nav` messages (ADR-0011): the header translates it. */
+export type NavItem = { href: string; labelKey: "overview" | "allProjects" | "customers" };
 
 const NAV: readonly NavItem[] = [
-  { href: "/", label: "Overview" },
-  { href: "/projects", label: "All projects" },
-  { href: "/customers", label: "Customers" },
+  { href: "/", labelKey: "overview" },
+  { href: "/projects", labelKey: "allProjects" },
+  { href: "/customers", labelKey: "customers" },
 ];
 
 /**

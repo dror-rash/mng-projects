@@ -25,12 +25,21 @@ Rules:
 | `packages/db` | Drizzle schema, migrations, lazy Postgres client |
 | `packages/auth` | Better Auth server/client, zone middleware helper, `SignOutButton` |
 | `packages/storage` | Files in object storage (task 057, ADR-0008), server-only: signed upload and download URLs, `stat`, `remove`, `objectKey`, and `removePrefix` / `workspacePrefix` for a whole workspace's folder (task 086). Google Cloud Storage deployed, `fake-gcs-server` locally (`STORAGE_LOCAL_URL`). Never checks access: callers check before asking for a URL |
+| `packages/i18n` | Languages (task 094, ADR-0011): `LOCALES` (`en`, `he`), `parseLocale`, `localeName`, `localeDir`, `LOCALE_COOKIE` / `localeCookie`, `localeFromRequest` (cookie, then `Accept-Language`, then English); `./server` has `requestLocale()` and `createRequestConfig(catalogues)` for each zone's `i18n/request.ts`; `./catalogue` has `catalogueDifferences(en, he)` for the parity tests |
 
 ## Conventions
 - Feature-based folders at each zone's root: `features/<feature>/` (imported as `@/features/...`).
 - Server Components by default; data fetching in server code, not in client effects.
 - Env vars validated at startup with a schema; never read `process.env` ad hoc.
 - Demo data (tasks 052–055, 076): `apps/dashboard/scripts/seed-demo.ts` (`seed:demo`) is a thin command over `scripts/seed-demo-run.ts` (`runSeedDemo(db, options)`), which writes through `@repo/db/maintenance` in one transaction on one connection (it works with `DB_POOL_MAX=1`). What it seeds and decides is pure and unit tested in `features/demo/`: `seed-plan.ts` (customers down to visits, the `Site inspection (demo)` reading form, reading values that `reading-values.ts` accepts) and `deploy-seed.ts` (`--deploy`: seed, skip or refuse, and output with counts only). The seed's database tests are the dashboard's own (`pnpm --filter @repo/dashboard test:db`, `scripts/**/*.db.test.ts`, against `DATABASE_URL`), with the unfinished uploads' (`features/**/*.db.test.ts`, task 087), which also need the local storage server (`STORAGE_*`; CI runs them after it starts).
+
+## Languages (ADR-0011, task 094)
+- **Which language:** the `locale` cookie (path `/`, one year, `SameSite=Lax`, not httpOnly, shared by every zone like `theme`), then `Accept-Language` (`he` if Hebrew ranks above English), then English. Never in the URL: `next-intl` runs without locale routing. A cookie value reaches `lang`, `dir` or a catalogue only through `parseLocale`; catalogues are imported statically, never by a path built from the request.
+- **Zones:** each zone has `i18n/request.ts` (`createRequestConfig` from `@repo/i18n/server`) wired by the `next-intl` plugin in `next.config.ts`. The root layout sets `<html lang dir>` on the server from `getLocale()`. Server components translate with `getTranslations`; a client island gets its text as props or through `NextIntlClientProvider` with only the namespaces it needs.
+- **Catalogues:** `apps/<zone>/messages/{en,he}.json` and `packages/ui/messages/{en,he}.json`; a zone mounts the `packages/ui` messages under `ui` (`getTranslations("ui.languageSwitch")`). Keys are namespaced by feature, camelCase (`nav.allProjects`, `login.heading`). Every catalogue has a parity test (`i18n/messages.test.ts` in a zone, `src/messages.test.ts` in `packages/ui`) with `catalogueDifferences`: same keys and the same ICU placeholders in both languages.
+- **Keys, not text:** parsers and value-set helpers return message keys and the caller translates (`navFor` returns `labelKey`). Pages not yet translated (tasks 097–100) show English inside a right-to-left page.
+- **Switch:** `LanguageSwitch` (`@repo/ui/language-switch`), a radio group in the dashboard header next to the theme toggle: it writes the cookie and reloads. Its name keeps the English word in Hebrew ("שפה / Language") so anyone finds it; each language is named in itself with its own `lang`.
+- **Text people write** (names, notes, readings) is never translated and gets `dir="auto"`. **Styling** uses logical utilities only (`ms-`/`me-`, `ps-`/`pe-`, `start-`/`end-`, `text-start`); mirroring the layout is task 096.
 
 ## Authentication & users
 - Better Auth (email + password) in `packages/auth`; users, sessions and accounts in Postgres via Drizzle (`packages/db`).
