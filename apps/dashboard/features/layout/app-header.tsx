@@ -65,8 +65,8 @@ export async function AppHeader({
             </Button>
           ))}
         </nav>
-        {/* Only the email gives way when space is short: never the workspace name. On a phone the controls wrap. */}
-        <div className="ml-auto flex flex-wrap items-center justify-end gap-2">
+        {/* Only the email gives way when space is short: never the workspace name. Below xl the controls wrap. */}
+        <div className="ms-auto flex min-w-0 flex-wrap items-center justify-end gap-2 xl:flex-nowrap">
           <span className="hidden min-w-0 max-w-56 truncate text-sm text-muted-foreground xl:inline">{email}</span>
           <LanguageSwitch locale={parseLocale(locale)} label={ui("label")} />
           <ThemeToggle theme={theme} />
