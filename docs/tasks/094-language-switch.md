@@ -1,6 +1,6 @@
 # Task 094: Language switch (Hebrew and English foundation)
 
-- **Status:** in-progress
+- **Status:** in-review
 - **Milestone:** M14 Hebrew and English
 - **Zone / package:** new `packages/i18n`, `packages/ui`, `apps/shell`, `apps/dashboard`, `e2e`
 - **Feature file:** `docs/features/language.feature` (`@task:094`)
@@ -44,11 +44,11 @@ The owner and their staff work in Hebrew, and each user should be able to switch
 - Translating pages beyond the header, menu and login heading (097–100).
 
 ## Acceptance criteria
-- [ ] Choosing עברית shows the menu in Hebrew, right to left, and carries to the login page after logging out and across a reload. ("Choosing Hebrew turns the app right to left, across zones and reloads")
-- [ ] Choosing English switches back. ("Switching back to English")
-- [ ] With no choice made, a browser that prefers Hebrew gets Hebrew, and any other gets English. ("A Hebrew browser starts in Hebrew", "Any other browser starts in English")
-- [ ] A made-up `locale` cookie value is ignored. ("An unknown language in the cookie falls back")
-- [ ] Every existing scenario passes unchanged in English.
+- [x] Choosing עברית shows the menu in Hebrew, right to left, and carries to the login page after logging out and across a reload. ("Choosing Hebrew turns the app right to left, across zones and reloads")
+- [x] Choosing English switches back. ("Switching back to English")
+- [x] With no choice made, a browser that prefers Hebrew gets Hebrew, and any other gets English. ("A Hebrew browser starts in Hebrew", "Any other browser starts in English")
+- [x] A made-up `locale` cookie value is ignored. ("An unknown language in the cookie falls back")
+- [x] Every existing scenario passes unchanged in English.
 
 ## Security notes
 - New cookie `locale`, read on every request: the value must go through `parseLocale` before it reaches `lang`/`dir` or a catalogue import, never interpolated. Otherwise an attacker-set cookie could inject attributes or load an arbitrary module path.
