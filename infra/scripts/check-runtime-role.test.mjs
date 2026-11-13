@@ -1,5 +1,7 @@
 // Tests for check-runtime-role.mjs (task 068) against the migrated database in DATABASE_URL, whose login
-// must be able to grant (the owner or a superuser). Every change to roles or tables is rolled back.
+// must be able to grant (the owner or a superuser). Every change to roles or tables is rolled back. The
+// passing runs connect as a throwaway runtime login (task 074: like app_runtime and preview_runtime, a
+// NOINHERIT login whose only membership is app_user with SET), created and dropped around each test.
 // Run: node --experimental-strip-types --test infra/scripts/check-runtime-role.test.mjs
 import assert from "node:assert/strict";
 import { execFile } from "node:child_process";
@@ -48,15 +50,82 @@ async function insertProbeWorkspace(client) {
   await client.query("insert into workspace (id, name) values ('role-check-probe', 'Role check probe')");
 }
 
+let runtimeLogins = 0;
+
+/**
+ * Runs `fn(url, login)` with a throwaway runtime login (task 074): LOGIN NOINHERIT, a SET-only member of
+ * app_user, nothing else; `setup(client, login)` runs as the DATABASE_URL login first. Dropped afterwards.
+ */
+async function withRuntimeLogin(fn, setup = async () => {}) {
+  const login = `role_check_runtime_${process.pid}_${++runtimeLogins}`;
+  const password = `pw_${process.pid}_${Date.now()}`;
+  await withClient(buildPoolConfig(env, null), async (client) => {
+    await client.query(`create role ${login} login noinherit password '${password}'`);
+    await client.query(`grant app_user to ${login} with inherit false, set true`);
+    await setup(client, login);
+  });
+  try {
+    const url = new URL(env.DATABASE_URL);
+    url.username = login;
+    url.password = password;
+    return await fn(url.toString(), login);
+  } finally {
+    await withClient(buildPoolConfig(env, null), (client) => client.query(`drop role ${login}`));
+  }
+}
+
+/** The role check on a connection opened like the runtime's, as a runtime login. */
+const checkAsRuntimeLogin = (setup) =>
+  withRuntimeLogin((url) => withClient(buildPoolConfig({ DATABASE_URL: url }), checkRuntimeRole), setup);
+
 function runCli(databaseUrl) {
   return promisify(execFile)(process.execPath, ["--experimental-strip-types", "--no-warnings", script], {
     env: { PATH: process.env.PATH, DATABASE_URL: databaseUrl },
   });
 }
 
-test("passes on a connection opened like the runtime's (role option on)", async () => {
+test("passes on a connection opened like the runtime's (runtime login, role option on)", async () => {
+  assert.deepEqual(await checkAsRuntimeLogin(), []);
+});
+
+// Task 074: a login that owns the tables (or can become their owner) leaves row-level security behind with
+// one `SET ROLE <owner>` or `RESET ROLE` on a pooled connection.
+test("fails on purpose when the runtime connects with the owner login", async () => {
   const failures = await withClient(buildPoolConfig(env), checkRuntimeRole);
-  assert.deepEqual(failures, []);
+  assert.match(failures.join("\n"), /the login \(session_user\) ".+" owns the tables/);
+});
+
+test("fails when the runtime login can SET ROLE to the tables' owner", async () => {
+  const { rows } = await withClient(buildPoolConfig(env, null), (client) =>
+    client.query("select pg_get_userbyid(relowner)::text as owner from pg_class where oid = 'public.workspace'::regclass"),
+  );
+  const owner = rows[0].owner;
+  const failures = await checkAsRuntimeLogin((client, login) => client.query(`grant "${owner}" to ${login} with inherit false, set true`));
+  assert.match(failures.join("\n"), new RegExp(`the login \\(session_user\\) "role_check_runtime_[0-9_]+" can SET ROLE "${owner}", which owns`));
+});
+
+test("fails when the runtime login can SET ROLE to any role but itself and app_user", async () => {
+  const extra = `role_check_extra_${process.pid}`;
+  try {
+    const failures = await checkAsRuntimeLogin(async (client, login) => {
+      await client.query(`create role ${extra} nologin`);
+      await client.query(`grant ${extra} to ${login} with inherit false, set true`);
+    });
+    assert.match(failures.join("\n"), new RegExp(`the login \\(session_user\\) "role_check_runtime_[0-9_]+" can SET ROLE to roles other than itself and app_user: ${extra}`));
+  } finally {
+    await withClient(buildPoolConfig(env, null), (client) => client.query(`drop role if exists ${extra}`));
+  }
+});
+
+test("on a runtime login's connection, SET ROLE to the owner is refused", async () => {
+  const { rows } = await withClient(buildPoolConfig(env, null), (client) =>
+    client.query("select pg_get_userbyid(relowner)::text as owner from pg_class where oid = 'public.workspace'::regclass"),
+  );
+  await withRuntimeLogin((url) =>
+    withClient(buildPoolConfig({ DATABASE_URL: url }), async (client) => {
+      await assert.rejects(client.query(`set role "${rows[0].owner}"`), /permission denied to set role/);
+    }),
+  );
 });
 
 test("fails on a connection without the role option (the login user)", async () => {
@@ -270,8 +339,7 @@ test("fails on a changed allowlisted definer function and prints its new hash", 
 });
 
 test("passes the migrations' rules, triggers, policies and functions as they are", async () => {
-  const failures = await withClient(buildPoolConfig(env), checkRuntimeRole);
-  assert.deepEqual(failures, []);
+  assert.deepEqual(await checkAsRuntimeLogin(), []);
 });
 
 // The auditor's constructions (re-audit D): each must fail.
@@ -329,9 +397,18 @@ test("functions planted in public are never called and can't fake a pass", async
   assert.match(text, /app_user is a member of the owner of: workspace/);
 });
 
-test("the command exits 0 on the migrated database and prints what it checked", async () => {
-  const { stdout } = await runCli(env.DATABASE_URL);
+test("the command exits 0 on the migrated database as a runtime login and prints what it checked", async () => {
+  const { stdout } = await withRuntimeLogin((url) => runCli(url));
   assert.match(stdout, /Runtime role check passed/);
+  assert.match(stdout, /can't SET ROLE to an owner/);
+});
+
+test("the command exits non-zero as the owner login", async () => {
+  await assert.rejects(runCli(env.DATABASE_URL), (error) => {
+    assert.equal(error.code, 1);
+    assert.match(error.stderr, /owns the tables/);
+    return true;
+  });
 });
 
 test("the command exits non-zero and prints FAILED when it can't check", async () => {

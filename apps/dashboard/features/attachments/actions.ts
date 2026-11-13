@@ -9,13 +9,23 @@ import { cleanText } from "@/features/forms/clean-text";
 import { requireProjectWorkAccess } from "@/features/projects/require-project-access";
 import { getProjectVisit } from "@/features/visits/queries";
 
-import { allowedOnVisit, parseAttachmentKind, uploadRefusal } from "./attachment-limits";
+import { allowedOnVisit, maxUploadBytes, parseAttachmentKind, uploadRefusal } from "./attachment-limits";
+import { prepareUpload, removeStaleObjects } from "./unfinished-uploads";
 
-// Photos and files (task 059) and reports (task 064). The browser uploads straight to storage: `startUploadAction` checks access
-// and the limits, records the upload (unconfirmed) and signs a URL; the browser sends the file; then
-// `finishUploadAction` checks the stored object and confirms it, or throws it away. Access problems (another
-// partner's project, a made-up id, someone else's upload) throw the same not-found error; the limits come
-// back as a message to show.
+// Photos and files (task 059) and reports (task 064). The browser uploads straight to storage. An upload's life:
+//   1. start: `startUploadAction` checks access and the limits, clears the workspace's stale uploads and
+//      checks the user's unfinished ones (task 087, `unfinished-uploads.ts`), records the upload (unconfirmed)
+//      and signs a URL;
+//   2. upload: the browser sends the file to storage with the URL's headers;
+//   3. confirm: `finishUploadAction` checks the stored object and confirms it, or throws it away.
+// One that never comes back to step 3 (a dropped connection, a closed tab) counts towards its uploader's 10
+// unfinished uploads in the workspace, and is cleared (record and object) by the first upload started in the
+// workspace an hour after it began. Its URL lasts 15 minutes, but storage checks that when the PUT starts,
+// so a very slow body can land after its record was cleared: a known orphan object until the bucket-wide
+// sweep (parked, task 087). A confirm that comes after the clearing answers not found and removes the object.
+// The signed URL carries the kind's size limit, so storage refuses a larger body (task 085); the confirm check
+// stays (the local server doesn't enforce the limit). Access problems (another partner's project, a made-up
+// id, someone else's upload) throw the same not-found error; the limits come back as a message to show.
 
 export type UploadStart = { ok: true; uploadUrl: string; headers: Record<string, string> } | { ok: false; error: string };
 export type UploadFinish = { ok: true } | { ok: false; error: string };
@@ -43,7 +53,8 @@ export async function startUploadAction(input: {
   if (!kind || (input.visitId && !allowedOnVisit(kind)) || !UUID.test(String(input.attachmentId)) || !fileName) {
     throw new Error("Not found");
   }
-  const key = await withAccess(session.user.id, async (): Promise<{ refusal: string } | { storageKey: string; contentType: string }> => {
+  type Started = { workspaceId: string; staleKeys: string[] } & ({ refusal: string } | { storageKey: string; contentType: string });
+  const key = await withAccess(session.user.id, async (): Promise<{ refusal: string } | Started> => {
     const project = await requireProjectWorkAccess(session.user.id, String(input.projectId));
     if (input.visitId && !(await getProjectVisit(session.user.id, project.id, String(input.visitId)))) {
       throw new Error("Not found");
@@ -51,6 +62,11 @@ export async function startUploadAction(input: {
     const refusal = uploadRefusal(kind, String(input.contentType), Number(input.size));
     if (refusal) {
       return { refusal };
+    }
+    const { staleKeys, refusal: tooMany } = await prepareUpload(session.user.id, project);
+    const cleared = { workspaceId: project.workspaceId, staleKeys };
+    if (tooMany) {
+      return { ...cleared, refusal: tooMany };
     }
     const storageKey = objectKey({ workspaceId: project.workspaceId, projectId: project.id });
     const contentType = String(input.contentType).toLowerCase();
@@ -70,18 +86,24 @@ export async function startUploadAction(input: {
     if (inserted.length === 0) {
       throw new Error("Not found");
     }
-    return { storageKey, contentType };
+    return { ...cleared, storageKey, contentType };
   });
+  // After the transaction: the cleared records are gone for good, so their objects can go too.
+  if ("staleKeys" in key && key.staleKeys.length > 0) {
+    await removeStaleObjects(key.workspaceId, key.staleKeys);
+  }
   if ("refusal" in key) {
     return { ok: false, error: key.refusal };
   }
-  const signed = await createUploadUrl({ key: key.storageKey, contentType: key.contentType });
+  // The URL itself refuses a body over the kind's limit (Cloud Storage; task 085), whatever size was declared.
+  const signed = await createUploadUrl({ key: key.storageKey, contentType: key.contentType, maxBytes: maxUploadBytes(kind) });
   return { ok: true, uploadUrl: signed.url, headers: signed.headers };
 }
 
 /**
- * Confirms the user's own unconfirmed upload once its stored object fits what was asked for (the signed URL
- * can't limit size). Otherwise removes the object and the record, and says so.
+ * Confirms the user's own unconfirmed upload once its stored object fits what was asked for (checked again
+ * here: the local server doesn't enforce the URL's size range, and it guards the content type). Otherwise
+ * removes the object and the record, and says so.
  */
 export async function finishUploadAction(input: { attachmentId: string }): Promise<UploadFinish> {
   const session = await requireActionSession();
@@ -89,6 +111,7 @@ export async function finishUploadAction(input: { attachmentId: string }): Promi
     getDb()
       .select({
         id: schema.attachment.id,
+        workspaceId: schema.attachment.workspaceId,
         projectId: schema.attachment.projectId,
         kind: schema.attachment.kind,
         storageKey: schema.attachment.storageKey,
@@ -115,16 +138,23 @@ export async function finishUploadAction(input: { attachmentId: string }): Promi
     : stored.contentType !== upload.contentType
       ? "The file isn't what it said it was"
       : uploadRefusal(kind, stored.contentType, stored.size);
-  await withAccess(session.user.id, async () => {
+  const confirmed = await withAccess(session.user.id, async () => {
     if (refusal) {
       await getDb().delete(schema.attachment).where(eq(schema.attachment.id, upload.id));
-    } else {
-      await getDb()
-        .update(schema.attachment)
-        .set({ confirmedAt: new Date(), sizeBytes: stored!.size })
-        .where(eq(schema.attachment.id, upload.id));
+      return false;
     }
+    const rows = await getDb()
+      .update(schema.attachment)
+      .set({ confirmedAt: new Date(), sizeBytes: stored!.size })
+      .where(eq(schema.attachment.id, upload.id))
+      .returning({ id: schema.attachment.id });
+    return rows.length > 0;
   });
+  if (!refusal && !confirmed) {
+    // Cleared as stale between the read and the confirm (task 087): its object goes too.
+    await removeStaleObjects(upload.workspaceId, [upload.storageKey]);
+    throw new Error("Not found");
+  }
   if (refusal) {
     await remove(upload.storageKey);
     return { ok: false, error: refusal };

@@ -4,7 +4,9 @@ type Env = Record<string, string | undefined>;
 
 /**
  * The role the app's queries run as (ADR-0006): it owns nothing and can't bypass row-level security.
- * The login user (the owner, which runs migrations) is a member of it, so it can switch on connect.
+ * Deployed runtimes log in as their own login (`app_runtime`, `preview_runtime`: owns nothing, a SET-only
+ * member of this role, task 074); locally and in CI the one login is the owner. Either way the connection
+ * switches to it on connect.
  */
 export const RUNTIME_ROLE = "app_user";
 
