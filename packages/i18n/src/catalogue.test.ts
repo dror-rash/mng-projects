@@ -30,6 +30,31 @@ describe("catalogueDifferences", () => {
     expect(catalogueDifferences(en, he)).toEqual(["greeting has placeholders name in en but first in he"]);
   });
 
+  it("doesn't take plural branch text for a placeholder", () => {
+    const en = { count: "{count, plural, one {task} other {tasks}}" };
+    const he = { count: "{count, plural, one {משימה} other {משימות}}" };
+
+    expect(catalogueDifferences(en, he)).toEqual([]);
+  });
+
+  it("doesn't take select branch text for a placeholder", () => {
+    const en = { role: "{kind, select, admin {Admin} other {Other}}" };
+    const he = { role: "{kind, select, admin {מנהל} other {אחר}}" };
+
+    expect(catalogueDifferences(en, he)).toEqual([]);
+  });
+
+  it("names a select argument missing from one language", () => {
+    const en = { role: "{kind, select, admin {Admin {name}} other {Other}}" };
+    const he = { role: "{kind, select, admin {מנהל} other {אחר}}" };
+
+    expect(catalogueDifferences(en, he)).toEqual(["role has placeholders kind, name in en but kind in he"]);
+  });
+
+  it("ignores quoted braces, which are text", () => {
+    expect(catalogueDifferences({ a: "Use '{name}' literally" }, { a: "טקסט" })).toEqual([]);
+  });
+
   it("counts placeholders nested in plural branches", () => {
     const en = { line: "{count, plural, one {# task for {who}} other {# tasks for {who}}}" };
     const he = { line: "{count, plural, one {משימה אחת} other {# משימות}}" };

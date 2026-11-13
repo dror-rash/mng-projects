@@ -5,10 +5,73 @@
  */
 export type Messages = { [key: string]: string | Messages };
 
-/** `{name}` and `{count, plural, …}` give `name` and `count`; plural branch text (`{# tasks}`) doesn't count. */
+/**
+ * The argument names in an ICU message: `{name}`, `{count, plural, …}`, `{kind, select, …}`, `{n, number}`,
+ * also inside plural and select branches. Branch text (`one {task}`) and quoted text (`'{name}'`) are not
+ * arguments. A small walk over the message, so no parser dependency.
+ */
 function placeholders(message: string): string[] {
   const names = new Set<string>();
-  for (const match of message.matchAll(/\{\s*([A-Za-z_]\w*)\s*[,}]/g)) names.add(match[1]!);
+  let i = 0;
+
+  // Text up to the end, or up to the `}` that closes the branch being read.
+  function text(): void {
+    while (i < message.length) {
+      const char = message[i];
+      if (char === "'") quoted();
+      else if (char === "{") argument();
+      else if (char === "}") return;
+      else i++;
+    }
+  }
+
+  // `''` is an apostrophe; `'` before `{`, `}`, `#` or `|` quotes up to the next `'`.
+  function quoted(): void {
+    const next = message[i + 1];
+    if (next === "'") i += 2;
+    else if (next !== undefined && "{}#|".includes(next)) {
+      const close = message.indexOf("'", i + 1);
+      i = close === -1 ? message.length : close + 1;
+    } else i++;
+  }
+
+  function readUntil(stops: string): string {
+    const begin = i;
+    while (i < message.length && !stops.includes(message[i]!)) i++;
+    return message.slice(begin, i).trim();
+  }
+
+  function argument(): void {
+    i++; // {
+    const name = readUntil(",}");
+    if (/^[A-Za-z_]\w*$/.test(name)) names.add(name);
+    if (message[i] === "}") return void i++;
+    i++; // ,
+    const type = readUntil(",}");
+    if (message[i] === "}") return void i++;
+    i++; // ,
+    if (type === "plural" || type === "selectordinal" || type === "select") branches();
+    else style();
+  }
+
+  // `one {…} other {…}` (with `=0` and `offset:1`), up to the argument's closing `}`.
+  function branches(): void {
+    while (i < message.length) {
+      readUntil("{}");
+      if (message[i] === "}") return void i++;
+      i++; // {
+      text();
+      i++; // } closing the branch
+    }
+  }
+
+  // A number or date style (`::currency/ILS`): no arguments, up to the closing `}`.
+  function style(): void {
+    readUntil("}");
+    i++;
+  }
+
+  text();
   return [...names].sort();
 }
 
