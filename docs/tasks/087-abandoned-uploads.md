@@ -1,6 +1,6 @@
 # Task 087: Abandoned uploads are cleared, and unfinished uploads are capped
 
-- **Status:** in-review
+- **Status:** done (PR #92, replacing PR #87)
 - **Milestone:** cross-cutting (security), M13 follow-up
 - **Zone / package:** `packages/db` (one migration: a definer function, its RLS pin), `apps/dashboard/features/attachments/` (`actions.ts`, `attachment-limits.ts`), `e2e/steps` (one new step). Commit types `test` → `feat(db)` / `fix(dashboard)`.
 - **Feature file:** `docs/features/attachments.feature` (one `@wip @task:087` scenario)
@@ -66,6 +66,7 @@ Red: DB tests for the function (none exists), the `@task:087` scenario (the 11th
   - `removeStaleObjects` says keys are never logged or sent to the client.
   - Not done: a separate refused-upload step. The scenario's `When I add the photo "panel.jpg" with "Add photos"` is the same text as the shared step, so a separate step would need a different wording in the feature file, which only a spec change may make. The shared step stays as loosened in the red commit (the photo or an upload error); in every other scenario that uses it, the next step needs the photo (a `Then` that shows it, its Delete button, or its download link), so a refused upload still fails the scenario there.
 - 2026-11-12 – Rebuilt on `main` (owner lifted the pre-demo hold) as a fresh branch: task 085 is merged, and the migration is regenerated as 0044 after `main`'s 0040–0043, made idempotent (`IF NOT EXISTS`, `OR REPLACE`) because the shared preview database ran the first draft as 0040. Same SQL otherwise; red/green history on PR #87.
+- 2026-11-12 – Merged as PR #92, which replaced PR #87 (closed); migration 0044. SEC-07 partly fixed: storage quota and a bucket-wide sweep stay open (SEC-48).
 
 ## Parking lot
 - The scheduled sweep (question 4).

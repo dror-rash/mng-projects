@@ -13,6 +13,9 @@ test-results
 .terraform
 *.tfstate
 *.tfstate.*
+# Saved Terraform plans (`terraform plan -out=tfplan`) hold secret values in plain text
+tfplan
+*.tfplan
 infra/terraform.tfvars
 infra/backend.hcl
 .features-gen

@@ -1,6 +1,6 @@
 # Task 086: Deleting a workspace deletes its files from storage
 
-- **Status:** in-review
+- **Status:** done (PR #80)
 - **Milestone:** cross-cutting (security), M13 follow-up
 - **Zone / package:** `packages/storage` (a `removePrefix` helper), `apps/dashboard/features/workspaces/settings-actions.ts` (`deleteWorkspaceAction`), `e2e/steps` (two new steps). No migration. Commit types `test(dashboard|storage)` → `feat(dashboard)` / `fix(storage)` → `refactor(storage)`.
 - **Feature file:** `docs/features/workspaces.feature` (two `@wip @task:086` scenarios)
@@ -58,6 +58,7 @@ Red: the two scenarios (the first fails today: the copied link still opens) and 
 - 2026-11-10 – Red: `@wip` off both scenarios (tagged `@slow`: sign-up, setup and two uploads pass 30 s on a loaded dev machine); steps `I copy the download links of …`, `the copied download links no longer open` / `still open` in `attachments.steps.ts`. "deletes its photos and files" fails (copied signed link answers 200, expected 404); "keeps another workspace's files" passes (a guard, green before and after).
 - 2026-11-10 – Green in lane 2. Red `becac68` (unit tests for `removePrefix`'s checks and `workspacePrefix`, a `test:storage` case, the dashboard helper's tests; throwing stubs so the commit typechecks), green `1cde7fe` (`removePrefix`, `workspacePrefix`, `removeWorkspaceFiles`, the call in `deleteWorkspaceAction`), refactor `e86be65` (`objectKey` builds on `workspacePrefix`). Commit types follow the orchestrator (`test(dashboard)` → `feat(dashboard)` → `refactor(storage)`), not the `fix(dashboard)` / `feat(storage)` this file named. Checks: `@task:086` e2e 2/2; `pnpm test` (dashboard 442, storage 10, all packages green); `test:storage` 8/8; lint, typecheck, build green; full `CI=1 pnpm test:e2e --workers=2` 325 passed.
 - 2026-11-10 – Review fixes (no blockers): `removePrefix` deletes with `ifGenerationMatch` so the client retries transient errors, skips a 412 to the next pass, stops on no progress (red `b433682`, fix `5e11f02`; unit tests with a fake bucket); `removeWorkspaceFiles` builds the prefix inside its `try`. Docs: bucket soft-delete (7 days, project Owners/Editors), the orphans a sweep would catch, the 300 s timeout. Checks: storage unit 14, `test:storage` 8, dashboard 442, lint and typecheck green, `@task:086` e2e 2/2.
+- 2026-11-12 – Merged (PR #80) after the owner lifted the pre-demo hold (2026-11-11). SEC-08 fixed, with the residuals on its register row.
 
 ## Parking lot
 - A periodic sweep for prefixes whose workspace is gone (also catches a failed inline delete or a SQL cascade).

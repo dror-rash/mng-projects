@@ -6,12 +6,14 @@ The one list of known security gaps and their status. The process that feeds it 
 
 ## Status at a glance
 
-| Priority | Open | Planned | Fixed | Accepted |
-|---|---|---|---|---|
-| P0 – fix now | 0 | 0 | 5 | 0 |
-| P1 – before real customer data on `main` | 2 | 9 | 3 | 0 |
-| P2 – hardening | 17 | 0 | 0 | 1 |
-| P3 – info / decide | 8 | 0 | 0 | 0 |
+| Priority | Open | Planned | Partly fixed | Fixed | Accepted |
+|---|---|---|---|---|---|
+| P0 – fix now | 0 | 0 | 0 | 5 | 0 |
+| P1 – before real customer data on `main` | 2 | 0 | 2 | 10 | 0 |
+| P2 – hardening | 20 | 0 | 0 | 0 | 1 |
+| P3 – info / decide | 8 | 0 | 0 | 0 | 0 |
+
+Counted from the rows below (2026-11-12). "Fixed" includes SEC-14 and SEC-17, merged but not live until the owner applies their Terraform, and rows whose code part is fixed with an owner setting left in the row (SEC-11, SEC-15).
 
 No Critical findings. One High (SEC-01). Nothing in the review showed one workspace's data reaching another through the app: every page, route handler and server action checks access on the server, and row-level security is on for every app table.
 
@@ -36,20 +38,20 @@ No Critical findings. One High (SEC-01). Nothing in the review showed one worksp
 
 | ID | Sev | Gap | Area | Effort | Status | Source |
 |---|---|---|---|---|---|---|
-| SEC-06 | Med | The `main` runtime connects as `app`, the database owner, and only switches to `app_user`; any SQL foothold can `RESET ROLE` and bypass row-level security | DB / infra | M | partly fixed (PR #85, task 074): no SET ROLE escape; closes when the follow-up removes the transition grants on `db-password` | INF-3, ACC-1 |
-| SEC-07 | Med | Uploads have no enforced size cap (the signed URL has no length range) and abandoned or orphaned uploads are never cleaned up: unbounded storage cost | Files | M | partly fixed: size cap PR #84 (task 085, after the owner's preview check), unfinished-upload cap and cleanup PR #87 (task 087); open: storage quota (SEC-48), bucket-wide sweep | WEB-1 |
+| SEC-06 | Med | The `main` runtime connects as `app`, the database owner, and only switches to `app_user`; any SQL foothold can `RESET ROLE` and bypass row-level security | DB / infra | M | partly fixed (PR #85, task 074; `main` runs as `app_runtime` since 2026-11-12): no SET ROLE escape; closes when task 109 removes the runtime's transition grants on `db-password` | INF-3, ACC-1 |
+| SEC-07 | Med | Uploads have no enforced size cap (the signed URL has no length range) and abandoned or orphaned uploads are never cleaned up: unbounded storage cost | Files | M | partly fixed: size cap PR #84 (task 085; CORS applied; the hand check on real Cloud Storage waits for previews, task 110), unfinished-upload cap and cleanup PR #92 (task 087); open: storage quota and a bucket-wide sweep (SEC-48) | WEB-1 |
 | SEC-08 | Med | Deleting a workspace (or a cascade) leaves its photos and reports in the bucket forever (retention, erasure requests) | Files | S–M | fixed (PR #80, task 086; residual: a failed inline delete or an upload landing after it leaves orphans until a bucket-wide sweep exists; deleted objects stay restorable to project Owners/Editors for 7 days) | WEB-2 |
 | SEC-09 | Med | No email verification and no password reset: anyone can register any address, and the real owner can't recover it; sign-up also reveals which emails have accounts | Auth | M | open (**owner decision:** email provider, or accept for the POC) | AUTH-2, AUTH-4 |
 | SEC-10 | Med | Sign-in brute force is limited only by the in-memory, per-instance rate limiter (up to 5× the budget); no account lockout | Auth | M | fixed (PR #83 shared limit, task 089; PR #86 lockout, task 090); accepted trade-off: anyone who knows an email can keep that account locked (owner, 2026-11-10); IPv6 counted per /64 | AUTH-3 |
 | SEC-11 | Med | No Dependabot alerts or updates, no `pnpm audit`, gitleaks or CodeQL in CI | Supply chain | S | fixed in CI (PR #62, task 082); **owner:** turn on Dependabot alerts and security updates; `security` is required by the SEC-02 ruleset | SUP-5 |
 | SEC-12 | Med | Agent guard gaps: `gcloud secrets versions access`, `gcloud beta run deploy`, `git push origin +main`, `git add -f .env` and `git -c … commit` all pass; commits in lane worktrees skip the commit checks | Tooling | M | fixed (PR #61, task 084; owner limits stay with SEC-02 and SEC-13) | SUP-2, SUP-3 |
 | SEC-13 | Med | The auto-mode environment in `~/.claude/settings.json` describes another, private repo; agent sessions hold the owner's `gcloud` and `gh` (`gist`, `repo`) credentials | Tooling | S | open (**owner:** project-level auto-mode context and deny rules; a less-privileged gcloud config for agents) | SUP-2 |
-| SEC-14 | Low | `main` can scale to 5 instances × 3 zones × 4 connections against a 12-connection database; unauthenticated traffic can cause "too many connections" outages | Infra | S | planned (task 091) | INF-8 |
-| SEC-15 | Low | Fork PRs from anyone with one merged PR run edited workflows without approval; `ci.yml` has no `permissions:`; WIF doesn't check which workflow asks for a token | CI/CD | S | `ci.yml` part fixed (PR #62, task 082); planned (task 083, WIF); **owner:** fork approval for all outside contributors | INF-11, INF-12 |
-| SEC-16 | Low | `drizzle-orm` 0.44.7 has a High SQL-injection advisory (identifiers); not reachable today, and Better Auth expects ≥0.45.2 | Supply chain | S | planned (task 081); task 081 bumps `drizzle-orm` to 0.45.4 (`drizzle-kit` 0.31.11) and removes GHSA-gpj5-g38j-94v9 from `pnpm.auditConfig.ignoreGhsas` | WEB-5, SUP-6 |
+| SEC-14 | Low | `main` can scale to 5 instances × 3 zones × 4 connections against a 12-connection database; unauthenticated traffic can cause "too many connections" outages | Infra | S | fixed (PR #78, task 091); live once the owner applies | INF-8 |
+| SEC-15 | Low | Fork PRs from anyone with one merged PR run edited workflows without approval; `ci.yml` has no `permissions:`; WIF doesn't check which workflow asks for a token | CI/CD | S | fixed: `ci.yml` (PR #62, task 082), WIF accepts only the deploy workflows (PR #79, task 083; applied, hand check PR #91); **owner:** fork approval for all outside contributors | INF-11, INF-12 |
+| SEC-16 | Low | `drizzle-orm` 0.44.7 has a High SQL-injection advisory (identifiers); not reachable today, and Better Auth expects ≥0.45.2 | Supply chain | S | fixed (PR #77, task 081): `drizzle-orm` 0.45.4 (`drizzle-kit` 0.31.11); GHSA-gpj5-g38j-94v9 removed from `pnpm.auditConfig.ignoreGhsas` | WEB-5, SUP-6 |
 | SEC-42 | Low | `postcss` 8.4.31, pinned by `next`, has two High advisories (GHSA-6g55-p6wh-862q, GHSA-r28c-9q8g-f849; fixed in ≥ 8.5.18); build-time only, but `pnpm audit --prod` (task 082) fails on them | Supply chain | S | fixed (PR #60, task 093) | task 082 audit |
 | SEC-18 | Low | Deleting a user who uploaded a file or recorded a visit fails (`attachment_check`, `site_visit_keep_project`), so an erasure request or a compromised account can't be deleted | DB | S | fixed (PR #90, task 088) | ACC-3 |
-| SEC-17 | Low | No alerting at all (IAM changes, deploys outside CI, 5xx, DB connections) and no budget alert | Infra | M | fixed (PR #82, task 092; live once the owner applies) | INF-5 |
+| SEC-17 | Low | No alerting at all (IAM changes, deploys outside CI, 5xx, DB connections) and no budget alert | Infra | M | fixed (PR #82, task 092); live once the owner applies | INF-5 |
 
 ## P2 – hardening
 
@@ -110,3 +112,4 @@ No Critical findings. One High (SEC-01). Nothing in the review showed one worksp
 - 2026-11-10 – SEC-17 fixed (PR #82, task 092), live once the owner applies.
 - 2026-11-10 – SEC-07: upload size cap in PR #84 (task 085), pending the owner's Terraform run and preview hand check; cleanup is task 087.
 - 2026-11-10 – SEC-07 partly fixed (PR #84, PR #87). SEC-48 added (P2): no storage quota or bucket-wide sweep.
+- 2026-11-12 – P1 wrap-up: every P1 PR is merged (owner lifted the pre-demo hold on 2026-11-11). SEC-16 fixed (PR #77); SEC-15 fixed (WIF: PR #79, applied, hand check PR #91; fork approval stays an owner setting); SEC-14 (PR #78) and SEC-17 (PR #82) fixed, live once the owner applies; SEC-07's cleanup is PR #92 (replaced #87), its real-Cloud-Storage hand check waits for the preview database rebuild (task 110); SEC-06: `main` runs as `app_runtime`, closes with task 109; SEC-18's PR #90 replaced #81. Counts recomputed from the rows, with a "Partly fixed" column (SEC-06, SEC-07); the previous table still showed 2026-11-08's numbers.

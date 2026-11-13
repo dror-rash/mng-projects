@@ -1,6 +1,6 @@
 # Task 088: An account that uploaded files or recorded visits can be deleted
 
-- **Status:** in-review
+- **Status:** done (PR #90, replacing PR #81)
 - **Milestone:** cross-cutting (security), M13 follow-up
 - **Zone / package:** `packages/db` (one migration replacing two trigger functions; `rls-pins.mjs`; DB tests). Commit types `test(db)` → `fix(db)`.
 - **Feature file:** none (no page deletes accounts today; DB tests are the check)
@@ -48,6 +48,7 @@ Red: the DB test deleting a user with an upload and a visit (and the broader one
 - 2026-11-10 – Red: `user-delete.db.test.ts` (deleting an uploader, a visit author, and a user with every kind of row, while the workspace exists) failed with `an attachment stays what and where it was put` / `a visit keeps its project and author` from the foreign keys' `SET NULL`. Green: migration 0040 lets `uploaded_by` / `created_by` become null only once the user row is gone (`NOT EXISTS` in `"user"`), tighter than "to null" because `app_user` may update `site_visit.created_by` (an author or admin could otherwise disown a visit); reassigning to another user, or clearing while the account exists, is refused (new cases). Pins updated (4 hashes); `pnpm test:infra` passes. ARCHITECTURE: user deletion convention. Checks in the lane: lint, typecheck, `pnpm test` 568, `@repo/db` `test:db` 154, `@repo/dashboard` `test:db` 19, build, `CI=1 pnpm test:e2e --workers=2` 323 passed, none flaky. The green commit also fixed the test's own expectation (the deleted account's `user` row had to leave the expected snapshot); that only showed once the delete went through.
 - 2026-11-10 – Review fixes (access audit: nothing ≥ Medium; code review: no blockers). The broad test now covers every user column, soft deletes included (photo, reading, customer, note, site, site contact, a project that stays deleted; the restored project went, as `restore_project` clears `deleted_by`), and checks the exact `table.column` list pointing at the user. New cases: after the delete an orphaned photo or visit can't be given to another user (maintenance and `app_user`); deleting a crew worker with an assigned task clears both. Migration 0040 regenerated with a later journal `when` (task 089's 0040/0041 in lane 3 would otherwise make it skipped on a shared database), same SQL.
 - 2026-11-12 – Merged `main` (tasks 089 and 090: migrations 0040–0042). The migration is regenerated as 0043 (`drizzle-kit generate --custom`, fresh journal `when`), same SQL; earlier mentions of 0040 in this log mean this migration.
+- 2026-11-12 – Merged as PR #90, which replaced PR #81 (closed); migration 0043. SEC-18 fixed.
 
 ## Parking lot
 - What an erasure request removes beyond the account (content, files the user uploaded): owner decision.
