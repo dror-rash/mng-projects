@@ -7,7 +7,7 @@ Feature: Hebrew and English
   # Every other feature file runs in English: the test browser prefers English and sets no language.
   # The Hebrew texts here are the defaults the owner reviews; a wording change is a docs(features) commit.
 
-  @wip @task:094
+  @task:094
   Scenario: Choosing Hebrew turns the app right to left, across zones and reloads
     Given I am signed in with an existing account
     When I open "/dashboard"
@@ -21,7 +21,7 @@ Feature: Hebrew and English
     And the page is right to left
     And I see the heading "ברוכים השבים"
 
-  @wip @task:094
+  @task:094
   Scenario: Switching back to English
     Given I am signed in with an existing account
     And my language cookie is set to "he"
@@ -30,21 +30,21 @@ Feature: Hebrew and English
     Then the page is left to right
     And the dashboard menu links are "Overview, All projects, Customers"
 
-  @wip @task:094
+  @task:094
   Scenario: A Hebrew browser starts in Hebrew
     Given my browser prefers "he-IL"
     And I am on the login page
     Then the page is right to left
     And I see the heading "ברוכים השבים"
 
-  @wip @task:094
+  @task:094
   Scenario: Any other browser starts in English
     Given my browser prefers "fr-FR"
     And I am on the login page
     Then the page is left to right
     And I see the heading "Welcome back"
 
-  @wip @task:094
+  @task:094
   Scenario: An unknown language in the cookie falls back
     Given my language cookie is set to "xx"
     And I am on the login page

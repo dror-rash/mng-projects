@@ -78,6 +78,7 @@ The owner and their staff work in Hebrew, and each user should be able to switch
 ## Progress log
 - 2026-11-11 – Drafted with `language.feature` (`@wip`) from the owner's decision (bilingual, per-user switch).
 - 2026-11-13: started in lane 1 (feat/language-switch); scope clarified (menu labels only; shell switch moved to 097).
+- 2026-11-13: acceptance steps written (`e2e/steps/language.steps.ts`), `@wip` off the five `@task:094` scenarios; red run: no "Language" radio group in the dashboard header, and `<html>` has no `dir`.
 
 ## Parking lot
 - A third language.
