@@ -1,6 +1,6 @@
 # Task 111: One command to set up a new workspace for local development
 
-- **Status:** in-review
+- **Status:** done (PR #99)
 - **Milestone:** cross-cutting (tooling)
 - **Zone / package:** `scripts/setup.sh` (new), `scripts/test-setup.sh` (new), `.github/workflows/ci.yml` (the `verify` job runs the test), `README.md` (Quick start, Windows line, "Onboarding a new person"), `CLAUDE.md` Commands line (drafted for the owner, who edits it). Commits `test:` → `feat(scripts):` → `docs:`.
 - **Feature file:** none (no app behavior; `scripts/test-setup.sh` is the check, as `scripts/test-lane.sh` is for lanes)
@@ -171,6 +171,10 @@ browsers, summary), tested with stubs like `test-lane.sh`. No new ADR (ADR-0013 
     (SUP-1; SEC-31 partly fixed); "created" only when `.env` was;
   - `packageManager` pinned with `+sha512` (npm registry `dist.integrity` for pnpm 10.18.0, checked against the
     tarball; corepack accepts it and refuses a wrong hash); hints and summary wording; register updated.
+- 2026-11-14 – Done: merged (PR #99, `aaaed85`). A shared `refactor(scripts):` commit follows on
+  `refactor/setup-seams` before tasks 112 and 113 start: subcommand dispatch with a parser per subcommand and usage as a
+  heredoc, `download_checked` (fnm moved onto it), `ensure_brew`, `add_apt_repo`, empty `infra` / `infra-push` /
+  `services` arms that keep today's messages, and test helpers per task in `test-setup.sh`.
 
 ## Parking lot
 - `.devcontainer/devcontainer.json` (Node 22, docker-in-docker, forwarded ports) for Codespaces.
@@ -182,4 +186,5 @@ browsers, summary), tested with stubs like `test-lane.sh`. No new ADR (ADR-0013 
 - `package.json` `engines` → `22.x`, to match the strict `.nvmrc` check (coordinator, 2026-11-14).
 - An interactive rerun on Linux asks about chromium's system libraries each time (it can't tell they're there).
 - Port warnings that recognize another checkout's compose containers (`docker ps --filter publish=<port>`).
-- A runbook in `infra/README.md` for removing a GCP admin (remove in Terraform, rotate the generated secrets).
+- A runbook in `infra/README.md` for removing a GCP admin (remove in Terraform, rotate the generated secrets):
+  moved to task 112 (its Rotation section).
