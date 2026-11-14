@@ -1,6 +1,6 @@
 # Task 111: One command to set up a new workspace for local development
 
-- **Status:** in-progress
+- **Status:** in-review
 - **Milestone:** cross-cutting (tooling)
 - **Zone / package:** `scripts/setup.sh` (new), `scripts/test-setup.sh` (new), `.github/workflows/ci.yml` (the `verify` job runs the test), `README.md` (Quick start, Windows line, "Onboarding a new person"), `CLAUDE.md` Commands line (drafted for the owner, who edits it). Commits `test:` → `feat(scripts):` → `docs:`.
 - **Feature file:** none (no app behavior; `scripts/test-setup.sh` is the check, as `scripts/test-lane.sh` is for lanes)
