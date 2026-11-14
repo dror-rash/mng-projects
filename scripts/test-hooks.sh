@@ -466,7 +466,8 @@ for c in "export \"GIT_DIR=$GP/.git\" && $D" "export GIT_D''IR='$GP/.git'; $D" "
 done
 gate 2 0 "refuses git add through lane.sh exec before a commit"        "scripts/lane.sh exec 3 -- git add -A && $D" "$GP"
 # After lane.sh exec the commit must be the exec's own command: one chained after it runs in the cwd, not the lane
-for c in "scripts/lane.sh exec 3 -- true && $D" "scripts/lane.sh exec 3 -- true; $D" "scripts/lane.sh exec 3 -- pnpm lint && $D" \
+for c in "scripts/lane.sh exec 3 -- 
+$D" "scripts/lane.sh exec 3 -- true && $D" "scripts/lane.sh exec 3 -- true; $D" "scripts/lane.sh exec 3 -- pnpm lint && $D" \
   "scripts/lane.sh exec 3 --
 $D" "scripts/lane.sh exec 3 -- FOO=1
 $D" "scripts/lane.sh exec 3 -- env
