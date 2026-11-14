@@ -575,13 +575,16 @@ check "summary: setup.sh infra is coming with task 112"     said "coming with ta
 
 # --- Database and file storage without Docker (task 113) -----------------------------------------------------------
 logged_f() { grep -Fq -- "$1" "$W/log"; }
+# The emulator runs in the background: its stub logs its call a moment after setup.sh started it. Wait for that line
+# (up to 5 s) before checking it, so it never lands in the next run's log.
+eventually() { local i; for i in 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 19 20; do "$@" && return 0; sleep 0.25; done; return 1; }
 repo_files() { (cd "$W/repo" && find . -type f | sort); }
 DATA="home/.local/share/mng-projects"
 GCS_ARGS="-scheme http -host 127.0.0.1 -port 4443 -public-host localhost:4443 -external-url http://localhost:4443"
 CORS="-cors-headers Content-Type,Content-Disposition,x-goog-if-generation-match,x-goog-content-length-range"
 ADMIN_URL="postgres://postgres:postgres@localhost:5433/postgres"
 
-sandbox; gcs_ready; REPO_BEFORE="$(repo_files)"; run -- --yes
+sandbox; gcs_ready; REPO_BEFORE="$(repo_files)"; run -- --yes; eventually logged '^fake-gcs-server '
 check "fallback: writes create_main_cluster = false"         grep -qx 'create_main_cluster = false' "$W/state/createcluster"
 check "fallback: in a createcluster.d drop-in, as root"      logged '^sudo install -D -m 644 .* /etc/postgresql-common/createcluster\.d/mng-projects\.conf$'
 check "fallback: then installs postgresql-16 through sudo"  in_order 'createcluster\.d' '^sudo apt-get install -y postgresql-16$'
@@ -600,7 +603,7 @@ check "fallback: the summary names setup.sh services, not pnpm db:up" \
 check "fallback: exits 0"                                    code_is 0
 check "fallback storage: fetches the pinned release"         logged '^curl .*https://github\.com/fsouza/fake-gcs-server/releases/download/v1\.52\.2/fake-gcs-server_1\.52\.2_Linux_arm64\.tar\.gz$'
 check "fallback storage: started with the compose file's arguments, its own storage root outside the repo" \
-  logged_f "fake-gcs-server $GCS_ARGS -data $W/repo/packages/storage/dev-bucket -filesystem-root $W/$DATA/storage $CORS"
+  sh -c "grep -F -- 'fake-gcs-server $GCS_ARGS -data ' '$W/log' | grep -qF -- '/repo/packages/storage/dev-bucket -filesystem-root $W/$DATA/storage $CORS'"
 check "fallback storage: its pid file and log next to the database's" \
   sh -c "[ -s '$W/$DATA/fake-gcs-server.pid' ] && [ -f '$W/$DATA/fake-gcs-server.log' ]"
 check "fallback storage: running"                            sh -c "kill -0 \"\$(cat '$W/$DATA/fake-gcs-server.pid')\""
@@ -609,10 +612,13 @@ check "fallback storage: running"                            sh -c "kill -0 \"\$
 hold_port() { # port: a listener on it, unless something already listens there; its pid (or nothing) in HELD
   HELD=""; command -v python3 >/dev/null 2>&1 || return 1
   python3 -I -c 'import socket, sys, time
-s = socket.socket(); s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+s = socket.socket()
 try: s.bind(("127.0.0.1", int(sys.argv[1])))
 except OSError: sys.exit(0)
-s.listen(1); time.sleep(30)' "$1" & HELD=$!
+s.listen(16); s.settimeout(1); end = time.time() + 60
+while time.time() < end:
+    try: s.accept()[0].close()
+    except OSError: pass' "$1" & HELD=$!
   sleep 0.5; kill -0 "$HELD" 2>/dev/null || HELD=""; return 0
 }
 GCS_PID_BEFORE="$(cat "$W/$DATA/fake-gcs-server.pid" 2>/dev/null)"
@@ -646,7 +652,7 @@ sandbox; gcs_ready; run -- --yes --no-docker
 check "--no-docker: no fallback step"                        not_logged 'postgresql|createcluster|fake-gcs-server|^initdb|^pg_ctl|^psql'
 check "--no-docker: exits 0"                                 code_is 0
 
-sandbox; gcs_ready; state pg_version "16.4 (Debian 16.4-1.pgdg120+2)"; run -- --yes
+sandbox; gcs_ready; state pg_version "16.4 (Debian 16.4-1.pgdg120+2)"; run -- --yes; eventually logged '^fake-gcs-server '
 check "a server other than 16.15 prints the rls-pins warning" sh -c "grep -qF 'rls-pins' '$W/out' && grep -qF '16.4' '$W/out'"
 check "a server other than 16.15 still exits 0"              code_is 0
 
@@ -677,9 +683,9 @@ check "storage, wrong sha256: leaves no binary"              test -z "$(find "$W
 check "storage, wrong sha256: Postgres still set up"         logged '^pnpm db:migrate$'
 sandbox; state arch x86_64; gcs_ready; run -- --yes
 check "storage on amd64: the amd64 release"                  logged '^curl .*fake-gcs-server_1\.52\.2_Linux_amd64\.tar\.gz$'
-check "storage on amd64: runs"                               sh -c "[ $CODE = 0 ] && grep -q '^fake-gcs-server ' '$W/log'"
+check "storage on amd64: runs"                               sh -c "[ $CODE = 0 ] && kill -0 \"\$(cat '$W/$DATA/fake-gcs-server.pid')\""
 
-sandbox; state uid 0; gcs_ready; run -- --yes
+sandbox; state uid 0; gcs_ready; run -- --yes; eventually logged '^fake-gcs-server '
 check "as root: no sudo"                                     not_logged '^sudo'
 check "as root: initdb as user postgres (initdb refuses root)" logged '^runuser -u postgres -- .*/initdb '
 check "as root: the database in the postgres user's home"    logged_f "initdb -D $W/pghome/mng-projects/postgres "
@@ -690,7 +696,7 @@ check "as root: exits 0"                                     code_is 0
 sandbox; absent sudo; gcs_ready; run -- --yes
 check "without root or sudo: says Postgres can't be installed" said "PostgreSQL 16 can't be installed"
 check "without root or sudo: installs nothing for Postgres"  not_logged 'postgresql-16|createcluster|^initdb|^pg_ctl'
-check "without root or sudo: still starts the storage emulator" logged '^fake-gcs-server '
+check "without root or sudo: still starts the storage emulator" eventually logged '^fake-gcs-server '
 check "without root or sudo: still finishes pnpm install"    logged '^pnpm install --frozen-lockfile$'
 check "without root or sudo: names only Postgres"            sh -c "! grep -qiE 'storage emulator|fake-gcs-server (did|can)' '$W/out'"
 check "without root or sudo: exits 1"                        code_is 1
@@ -704,14 +710,15 @@ gcs_pid() { cat "$W/$DATA/fake-gcs-server.pid" 2>/dev/null; }
 alive() { [ -n "$1" ] && kill -0 "$1" 2>/dev/null; }
 sandbox; run -- services
 check "services before setup: says to run setup.sh first"    sh -c "[ $CODE = 1 ] && grep -qF 'bash scripts/setup.sh' '$W/out' && ! grep -q '^initdb' '$W/log'"
-sandbox; gcs_ready; run -- --yes; run -- services --stop
+sandbox; gcs_ready; run -- --yes; eventually logged '^fake-gcs-server '; run -- services --stop
 check "services --stop: stops the database"                  sh -c "grep -q '^pg_ctl .* stop$' '$W/log' && [ ! -e '$W/$DATA/postgres/postmaster.pid' ]"
 check "services --stop: stops the storage emulator"          sh -c "[ ! -e '$W/$DATA/fake-gcs-server.pid' ]"
 check "services --stop: exits 0"                             code_is 0
 run -- services
 P1="$(pg_pid)"; G1="$(gcs_pid)"
 check "services: starts the database again"                  sh -c "grep -q '^pg_ctl .* start$' '$W/log' && kill -0 '$P1'"
-check "services: starts the storage emulator again"          sh -c "grep -q '^fake-gcs-server ' '$W/log' && kill -0 '$G1'"
+check "services: starts the storage emulator again"          sh -c "kill -0 '$G1'"
+check "services: with the same arguments"                    eventually logged_f "fake-gcs-server $GCS_ARGS -data "
 check "services: runs no initdb, install or migration"       not_logged '^initdb|apt-get|^curl|^pnpm'
 check "services: exits 0"                                    code_is 0
 run -- services
@@ -725,7 +732,9 @@ check "services --stop when stopped: exits 0"                code_is 0
 world; state uname Linux; run -- services --yes
 check "services takes only --stop"                           sh -c "[ $CODE = 1 ] && grep -qF \"unknown option '--yes'\" '$W/out'"
 
-for f in "$TMP"/w.*/state/pids; do [ -f "$f" ] && while read -r p; do kill "$p" 2>/dev/null; done < "$f"; done
+for f in "$TMP"/w.*/state/pids "$TMP"/w.*/home/.local/share/mng-projects/fake-gcs-server.pid; do
+  [ -f "$f" ] && while read -r p; do kill "$p" 2>/dev/null; done < "$f"
+done
 
 echo; echo "$pass passed, $fail failed"
 [ "$fail" = 0 ]
