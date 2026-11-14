@@ -367,5 +367,85 @@ git commit --no-verify -m 'docs: y'
 EOF
 )\"" "$REPO"
 
+# The lint/typecheck gate runs only for commits in the guard's own project (task 115): its main checkout, a lane
+# worktree, a repository sharing its git dir, or one with any of its remote URLs. A fake pnpm first on PATH records
+# whether it ran. The guard's repository is a fixture holding a committed copy of guard.sh, so these cases don't
+# depend on the checkout running them.
+GB="$(cd "$(mktemp -d)" && pwd -P)"; trap 'rm -rf "$LINK_DIR" "${BASE:-}" "$GB"' EXIT
+FAKEBIN="$GB/bin"; PNPM_LOG="$GB/pnpm.log"; mkdir -p "$FAKEBIN"
+cat > "$FAKEBIN/pnpm" <<'EOF'
+#!/bin/sh
+echo "$*" >> "$PNPM_LOG"
+exit "${FAKE_PNPM_EXIT:-0}"
+EOF
+chmod +x "$FAKEBIN/pnpm"
+newrepo() { # dir: a repository with one commit
+  mkdir -p "$1" && git -C "$1" init -q -b main && git -C "$1" config user.email t@example.com &&
+    git -C "$1" config user.name t && echo "# x" > "$1/README.md" && git -C "$1" add -A && git -C "$1" commit -qm init
+}
+GP="$GB/proj"; newrepo "$GP"
+mkdir -p "$GP/.claude/hooks" && cp "$GUARD" "$GP/.claude/hooks/guard.sh" && git -C "$GP" add -A && git -C "$GP" commit -qm guard
+git -C "$GP" remote add origin "git@github.com:Example/Proj.git"
+PGUARD="$GP/.claude/hooks/guard.sh"
+GLANE="$GB/proj-lanes/lane-3"; git -C "$GP" worktree add -q -b lane-3 "$GLANE" main
+ln -s "$GP" "$GB/projlink"
+OTHER="$GB/notes"; newrepo "$OTHER"                                                  # another repository, no remote
+NAMED="$GB/x/mng-projects"; newrepo "$NAMED"; git -C "$NAMED" remote add origin "https://github.com/someone/mng-projects.git"
+NAMED2="$GB/y/proj"; newrepo "$NAMED2"                                               # named like the guard's repo
+CL_HTTPS="$GB/clone-https"; newrepo "$CL_HTTPS"; git -C "$CL_HTTPS" remote add origin "https://github.com/example/proj"
+CL_UP="$GB/clone-upstream"; newrepo "$CL_UP"; git -C "$CL_UP" remote add origin "https://github.com/someone/else.git"
+git -C "$CL_UP" remote add upstream "ssh://git@GitHub.com/example/proj.git/"
+CL_PUSH="$GB/clone-push"; newrepo "$CL_PUSH"; git -C "$CL_PUSH" remote add origin "https://github.com/someone/else.git"
+git -C "$CL_PUSH" remote set-url --add --push origin "https://github.com/example/proj.git"
+GITFILE="$GB/gitfile"; mkdir -p "$GITFILE"; echo "gitdir: $GP/.git" > "$GITFILE/.git"   # shares the guard repo's git dir
+GITLINK="$GB/gitlink"; mkdir -p "$GITLINK"; ln -s "$GP/.git" "$GITLINK/.git"
+NOREPO="$GB/norepo"; mkdir -p "$NOREPO"; cp "$GUARD" "$NOREPO/guard.sh"            # a guard copy outside any repository
+gate() { # want-exit, want-lint (0|1), name, command, cwd, [pnpm exit], [guard]
+  local want="$1" lint="$2" name="$3" out code ran=0
+  rm -f "$PNPM_LOG"
+  out="$(jq -nc --arg c "$4" --arg cwd "$5" '{tool_name:"Bash", tool_input:{command:$c}, cwd:$cwd}' \
+    | (unset GUARD_SKIP_CHECKS; PATH="$FAKEBIN:$PATH" PNPM_LOG="$PNPM_LOG" FAKE_PNPM_EXIT="${6:-0}" \
+        GUARD_BASE_REF=main bash "${7:-$PGUARD}") 2>&1)"; code=$?
+  [ -s "$PNPM_LOG" ] && ran=1
+  if [ "$code" = "$want" ] && [ "$ran" = "$lint" ]; then pass=$((pass+1)); echo "ok   - $name"
+  else fail=$((fail+1)); echo "FAIL - $name (exit $code, want $want; lint ran $ran, want $lint) $out"; fi
+}
+D="git commit -m 'docs: x'"
+# Another repository: no gate, from its own cwd or from the project's
+gate 0 0 "skips lint in another repository without package.json"      "$D" "$OTHER"
+gate 0 0 "skips lint via cd <other> && from the project's cwd"         "cd '$OTHER' && $D" "$GP"
+gate 0 0 "skips lint via git -C <other> from the project's cwd"        "git -C '$OTHER' commit -m 'docs: x'" "$GP"
+gate 0 0 "skips lint in a repository named mng-projects with another remote" "$D" "$NAMED"
+gate 0 0 "skips lint in a repository named like the guard's own"      "$D" "$NAMED2"
+# The guard's own repository and its lanes: the gate runs
+gate 0 1 "runs lint in the guard's repository"                         "$D" "$GP"
+gate 2 1 "refuses a commit in the guard's repository when lint fails"  "$D" "$GP" 1
+gate 2 1 "runs lint in a subdirectory of the guard's repository"       "$D" "$GP/.claude" 1
+gate 2 1 "runs lint via a symlinked path to the guard's repository"    "cd '$GB/projlink' && $D" "$OTHER" 1
+gate 2 1 "runs lint in a lane via cd <lane> &&"                        "cd '$GLANE' && $D" "$OTHER" 1
+gate 2 1 "runs lint in a lane via lane.sh exec"                        "scripts/lane.sh exec 3 -- $D" "$GP" 1
+gate 2 1 "runs lint in a lane via git -C \$(scripts/lane.sh path n)"   "git -C \"\$(scripts/lane.sh path 3)\" commit -m 'docs: x'" "$GP" 1
+gate 2 1 "runs lint in a lane as the session's cwd"                    "$D" "$GLANE" 1
+gate 2 1 "runs lint from a lane's copy of the guard"                   "$D" "$GP" 1 "$GLANE/.claude/hooks/guard.sh"
+# Repositories that pretend to be this project get the gate
+gate 2 1 "runs lint in a clone whose origin is the project's (https, no .git)" "$D" "$CL_HTTPS" 1
+gate 0 1 "allows that clone's commit when lint passes"                 "$D" "$CL_HTTPS"
+gate 2 1 "runs lint with the project's URL on upstream (ssh://, .git/)" "$D" "$CL_UP" 1
+gate 2 1 "runs lint with the project's URL as a push URL"              "$D" "$CL_PUSH" 1
+gate 2 1 "runs lint where .git is a file pointing at the project's git dir" "$D" "$GITFILE" 1
+gate 2 1 "runs lint where .git links to the project's git dir"         "$D" "$GITLINK" 1
+gate 2 1 "runs lint via git -C <gitfile dir> from another repository"  "git -C '$GITFILE' commit -m 'docs: x'" "$OTHER" 1
+# Every other commit check still applies in another repository
+gate 2 0 "refuses --no-verify in another repository"                   "git commit --no-verify -m 'docs: x'" "$OTHER"
+gate 2 0 "refuses -nm in another repository"                           "git commit -nm 'docs: x'" "$OTHER"
+gate 2 0 "refuses two commits in another repository"                   "$D && git commit -m 'docs: y'" "$OTHER"
+gate 2 0 "refuses a commit behind bash -c in another repository"       "bash -c \"$D\"" "$OTHER"
+gate 2 0 "refuses an unresolvable cd to another repository"            "cd \"\$X\" && $D" "$GP"
+gate 2 0 "refuses GIT_COMMON_DIR= pointing at the project from another repository" "cd '$OTHER' && GIT_COMMON_DIR='$GP/.git' $D" "$GP"
+gate 2 0 "refuses export GIT_COMMON_DIR= before a commit"              "export GIT_COMMON_DIR='$GP/.git'; $D" "$OTHER"
+# Fail closed: a guard that can't tell its own repository runs the gate
+gate 2 1 "runs lint when the guard isn't in a repository"              "$D" "$OTHER" 1 "$NOREPO/guard.sh"
+gate 0 1 "allows that commit when lint passes"                         "$D" "$OTHER" 0 "$NOREPO/guard.sh"
+
 echo; echo "$pass passed, $fail failed"
 [ "$fail" = 0 ]
