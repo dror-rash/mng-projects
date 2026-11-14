@@ -1,6 +1,6 @@
 # Task 110: Rebuild the shared preview database, and keep PR migrations from skipping `main`'s
 
-- **Status:** todo
+- **Status:** in-progress
 - **Milestone:** cross-cutting (infra), M11 follow-up
 - **Zone / package:** owner steps on GCP through Terraform (`infra/`, no code change for the rebuild); `infra/README.md` (a runbook section); `docs/WORKFLOW.md` (the migration rule, if question 1 picks it). Commit type `docs:` for the runbook; any check that question 1 adds gets its own `test(infra)` → `fix(infra)`/`ci:` commits.
 - **Feature file:** none (no app behavior; the preview deploy's migration, role check and `@smoke` run are the check)
@@ -56,6 +56,7 @@ Owner steps 1–3, then the runbook and the chosen prevention. No ADR for the re
 
 ## Progress log
 - 2026-11-12 – Drafted at the P1 wrap-up: previews stop at the runtime role check since tasks 088's and 087's drafts ran on `app_preview` as `0040`.
+- 2026-11-14 – Owner rebuilt `app_preview` (targeted plan 1/0/1). `main` Deploy re-run (43560341783, attempt 2): "Preview side ok: app_preview's schema grant made, preview logins verified." Runbook added to `infra/README.md`; this PR's preview deploy is the step-3 check. Question 1: default B, as a follow-up task.
 
 ## Parking lot
 - (none yet)
