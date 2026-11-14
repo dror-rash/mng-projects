@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit",
     "lint": "eslint .",
     "screenshots": "node scripts/screenshots.mjs",
+    "flow-guide": "node scripts/flow-guide.mjs",
     "test": "vitest run"
   },
   "devDependencies": {

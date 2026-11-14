@@ -24,6 +24,7 @@ infra/backend.hcl
 infra/.config-generation
 .features-gen
 e2e/screenshots
+e2e/flow-guide
 next-env.d.ts
 *.tsbuildinfo
 .claude/settings.local.json
