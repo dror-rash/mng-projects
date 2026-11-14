@@ -44,6 +44,15 @@ Given("the site {string} has a contact {string}", async ({ page }, site: string,
   await expect(page.getByRole("region", { name: "On-site contacts", exact: true })).toContainText(name);
 });
 
+// A page whose JavaScript hasn't run yet (a slow phone, or a full page load after a failed client navigation)
+// submits its forms as plain form posts, not through the client router (task 114). The dashboard's scripts
+// are refused for the rest of the scenario; the pages' server HTML, styles and the session still load.
+Given("my connection is so slow that pages haven't finished loading when I use them", async ({ page }) => {
+  await page.route("**/dashboard/_next/static/**", (route) =>
+    route.request().resourceType() === "script" ? route.abort() : route.fallback(),
+  );
+});
+
 When("I open the new site page for {string}", async ({ page }, customer: string) => {
   await page.goto(`/dashboard/sites/new?customer=${await myRecordId(page, "organization", customer)}`);
 });
