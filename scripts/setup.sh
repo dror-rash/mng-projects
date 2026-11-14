@@ -17,9 +17,9 @@
 # running it on macOS.
 #
 # Test hooks (scripts/test-setup.sh): sourced (. scripts/setup.sh), it only defines its helpers, so the tests call
-# them directly. SETUP_INTERACTIVE=1 treats stdin as a terminal; SETUP_PROC_VERSION, SETUP_BREW_PREFIXES,
-# SETUP_APT_SOURCES, SETUP_PORTS and SETUP_DB_TIMEOUT replace /proc/version, Homebrew's install prefixes,
-# /etc/apt/sources.list.d, the ports checked and the database wait (60 s).
+# them directly, and then SETUP_APT_ROOT puts add_apt_repo's files under a directory. SETUP_INTERACTIVE=1 treats
+# stdin as a terminal; SETUP_PROC_VERSION, SETUP_BREW_PREFIXES, SETUP_PORTS and SETUP_DB_TIMEOUT replace
+# /proc/version, Homebrew's install prefixes, the ports checked and the database wait (60 s).
 set -u
 
 # fnm for Linux and WSL when there is neither nvm nor fnm. To upgrade: change the version and both hashes together.
@@ -96,13 +96,20 @@ sha256_of() { # file: its sha256; false without sha256sum or shasum
   elif has shasum; then shasum -a 256 "$1" | cut -d' ' -f1
   else return 1; fi
 }
-# url sha256 dest: downloads into a new temp dir and checks the pinned sha256 before anything is at dest. Fails
-# closed: false with the reason, nothing at dest, the temp dir removed.
+fetch() { # url file: https only, redirects too
+  curl --proto '=https' --proto-redir '=https' -fsSL -o "$2" "$1"
+}
+# url sha256 dest: downloads (https only) into a new temp dir and checks the pinned sha256 (64 lower-case hex digits)
+# before anything is at dest. Fails closed: false with the reason, nothing at dest, the temp dir removed.
 download_checked() {
   local url="$1" sha="$2" dest="$3" tmp got ok=1
+  case "$sha" in
+    *[!0-9a-f]*|"") err "the pinned sha256 for $url isn't 64 lower-case hex digits"; return 1 ;;
+  esac
+  [ "${#sha}" = 64 ] || { err "the pinned sha256 for $url isn't 64 lower-case hex digits"; return 1; }
   tmp="$(mktemp -d)" || { err "mktemp failed"; return 1; }
-  if ! curl -fsSL -o "$tmp/download" "$url"; then err "couldn't download $url"
-  elif ! got="$(sha256_of "$tmp/download")"; then err "no sha256sum or shasum to check $url with"
+  if ! fetch "$url" "$tmp/download"; then err "couldn't download $url"
+  elif ! got="$(sha256_of "$tmp/download")" || [ -z "$got" ]; then err "no sha256sum or shasum to check $url with"
   elif [ "$got" != "$sha" ]; then err "$url doesn't match its pinned sha256; nothing installed"
   elif ! mv "$tmp/download" "$dest"; then err "couldn't write $dest"
   else ok=0; fi
@@ -110,24 +117,45 @@ download_checked() {
   return "$ok"
 }
 
-# key-url keyring list-line: an apt repository signed by its own key, as root, then apt-get update. The line must
-# name the keyring (signed-by=<keyring>). The key goes through gpg --dearmor into keyring (mode 644), the line into
-# <sources.list.d>/<keyring's name>.list. False with the reason; nothing is written before the key is fetched and
-# dearmored. The caller installs gpg first when it's missing.
+# key-url keyring list-line fingerprint: an apt repository signed by its own key, as root, then apt-get update.
+# - keyring: /usr/share/keyrings/<name> or /etc/apt/keyrings/<name>, name of [A-Za-z0-9._-] not starting with a dot;
+# - list-line: one line, signed-by=<keyring>, no trusted=; it goes into sources.list.d/<name without extension>.list;
+# - fingerprint: the key's pinned primary fingerprint (40 or 64 hex digits; spaces and case don't matter). The key is
+#   fetched (https only) and must hold exactly one key with that fingerprint (gpg --show-keys) before it goes
+#   through gpg --dearmor into keyring (mode 644).
+# False with the reason; nothing is written before every check passes. The caller installs gpg first when missing.
 add_apt_repo() {
-  local key_url="$1" keyring="$2" line="$3" sources="${SETUP_APT_SOURCES:-/etc/apt/sources.list.d}" name tmp ok=1
-  name="$(basename "$keyring")"; name="${name%.*}"
+  local key_url="$1" keyring="$2" line="$3" want sources="$APT_ROOT/etc/apt/sources.list.d" name dir tmp keys ok=1
+  local nl=$'\n' cr=$'\r'
+  want="$(printf '%s' "${4:-}" | tr -d ' ' | tr 'a-f' 'A-F')"
+  case "$want" in *[!0-9A-F]*|"") want="" ;; esac
+  case "${#want}" in 40|64) ;; *) err "the pinned key fingerprint for $key_url isn't 40 or 64 hex digits"; return 1 ;; esac
+  name="${keyring##*/}"; dir="${keyring%/*}"
+  case "$dir" in /usr/share/keyrings|/etc/apt/keyrings) ;; *) name="" ;; esac
+  case "$name" in ""|.*|*[!A-Za-z0-9._-]*)
+    err "the keyring must be /usr/share/keyrings/<name> or /etc/apt/keyrings/<name> ([A-Za-z0-9._-]): $keyring"
+    return 1 ;;
+  esac
   case "$line" in
+    *"$nl"*|*"$cr"*) err "the apt line for $key_url must be one line"; return 1 ;;
+    *trusted=*) err "the apt line for $key_url must not say trusted="; return 1 ;;
     *"signed-by=$keyring]"*|*"signed-by=$keyring "*) ;;
     *) err "the apt line for $key_url must be signed by its key (signed-by=$keyring)"; return 1 ;;
   esac
+  name="${name%.*}"
   has gpg || { err "gpg is needed to add the apt repository for $key_url"; return 1; }
   tmp="$(mktemp -d)" || { err "mktemp failed"; return 1; }
-  if ! curl -fsSL -o "$tmp/key" "$key_url"; then err "couldn't download $key_url"
+  if ! fetch "$key_url" "$tmp/key"; then err "couldn't download $key_url"
+  elif ! keys="$(gpg --batch --show-keys --with-colons "$tmp/key" 2>/dev/null)"; then err "$key_url isn't a key gpg can read"
+  elif ! keys="$(printf '%s\n' "$keys" | awk -F: '$1 == "pub" { p = 1; next } $1 == "fpr" && p { print $10; p = 0 }')" ||
+    [ -z "$keys" ]; then err "$key_url isn't a key gpg can read"
+  elif [ "$(printf '%s\n' "$keys" | wc -l | tr -d ' ')" != 1 ]; then err "$key_url holds more than one key"
+  elif [ "$keys" != "$want" ]; then err "$key_url's fingerprint $keys isn't the pinned $want; nothing added"
   elif ! gpg --batch --dearmor < "$tmp/key" > "$tmp/keyring"; then err "$key_url isn't a key gpg can read"
   elif ! printf '%s\n' "$line" > "$tmp/list"; then err "couldn't write the apt line"
-  elif ! as_root mkdir -p "$(dirname "$keyring")" "$sources"; then err "couldn't create $(dirname "$keyring") or $sources"
-  elif ! { as_root cp "$tmp/keyring" "$keyring" && as_root chmod 644 "$keyring"; }; then err "couldn't write $keyring"
+  elif ! as_root mkdir -p "$APT_ROOT$dir" "$sources"; then err "couldn't create $APT_ROOT$dir or $sources"
+  elif ! { as_root cp "$tmp/keyring" "$APT_ROOT$keyring" && as_root chmod 644 "$APT_ROOT$keyring"; }; then
+    err "couldn't write $APT_ROOT$keyring"
   elif ! { as_root cp "$tmp/list" "$sources/$name.list" && as_root chmod 644 "$sources/$name.list"; }; then
     err "couldn't write $sources/$name.list"
   else ok=0; fi
@@ -140,8 +168,9 @@ need_value() { # flag args-from-the-flag-on: exits 1 unless a value (not another
   case "${2:-}" in ""|-*) die "$1 needs a value" ;; esac
 }
 
-# Sourced: the helpers only.
-if [ "${BASH_SOURCE[0]}" != "$0" ]; then return 0; fi
+# Sourced: the helpers only. SETUP_APT_ROOT (a test hook) puts apt's files under a directory, and only when sourced.
+APT_ROOT=""
+if [ "${BASH_SOURCE[0]}" != "$0" ]; then APT_ROOT="${SETUP_APT_ROOT:-}"; return 0; fi
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT" || exit 1
