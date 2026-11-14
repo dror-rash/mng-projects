@@ -373,6 +373,21 @@ account are `sensitive`, so `terraform plan` prints neither. `bash infra/scripts
   Manager) on the billing account. Without it, plan with `-refresh=false`, or `-target` the resources you change.
 - Alerts for previews, uptime checks and chat/paging channels are out of scope (task 092's parking lot).
 
+## Rebuilding the preview database (task 110)
+
+**When:** a PR preview's migration or runtime role check fails because `app_preview` has drifted from `main`, for example a draft migration that ran there with a later journal timestamp, so `drizzle-kit migrate` skips `main`'s newer ones. Never for `app`: this drops every preview account and record (previews hold no real data, SEC-40).
+
+1. **Rebuild (owner),** from `infra/` on `main`. Name the address in a variable so the long line doesn't wrap:
+   ```
+   T='google_sql_database.databases["app_preview"]'
+   terraform plan -replace="$T" -target="$T" -out=tfplan
+   ```
+   Expect `1 to add, 0 to change, 1 to destroy`, and the targeting warning. Both addresses must say `app_preview`: replacing `databases["app"]` deletes production. Then `terraform apply tfplan; rm tfplan` (a saved plan holds secrets). If the apply fails on open connections, wait for the preview services to scale to zero and plan again.
+2. **Re-provision:** re-run the latest `main` **Deploy** run (`gh run rerun <id>`) or merge the next PR. Expect "Preview side ok: app_preview's schema grant made, preview logins verified." The logins are cluster-wide and survive the drop; the database and schema grants are made again.
+3. **Check:** a PR's **Deploy** run applies every migration on the empty database as `preview_owner`, then "Runtime role check passed on app_preview (login preview_runtime)" and `@smoke`.
+
+First done 2026-11-14 (drafts of tasks 088 and 087 had run on `app_preview` as `0040`).
+
 ## Known limits / follow-ups
 - Connections on `db-f1-micro` (22 for logins; task 075): previews at most 10 (`preview_runtime` 3 × 1 × 2 + 1 =
   7, `preview_owner` 3), `main` 12 (`MAIN_DB_CONNECTIONS` in `environment.sh`). That fills all 22 with no margin.

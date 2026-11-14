@@ -1,6 +1,6 @@
 # Task 094: Language switch (Hebrew and English foundation)
 
-- **Status:** in-review
+- **Status:** done
 - **Milestone:** M14 Hebrew and English
 - **Zone / package:** new `packages/i18n`, `packages/ui`, `apps/shell`, `apps/dashboard`, `e2e`
 - **Feature file:** `docs/features/language.feature` (`@task:094`)
