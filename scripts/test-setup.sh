@@ -89,6 +89,7 @@ infra_world() { # task 112: terraform, gcloud and gh for setup.sh infra / infra-
   mkdir -p "$s/bucket" "$s/secrets"
   state gcloud_account owner@example.test; state gcloud_project "$PROJ"; state bucket_project "$PROJ"
   state terraform 1.13.4; touch "$s/adc" "$s/gh_login"
+  state project_number 123456789012; state bucket_project_number 123456789012
   printf 'project = "%s"\nalert_email = "%s"\nbilling_account = "%s"\n' "$PROJ" "$TFV_MARK" "$BILL_MARK" > "$s/bucket/terraform.tfvars"
   printf 'bucket = "%s-tfstate"\nprefix = "%s"\n' "$PROJ" "$BACK_MARK" > "$s/bucket/backend.hcl"
   echo 1700000000000001 > "$s/bucket/terraform.tfvars.gen"; echo 1700000000000002 > "$s/bucket/backend.hcl.gen"
@@ -105,14 +106,18 @@ case "$1 $2" in
   "auth application-default") [ "$3" = print-access-token ] || exit 0
     [ -f "$S/adc" ] && { echo ya29.stub-token; exit 0; }; echo "no application default credentials" >&2; exit 1 ;;
   "config get") [ -f "$S/gcloud_project" ] && cat "$S/gcloud_project"; exit 0 ;;
+  "projects describe") cat "$S/project_number"; exit 0 ;;
+  "storage buckets") [ "$4" = "gs://$(cat "$S/bucket_project")-tfstate" ] || { echo "ERROR: $4 not found: 404" >&2; exit 1; }
+    cat "$S/bucket_project_number"; exit 0 ;;
   "storage objects") n="$(obj "$4")" || { echo "ERROR: $4 not found: 404" >&2; exit 1; }; cat "$B/$n.gen"; exit 0 ;;
-  "storage cp") shift 2; src=""; dst=""; match=""
-    for a in "$@"; do case "$a" in --if-generation-match=*) match="${a#*=}" ;; -*) ;; *) if [ -z "$src" ]; then src="$a"; else dst="$a"; fi ;; esac; done
+  "storage cp") shift 2; src=""; dst=""; match=""; created=""
+    for a in "$@"; do case "$a" in --if-generation-match=*) match="${a#*=}" ;; --print-created-message) created=1 ;; -*) ;; *) if [ -z "$src" ]; then src="$a"; else dst="$a"; fi ;; esac; done
     case "$src" in
       gs://*) n="$(obj "$src")" || { echo "ERROR: $src not found: 404" >&2; exit 1; }; cp "$B/$n" "$dst" ;;
       *) n="${dst#gs://*/config/}"
          if [ -n "$match" ] && [ "$match" != "$(cat "$B/$n.gen" 2>/dev/null)" ]; then echo "ERROR: 412 Precondition Failed" >&2; exit 1; fi
-         cp "$src" "$B/$n"; echo $(( $(cat "$B/$n.gen") + 1 )) > "$B/$n.gen.new"; mv "$B/$n.gen.new" "$B/$n.gen" ;;
+         cp "$src" "$B/$n"; echo $(( $(cat "$B/$n.gen") + 1 )) > "$B/$n.gen.new"; mv "$B/$n.gen.new" "$B/$n.gen"
+         [ -n "$created" ] && echo "Created: ${dst}#$(cat "$B/$n.gen")" >&2 ;;
     esac; exit 0 ;;
   "secrets versions") n=""; for a in "$@"; do case "$a" in --secret=*) n="${a#*=}" ;; esac; done
     [ -f "$S/secrets/$n" ] || { echo "ERROR: NOT_FOUND" >&2; exit 1; }; cat "$S/secrets/$n"; exit 0 ;;
@@ -563,10 +568,14 @@ infra_brew() { # brew that installs a tap formula or the gcloud cask under the c
   stub_stdin brew <<'EOF'
 [ "$1" = install ] || exit 0; shift
 for p in "$@"; do case "$p" in
-  --cask) ;; google-cloud-sdk) cp -P "$STUB_AVAIL/gcloud" "$STUB_BIN/gcloud" ;;
+  --cask) ;; gcloud-cli) cp -P "$STUB_AVAIL/gcloud" "$STUB_BIN/gcloud" ;;
   *) n="${p##*/}"; rm -f "$STUB_BIN/$n"; cp -P "$STUB_AVAIL/$n" "$STUB_BIN/$n" ;; esac; done
 EOF
 present brew; }
+sum_of()    { (sha256sum "$1" 2>/dev/null || shasum -a 256 "$1") | cut -d' ' -f1; }
+stored_edit() { # file: another machine stored a new copy of it
+  printf 'other = "machine"\n' >> "$W/state/bucket/$1"; echo $(( $(cat "$W/state/bucket/$1.gen") + 7 )) > "$W/state/bucket/$1.gen.n"
+  mv "$W/state/bucket/$1.gen.n" "$W/state/bucket/$1.gen"; }
 mode600()   { ls -l "$1" 2>/dev/null | grep -q '^-rw-------'; }
 no_marks()  { ! grep -qE "$TFV_MARK|$BILL_MARK|$BACK_MARK|$SECRET_MARK|$LOCAL_MARK|$PROJ-tfstate\"|ya29" "$W/out"; }
 last_line() { [ "$(grep -v '^$' "$W/out" | tail -1)" = "$1" ]; }
@@ -580,8 +589,8 @@ check "infra: writes terraform.tfvars from the stored copy" cmp -s "$W/state/buc
 check "infra: writes backend.hcl from the stored copy"      cmp -s "$W/state/bucket/backend.hcl" "$W/repo/infra/backend.hcl"
 check "infra: terraform.tfvars is mode 600"                 mode600 "$TFV"
 check "infra: backend.hcl is mode 600"                      mode600 "$W/repo/infra/backend.hcl"
-check "infra: records both generations" \
-  sh -c "grep -qx 'terraform.tfvars 1700000000000001' '$W/repo/infra/.config-generation' && grep -qx 'backend.hcl 1700000000000002' '$W/repo/infra/.config-generation'"
+check "infra: records both generations and sha256s" \
+  sh -c "grep -qx 'terraform.tfvars 1700000000000001 $(sum_of "$W/state/bucket/terraform.tfvars")' '$W/repo/infra/.config-generation' && grep -qx 'backend.hcl 1700000000000002 $(sum_of "$W/state/bucket/backend.hcl")' '$W/repo/infra/.config-generation'"
 check "infra: reads the state bucket's config/"             logged "^gcloud storage cp gs://$PROJ-tfstate/config/terraform\\.tfvars"
 check "infra: runs terraform init with backend.hcl"         logged '^terraform -chdir=infra init -backend-config=backend\.hcl$'
 check "infra: init after both files are written"            in_order "^gcloud storage cp gs://.*/backend\\.hcl" '^terraform -chdir=infra init'
@@ -610,6 +619,32 @@ check "infra --force: replaces it with the stored copy"     sh -c "[ $CODE = 0 ]
 check "infra --force: mode 600"                             mode600 "$TFV"
 check "infra --force: prints neither content"               no_marks
 
+# The pull/push loop: the recorded sha256 tells an untouched local file from a local edit
+iworld; run -- infra --yes; TFV="$W/repo/infra/terraform.tfvars"; stored_edit terraform.tfvars; run -- infra --yes
+check "infra, stored copy changed, local untouched: pulls, exits 0" sh -c "[ $CODE = 0 ] && cmp -s '$W/state/bucket/terraform.tfvars' '$TFV'"
+check "infra, stored copy changed, local untouched: records the new generation" \
+  grep -q "^terraform.tfvars 1700000000000008 " "$W/repo/infra/.config-generation"
+check "infra, stored copy changed, local untouched: prints no content" no_marks
+iworld; run -- infra --yes; TFV="$W/repo/infra/terraform.tfvars"; printf 'x = "%s"\n' "$LOCAL_MARK" >> "$TFV"; cp "$TFV" "$W/tfv.before"
+run -- infra --yes
+check "infra, an unpushed local edit: refused naming infra-push" \
+  sh -c "[ $CODE = 1 ] && grep -q 'infra/terraform.tfvars differs from the stored copy' '$W/out' && grep -q 'setup.sh infra-push' '$W/out'"
+check "infra, an unpushed local edit: kept"                 cmp -s "$W/tfv.before" "$TFV"
+stored_edit terraform.tfvars; run -- infra --yes
+check "infra, both changed: refused, says to keep a copy"   sh -c "[ $CODE = 1 ] && grep -q 'keep a copy' '$W/out' && grep -q -- '--force' '$W/out' && grep -q 'infra-push' '$W/out'"
+check "infra, both changed: the local edit is kept"         cmp -s "$W/tfv.before" "$TFV"
+check "infra, both changed: prints neither content"         no_marks
+
+# The bucket belongs to the project, and backend.hcl names that bucket
+iworld; state bucket_project_number 999999999999; run -- infra --yes
+check "infra, a bucket of another project: refused"         sh -c "[ $CODE = 1 ] && grep -q 'project' '$W/out'"
+check "infra, a bucket of another project: reads no config" sh -c "! grep -q '^gcloud storage cp' '$W/log' && [ ! -e '$W/repo/infra/terraform.tfvars' ]"
+iworld; printf 'bucket = "someone-else-tfstate"\nprefix = "%s"\n' "$BACK_MARK" > "$W/state/bucket/backend.hcl"; run -- infra --yes
+check "infra, backend.hcl names another bucket: refused"    sh -c "[ $CODE = 1 ] && grep -q 'backend.hcl' '$W/out'"
+check "infra, backend.hcl names another bucket: writes nothing" \
+  sh -c "[ ! -e '$W/repo/infra/terraform.tfvars' ] && [ ! -e '$W/repo/infra/backend.hcl' ] && ! grep -q '^terraform -chdir' '$W/log'"
+check "infra, backend.hcl names another bucket: prints no content" no_marks
+
 for obj in terraform.tfvars backend.hcl; do
   iworld; rm -f "$W/state/bucket/$obj"; run -- infra --yes
   check "infra, no stored $obj: exits 1"                    code_is 1
@@ -624,6 +659,9 @@ check "infra: the project comes from gcloud config"         logged '^gcloud conf
 iworld; rm "$W/state/gcloud_project"; run -- infra --yes
 check "infra, no project: exits 1 asking for --project"     sh -c "[ $CODE = 1 ] && grep -q -- '--project' '$W/out'"
 check "infra, no project: reads nothing"                    not_logged '^gcloud (storage|secrets)'
+iworld; rm "$W/state/gcloud_project" "$W/state/gcloud_account"; run -- infra --yes
+check "infra, logged out and no project: the logins come first" \
+  sh -c "[ $CODE = 1 ] && grep -qF 'gcloud auth login' '$W/out' && grep -qF 'set-quota-project <project-id>' '$W/out' && ! grep -qF 'rerun with --project' '$W/out'"
 iworld; run -- infra --project
 check "infra --project without a value: refused"            sh -c "[ $CODE = 1 ] && grep -qF -- '--project needs a value' '$W/out'"
 iworld; run -- infra --yes --project 'Bad_Project;x'
@@ -645,7 +683,7 @@ iworld; absent terraform; infra_brew; run -- infra --yes
 check "infra, macOS without terraform: the HashiCorp tap"   logged '^brew install hashicorp/tap/terraform$'
 check "infra, macOS without terraform: then runs init"      sh -c "[ $CODE = 0 ] && grep -q '^terraform -chdir=infra init' '$W/log'"
 iworld; absent gcloud gh; infra_brew; run -- infra --yes
-check "infra, macOS without gcloud: the google-cloud-sdk cask" logged '^brew install --cask google-cloud-sdk$'
+check "infra, macOS without gcloud: the gcloud-cli cask"    logged '^brew install --cask gcloud-cli$'
 check "infra, macOS without gh: brew install gh"            logged '^brew install gh$'
 check "infra, macOS: never apt-get"                         not_logged '^(sudo )?apt-get'
 iworld; absent terraform; run -- infra
@@ -656,6 +694,10 @@ check "infra, declined: asks, installs nothing, exits 1"    sh -c "[ $CODE = 1 ]
 iworld; absent terraform; run -- infra --no-install
 check "infra --no-install: prints the command, exits 1"     sh -c "[ $CODE = 1 ] && grep -q 'brew install hashicorp/tap/terraform' '$W/out'"
 check "infra --no-install: installs and reads nothing"      not_logged '^(brew|apt-get|sudo|curl)|^gcloud (storage|secrets)'
+iworld; BEFORE="$(snapshot)"; run -- infra --no-install
+check "infra --no-install, all present: exits 0"            code_is 0
+check "infra --no-install, all present: runs and reads nothing" not_logged '^(gcloud|gh|terraform -chdir|brew|apt-get|sudo|curl)'
+check "infra --no-install, all present: changes no file"    test "$BEFORE" = "$(snapshot)"
 iworld; state terraform 1.5.7; run -- infra --no-install
 check "infra: Terraform older than 1.9 counts as missing"   sh -c "[ $CODE = 1 ] && grep -q '1.9' '$W/out'"
 iworld; state uname Linux; absent brew gcloud gh; run -- infra --no-install
@@ -681,6 +723,17 @@ EOF
   check "infra, Linux arm64: fetches the arm64 zip"         logged '^curl .*/terraform_[0-9.]+_linux_arm64\.zip$'
   check "infra, Linux: a matching sha256 installs terraform into ~/.local/bin" test -x "$W/home/.local/bin/terraform"
   check "infra, Linux: then runs init with it"              sh -c "[ $CODE = 0 ] && grep -q '^terraform -chdir=infra init' '$W/log'"
+  iworld; state uname Linux; state arch aarch64; state terraform 1.5.7; absent brew unzip; ln -s "$(command -v unzip)" "$W/bin/unzip"
+  printf '#!/bin/bash\necho "tfnew $*" >> "$STUB_LOG"\n[ "$1" = version ] && echo "Terraform v1.17.2"\nexit 0\n' > "$W/tfnew"
+  python3 -I - "$W/tfnew" "$W/state/download" <<'EOF'
+import sys, zipfile
+info = zipfile.ZipInfo("terraform"); info.external_attr = 0o755 << 16
+with zipfile.ZipFile(sys.argv[2], "w") as z: z.writestr(info, open(sys.argv[1]).read())
+EOF
+  SUM="$(sum_of "$W/state/download")"
+  sed "s/^TERRAFORM_SHA256_LINUX_ARM64=.*/TERRAFORM_SHA256_LINUX_ARM64=\"$SUM\"/" "$SETUP" > "$W/repo/scripts/setup.sh"
+  run PATH="$W/bin:$W/home/.local/bin" -- infra --yes
+  check "infra, Linux: the installed terraform wins over an old one on PATH" sh -c "[ $CODE = 0 ] && grep -q '^tfnew -chdir=infra init' '$W/log'"
 fi
 
 # Pinned keys: each repository's line, keyring and fingerprints pass add_apt_repo with the vendor's key
@@ -733,13 +786,15 @@ check "secrets: writes the value to its git-ignored path"   test "$(cat "$W/repo
 check "secrets: mode 600"                                   mode600 "$W/repo/.env.workstation"
 check "secrets: never prints the value"                     no_marks
 check "secrets: then init, exits 0"                         sh -c "[ $CODE = 0 ] && grep -q '^terraform -chdir=infra init' '$W/log'"
-for p in infra/token.txt ../outside-token "infra/../.env.workstation" ..; do
+for p in infra/token.txt ../outside-token "infra/../.env.workstation" .. .env .env.example infra/terraform.tfvars \
+  infra/backend.hcl infra/.config-generation .env.Tool .env.-x secrets/.env.tool; do
   iworld; ws_list "tool-token $p"; printf '%s' "$SECRET_MARK" > "$W/state/secrets/tool-token"; run -- infra --yes
   check "secrets: refuses the path '$p'"                    sh -c "[ $CODE = 1 ] && grep -qF -- '$p' '$W/out'"
   check "secrets: '$p' fetches nothing"                     sh -c "! grep -q '^gcloud secrets' '$W/log' && [ ! -e '$W/repo/infra/token.txt' ] && [ ! -e '$W/outside-token' ]"
 done
-iworld; ws_list "tool-token $W/abs-token"; printf '%s' "$SECRET_MARK" > "$W/state/secrets/tool-token"; run -- infra --yes
-check "secrets: refuses an absolute path"                   sh -c "[ $CODE = 1 ] && [ ! -e '$W/abs-token' ] && ! grep -q '^gcloud secrets' '$W/log'"
+iworld; ws_list "tool-token $W/repo/.env.workstation"; printf '%s' "$SECRET_MARK" > "$W/state/secrets/tool-token"; run -- infra --yes
+check "secrets: refuses an absolute path, even a git-ignored one in the repo" \
+  sh -c "[ $CODE = 1 ] && [ ! -e '$W/repo/.env.workstation' ] && ! grep -q '^gcloud secrets' '$W/log'"
 iworld; ws_list "only-a-name"; run -- infra --yes
 check "secrets: refuses a line without a path"              sh -c "[ $CODE = 1 ] && ! grep -q '^gcloud secrets' '$W/log'"
 iworld; ws_list 'bad$name .env.workstation'; run -- infra --yes
@@ -752,15 +807,22 @@ run -- infra-push
 check "infra-push: exits 0"                                 code_is 0
 check "infra-push: uploads tfvars with the recorded generation" \
   logged "^gcloud storage cp infra/terraform\\.tfvars gs://$PROJ-tfstate/config/terraform\\.tfvars --if-generation-match=1700000000000001\$"
-check "infra-push: uploads backend.hcl with the recorded generation" \
-  logged "^gcloud storage cp infra/backend\\.hcl gs://$PROJ-tfstate/config/backend\\.hcl --if-generation-match=1700000000000002\$"
+check "infra-push: skips backend.hcl, unchanged since the pull" not_logged '^gcloud storage cp infra/backend\.hcl'
 check "infra-push: the stored copy is the local edit"       cmp -s "$TFV" "$W/state/bucket/terraform.tfvars"
-check "infra-push: uploads only the two files"              sh -c "[ \"\$(grep -c '^gcloud storage cp' '$W/log')\" = 2 ] && ! grep -q 'workstation' '$W/log'"
-check "infra-push: prints the new generations"              sh -c "grep -q 1700000000000002 '$W/out' && grep -q 1700000000000003 '$W/out'"
-check "infra-push: records them"                            grep -qx 'terraform.tfvars 1700000000000002' "$W/repo/infra/.config-generation"
+check "infra-push: uploads only the changed file"           sh -c "[ \"\$(grep -c '^gcloud storage cp' '$W/log')\" = 1 ] && ! grep -q 'workstation' '$W/log'"
+check "infra-push: prints the new generation"               said "generation 1700000000000002"
+check "infra-push: takes it from the upload's own result"   sh -c "grep -q -- '--print-created-message' '$W/log' && [ \"\$(grep -c '^gcloud storage objects describe' '$W/log')\" = 1 ]"
+check "infra-push: records it with the new sha256" \
+  grep -qx "terraform.tfvars 1700000000000002 $(sum_of "$TFV")" "$W/repo/infra/.config-generation"
 check "infra-push: prints no content"                       no_marks
 run -- infra --yes
 check "infra after infra-push: in step, exits 0"            code_is 0
+run -- infra-push
+check "infra-push, nothing changed: uploads nothing, exits 0" sh -c "[ $CODE = 0 ] && ! grep -q '^gcloud storage cp' '$W/log' && grep -q 'Nothing to push' '$W/out'"
+rm "$W/repo/infra/backend.hcl"; run -- infra-push
+check "infra-push, a local file missing: exits 1, uploads nothing" sh -c "[ $CODE = 1 ] && ! grep -q '^gcloud storage cp' '$W/log'"
+iworld; run -- infra --yes; state bucket_project_number 999999999999; printf 'x = 1\n' >> "$W/repo/infra/terraform.tfvars"; run -- infra-push
+check "infra-push, a bucket of another project: uploads nothing" sh -c "[ $CODE = 1 ] && ! grep -q '^gcloud storage cp' '$W/log'"
 iworld; run -- infra --yes; TFV="$W/repo/infra/terraform.tfvars"; printf 'budget = "%s"\n' "$LOCAL_MARK" >> "$TFV"
 cp "$W/state/bucket/terraform.tfvars" "$W/stored.before"; echo 1700000000000009 > "$W/state/bucket/terraform.tfvars.gen"
 run -- infra-push
