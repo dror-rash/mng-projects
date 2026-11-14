@@ -1,7 +1,7 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 
-const BASE_PATH = "/dashboard";
+import { withBasePath } from "./base-path";
 
 /**
  * Ends a server action with a redirect to `path`, a path in this zone without the basePath (`/sites/<id>`).
@@ -15,5 +15,5 @@ const BASE_PATH = "/dashboard";
  */
 export async function redirectFromAction(path: string): Promise<never> {
   const fromClientRouter = (await headers()).has("next-action");
-  redirect(fromClientRouter ? path : `${BASE_PATH}${path === "/" ? "" : path}`);
+  redirect(fromClientRouter ? path : withBasePath(path));
 }
