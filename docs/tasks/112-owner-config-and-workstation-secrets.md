@@ -1,6 +1,6 @@
 # Task 112: The owner's infra config (and any workstation secret) on any machine
 
-- **Status:** in-review
+- **Status:** done (PR #103)
 - **Milestone:** cross-cutting (infra tooling)
 - **Zone / package:** `scripts/setup.sh` (subcommands `infra` and `infra-push`), `scripts/test-setup.sh`, `infra/workstation-secrets.list` (new, committed, no entries), `.claude/hooks/guard.sh` + `scripts/test-hooks.sh` (refuse both subcommands in agent sessions), `.gitignore` (`infra/.config-generation`), `infra/README.md` ("Working from another machine", "Onboarding a GCP admin", rotation), `README.md` (the leaver step in "Onboarding a new person" points at `infra/README.md` instead of ADR-0013). No Terraform change. Commits `test:` → `feat(scripts):` → `docs:`.
 - **Feature file:** none (tooling; `scripts/test-setup.sh` and `scripts/test-hooks.sh` are the checks)
@@ -203,6 +203,7 @@ No new ADR (ADR-0013).
     neither setup nor gcloud and aren't commits skip the parsing.
   - SEC-13 notes that agents can still read the pulled files.
 - 2026-11-14 – Guard re-review (re-review and QA; QA passed). Red run: 216 passed / 28 failed.
+- 2026-11-14 – Merged as PR #103 (rebuilt from #102 as one commit: the old history quoted a public key fingerprint that CI's secret scan flags). The owner uploaded `terraform.tfvars` and `backend.hcl` to `gs://mng-projects-poc-tfstate/config/` the same day.
   - Regression fixed: a `<<` in a `#` comment, `$((…))`, `((…))` or `${…}` no longer queues a heredoc.
     - The scanner follows the context (quotes, `$(…)`, arithmetic, `${…}`) across lines and into `"$(…)"`.
     - The delimiter is the next word with its quotes and backslashes removed (`E\OF`, `'E'OF`, `"E"OF`, `E-F`).

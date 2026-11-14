@@ -1,6 +1,6 @@
 # Task 067: The agent team (harness)
 
-- **Status:** in-review
+- **Status:** done (PR #36)
 - **Milestone:** POC (2026-11-13), first step
 - **Zone / package:** `.claude/` (agents, hooks, skills, settings), `scripts/`, `apps/*/package.json` (ports), `e2e/playwright.config.ts` (ports), `docs/`
 - **Feature file:** none (developer tooling, no user-visible behavior). Tested by `scripts/test-hooks.sh` and `scripts/test-lane.sh`.
@@ -56,6 +56,7 @@ Hooks are bash scripts that read the tool-call JSON with `jq`, so they need no b
 - 2026-11-02 – Planned at the owner's request: agent team first, then the POC (tasks 068–069 and M13 056–061, 064).
 
 - 2026-11-02 – Built:
+- 2026-11-14 – Status synced: merged in PR #36 (2026-11-02).
   - **Tests:** guard 29/29, lane 15/15.
   - **Lane 1 dogfood:** the full e2e suite ran in lane 1 (ports 3010–3012, `app_lane1`).
     - The first run gave 228 passed and 19 failed, at the same time as another session's full suite in the main checkout (load average about 21).
