@@ -38,8 +38,8 @@ TERRAFORM_VERSION="1.17.2"
 TERRAFORM_SHA256_LINUX_AMD64="e6f16b2f0b137ee5729caa8c4e79a3bae4ee261acd198a1fcfa8584a6296605b"
 TERRAFORM_SHA256_LINUX_ARM64="858e08c181a76b6b223e8c767a8e983922eebe2d062db949a2de66ce040c368c"
 # gcloud's apt repository, as https://cloud.google.com/sdk/docs/install#deb sets it up. Google publishes no
-# fingerprint: this is apt-key.gpg's only key ("Artifact Registry Repository Signer"), the same key as on
-# keyserver.ubuntu.com (checked 2026-11-14).
+# fingerprint, so this pin is TOFU (keyserver cross-check): apt-key.gpg's only key ("Artifact Registry Repository
+# Signer") as downloaded on 2026-11-14, the same key as on keyserver.ubuntu.com.
 GCLOUD_APT_KEY_URL="https://packages.cloud.google.com/apt/doc/apt-key.gpg"
 GCLOUD_KEYRING="/usr/share/keyrings/cloud.google.gpg"
 GCLOUD_APT_LINE="deb [signed-by=$GCLOUD_KEYRING] https://packages.cloud.google.com/apt cloud-sdk main"
@@ -260,7 +260,8 @@ esac
 # infra/workstation-secrets.list. Both are for a person's terminal: agent sessions are refused (and the guard
 # refuses the command). Never prints a config or secret value; never runs terraform plan or apply.
 INFRA_CONFIG="terraform.tfvars backend.hcl"
-GEN_FILE="infra/.config-generation" # git-ignored: "project <id>", then "<file> <generation>" per config file
+# git-ignored: "project <id>", then "<file> <generation> <sha256>" per config file, as last pulled or pushed here
+GEN_FILE="infra/.config-generation"
 WS_LIST="infra/workstation-secrets.list"
 TF_HOME="$HOME/.local/bin"
 GENS=""; INFRA_TMP=""
@@ -285,15 +286,32 @@ infra_start() { # both subcommands: a person, on macOS, Linux or WSL2
 valid_project() { [[ "$1" =~ ^[a-z][a-z0-9-]{4,28}[a-z0-9]$ ]]; }
 is_generation() { [[ "$1" =~ ^[0-9]{1,20}$ ]]; }
 gen_of() { printf '%s\n' "$GENS" | awk -v f="$1" '$1 == f { print $2; exit }'; }
-set_gen() { GENS="$(printf '%s\n' "$GENS" | awk -v f="$1" -v g="$2" '$1 == f { $2 = g } NF { print }')"; }
+sum_recorded() { printf '%s\n' "$GENS" | awk -v f="$1" '$1 == f { print $3; exit }'; }
+set_gen() { # file generation sha256
+  GENS="$(printf '%s\n' "$GENS" | awk -v f="$1" '$1 != f && NF')"$'\n'"$1 $2 $3"
+}
 write_gens() { # GENS into infra/.config-generation (through a temp file)
-  { printf 'project %s\n%s\n' "$PROJECT" "$GENS" > "$INFRA_TMP/generations" && mv -f "$INFRA_TMP/generations" "$GEN_FILE"; } ||
-    die "couldn't write $GEN_FILE"
+  { printf 'project %s\n%s\n' "$PROJECT" "$(printf '%s\n' "$GENS" | awk 'NF')" > "$INFRA_TMP/generations" &&
+    mv -f "$INFRA_TMP/generations" "$GEN_FILE"; } || die "couldn't write $GEN_FILE"
+}
+read_gens() { # what this machine last pulled or pushed for $PROJECT (nothing for another project)
+  GENS=""
+  [ -f "$GEN_FILE" ] && [ "$(awk '$1 == "project" { print $2; exit }' "$GEN_FILE")" = "$PROJECT" ] &&
+    GENS="$(grep -v '^project ' "$GEN_FILE")"
+  return 0
 }
 bucket_dir() { echo "gs://$PROJECT-tfstate/config"; }
 stored_gen() { # file: the stored copy's generation; false when it's missing or unreadable
   local g
   g="$(gcloud storage objects describe "$(bucket_dir)/$1" --format='value(generation)' 2>/dev/null)" && is_generation "$g" && echo "$g"
+}
+check_bucket() { # gs://<project>-tfstate must belong to the project (a bucket name is global: anyone can take it)
+  local want got
+  want="$(gcloud projects describe "$PROJECT" --format='value(projectNumber)' 2>/dev/null)"
+  got="$(gcloud storage buckets describe "gs://$PROJECT-tfstate" --raw --format='value(projectNumber)' 2>/dev/null)"
+  [[ "$want" =~ ^[0-9]+$ ]] || die "can't read project $PROJECT's number (gcloud projects describe $PROJECT): nothing done"
+  [[ "$got" =~ ^[0-9]+$ ]] || die "can't read the bucket gs://$PROJECT-tfstate (does it exist, and may you read it?): nothing done"
+  [ "$got" = "$want" ] || die "gs://$PROJECT-tfstate belongs to another project, not $PROJECT: nothing done"
 }
 
 # --- 1. Tools: Terraform >= 1.9 (infra/versions.tf), gcloud, gh
@@ -307,7 +325,7 @@ terraform_ok() {
 infra_install_cmd() { # tool: how this environment installs it
   case "$ENV:$1" in
     macos:terraform) echo "brew install hashicorp/tap/terraform" ;;
-    macos:gcloud) echo "brew install --cask google-cloud-sdk" ;;
+    macos:gcloud) echo "brew install --cask gcloud-cli" ;;
     macos:gh) echo "brew install gh" ;;
     *:terraform) echo "Terraform $TERRAFORM_VERSION from releases.hashicorp.com (sha256 checked) into $TF_HOME" ;;
     *:gcloud) echo "Google's apt repository (key $GCLOUD_APT_KEY_FPR), then ${SUDO}apt-get install -y google-cloud-cli" ;;
@@ -382,33 +400,39 @@ infra_tools() {
       installed "gh (GitHub's apt repository)" ;;
     esac
   fi
-  terraform_ok || die "Terraform >= 1.9 still isn't on PATH"
+  terraform_ok || die "Terraform >= 1.9 still isn't first on PATH"
   has gcloud || die "gcloud still isn't on PATH (open a new terminal and rerun)"
   has gh || die "gh still isn't on PATH"
 }
 
-# --- 2. Project and logins
+# --- 2. Logins, then the project
+infra_login() {
+  local account hint="$PROJECT"
+  account="$(gcloud auth list --filter=status:ACTIVE --format='value(account)' 2>/dev/null | head -1)"
+  if [ -z "$account" ] || ! gcloud auth application-default print-access-token >/dev/null 2>&1; then
+    [ -n "$hint" ] || hint="$(gcloud config get project 2>/dev/null | head -1)"
+    valid_project "$hint" || hint="<project-id>"
+    say "Log in to Google Cloud first (your own account, with 2-step verification), then rerun:"
+    say "  gcloud auth login"
+    say "  gcloud auth application-default login"
+    say "  gcloud auth application-default set-quota-project $hint"
+    exit 1
+  fi
+  say "gcloud: logged in as $account"
+}
 infra_project() {
   if [ -z "$PROJECT" ]; then PROJECT="$(gcloud config get project 2>/dev/null | head -1)"; fi
   [ -n "$PROJECT" ] || die "no GCP project: rerun with --project <id> (or gcloud config set project <id>)"
   valid_project "$PROJECT" || die "'$PROJECT' isn't a GCP project id: rerun with --project <id>"
-}
-infra_login() {
-  local account
-  account="$(gcloud auth list --filter=status:ACTIVE --format='value(account)' 2>/dev/null | head -1)"
-  if [ -z "$account" ] || ! gcloud auth application-default print-access-token >/dev/null 2>&1; then
-    say "Log in to Google Cloud first (your own account, with 2-step verification), then rerun:"
-    say "  gcloud auth login"
-    say "  gcloud auth application-default login"
-    say "  gcloud auth application-default set-quota-project ${PROJECT:-<project-id>}"
-    exit 1
-  fi
-  say "gcloud: logged in as $account (project $PROJECT)"
+  say "Project: $PROJECT"
 }
 
-# --- 3. Owner config: both stored copies at the generations just read, compared before anything is written
+# --- 3. Owner config: both stored copies at the generations just read, checked before anything is written. A local
+# file that still matches what this machine last pulled or pushed (its recorded sha256) follows the stored copy.
 infra_pull() {
-  local f gen differ=""
+  local f gen sum bucket refused=0
+  read_gens
+  local recorded="$GENS"
   GENS=""
   for f in $INFRA_CONFIG; do
     if ! gen="$(stored_gen "$f")"; then
@@ -417,19 +441,29 @@ infra_pull() {
       say "  gcloud storage cp infra/terraform.tfvars infra/backend.hcl gs://$PROJECT-tfstate/config/"
       exit 1
     fi
-    GENS="$GENS$f $gen"$'\n'
-  done
-  for f in $INFRA_CONFIG; do
-    ( umask 077; gcloud storage cp "$(bucket_dir)/$f#$(gen_of "$f")" "$INFRA_TMP/$f" >/dev/null 2>&1 ) ||
+    ( umask 077; gcloud storage cp "$(bucket_dir)/$f#$gen" "$INFRA_TMP/$f" >/dev/null 2>&1 ) ||
       die "couldn't download $(bucket_dir)/$f"
-    if [ -f "infra/$f" ] && ! cmp -s "infra/$f" "$INFRA_TMP/$f"; then differ="$differ $f"; fi
+    sum="$(sha256_of "$INFRA_TMP/$f")" && [ -n "$sum" ] || die "no sha256sum or shasum to check infra/$f with"
+    GENS="$GENS$f $gen $sum"$'\n'
   done
-  if [ -n "$differ" ] && [ "$FORCE" != 1 ]; then
-    for f in $differ; do
-      err "infra/$f differs from the stored copy: run \`setup.sh infra-push\`, or \`--force\` to replace it"
-    done
-    exit 1
-  fi
+  bucket="$(sed -n 's/^[[:space:]]*bucket[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' "$INFRA_TMP/backend.hcl" | head -1)"
+  [ "$bucket" = "$PROJECT-tfstate" ] ||
+    die "the stored backend.hcl doesn't name the bucket $PROJECT-tfstate: nothing written (fix it on the machine that has it, then infra-push)"
+  for f in $INFRA_CONFIG; do
+    [ -f "infra/$f" ] || continue
+    cmp -s "infra/$f" "$INFRA_TMP/$f" && continue
+    [ "$FORCE" = 1 ] && continue
+    sum="$(printf '%s\n' "$recorded" | awk -v f="$f" '$1 == f { print $3; exit }')"
+    [ -n "$sum" ] && [ "$(sha256_of "infra/$f")" = "$sum" ] && continue # untouched since this machine's pull or push
+    refused=1
+    if [ -n "$sum" ] && [ "$(printf '%s\n' "$recorded" | awk -v f="$f" '$1 == f { print $2; exit }')" = "$(gen_of "$f")" ]; then
+      err "infra/$f differs from the stored copy: it has a local edit that isn't pushed. Run \`setup.sh infra-push\`, or \`--force\` to drop the edit."
+    else
+      err "infra/$f differs from the stored copy, and the stored copy changed since this machine's pull (or was never pulled here)."
+      err "  To keep your edit: keep a copy (cp infra/$f ~/$f.mine), run \`setup.sh infra --force\`, re-apply the edit, then \`setup.sh infra-push\`."
+    fi
+  done
+  [ "$refused" = 0 ] || exit 1
   mkdir -p infra || die "couldn't create infra/"
   for f in $INFRA_CONFIG; do
     { chmod 600 "$INFRA_TMP/$f" && mv -f "$INFRA_TMP/$f" "infra/$f" && chmod 600 "infra/$f"; } || die "couldn't write infra/$f"
@@ -438,7 +472,8 @@ infra_pull() {
   say "Owner config: infra/terraform.tfvars and infra/backend.hcl from $(bucket_dir)/ (mode 600)"
 }
 
-# --- 4. Workstation secrets: every entry checked before any is fetched
+# --- 4. Workstation secrets: every entry checked before any is fetched. One path shape only: .env.<name> at the
+# repo's top (git-ignored by .env.*), never .env, .env.example or the owner config.
 infra_secrets() {
   local line trimmed name path extra entries="" bad=0
   if [ -f "$WS_LIST" ]; then
@@ -449,8 +484,14 @@ infra_secrets() {
       read -r name path extra <<<"$trimmed"
       if [ -z "$path" ] || [ -n "$extra" ]; then err "$WS_LIST: '$trimmed' isn't '<secret name> <path in the repo>'"; bad=1; continue; fi
       if ! [[ "$name" =~ ^[A-Za-z0-9_-]{1,255}$ ]]; then err "$WS_LIST: '$name' isn't a Secret Manager secret name"; bad=1; continue; fi
-      case "$path" in /*) err "$WS_LIST: $path is absolute; use a path in the repo"; bad=1; continue ;; esac
-      case "/$path/" in */../*) err "$WS_LIST: $path has '..'; use a path in the repo"; bad=1; continue ;; esac
+      case "$path" in /*) err "$WS_LIST: $path is absolute; use .env.<name> in the repo"; bad=1; continue ;; esac
+      case "/$path/" in */../*) err "$WS_LIST: $path has '..'; use .env.<name> in the repo"; bad=1; continue ;; esac
+      case "$path" in .env|.env.example|infra/terraform.tfvars|infra/backend.hcl|infra/.config-generation)
+        err "$WS_LIST: $path is never a workstation secret's file"; bad=1; continue ;;
+      esac
+      if ! [[ "$path" =~ ^\.env\.[a-z0-9][a-z0-9-]*$ ]]; then
+        err "$WS_LIST: $path isn't .env.<name> (lower-case letters, digits and -) at the repo's top"; bad=1; continue
+      fi
       if [ -d "$path" ] || ! git check-ignore -q -- "$path" 2>/dev/null; then
         err "$WS_LIST: $path isn't a git-ignored file: a secret never goes where git could commit it"; bad=1; continue
       fi
@@ -463,8 +504,7 @@ infra_secrets() {
     [ -n "$name" ] || continue
     ( umask 077; gcloud secrets versions access latest --secret="$name" --project "$PROJECT" > "$INFRA_TMP/secret" ) ||
       die "couldn't read the secret $name (does it exist, and may you read it?)"
-    { mkdir -p "$(dirname "$path")" && chmod 600 "$INFRA_TMP/secret" && mv -f "$INFRA_TMP/secret" "$path" && chmod 600 "$path"; } ||
-      die "couldn't write $path"
+    { chmod 600 "$INFRA_TMP/secret" && mv -f "$INFRA_TMP/secret" "$path" && chmod 600 "$path"; } || die "couldn't write $path"
     say "Workstation secret $name: $path (mode 600)"
   done <<<"$entries"
 }
@@ -473,12 +513,14 @@ run_infra() { # bash scripts/setup.sh infra
   local on_path=1
   say "Environment: $ENV_LABEL"
   infra_start
-  case ":$PATH:" in *":$TF_HOME:"*) ;; *) on_path=0; PATH="$TF_HOME:$PATH"; export PATH ;; esac
+  case ":$PATH:" in *":$TF_HOME:"*) ;; *) on_path=0 ;; esac
+  PATH="$TF_HOME:$PATH"; export PATH # a Terraform installed here comes first for this run
   infra_tools
   if [ "$NO_INSTALL" = 1 ]; then say "Check only (--no-install): everything is installed."; exit 0; fi
-  infra_project
   infra_login
+  infra_project
   gh auth status >/dev/null 2>&1 || warn "gh isn't logged in (no infra step needs it): gh auth login"
+  check_bucket
   infra_pull
   infra_secrets
   terraform -chdir=infra init -backend-config=backend.hcl || die "terraform init failed"
@@ -490,32 +532,41 @@ run_infra() { # bash scripts/setup.sh infra
   exit 0
 }
 
-run_infra_push() { # bash scripts/setup.sh infra-push: the two config files, each only over the generation pulled
-  local f gen now
+# bash scripts/setup.sh infra-push: each config file edited since this machine's pull or push (its sha256 differs
+# from the recorded one), only over the generation recorded for it.
+run_infra_push() {
+  local f gen now sum out changed=""
   infra_start
   [ -f "$GEN_FILE" ] || die "this machine has no pulled config ($GEN_FILE): pull first: \`setup.sh infra\`"
   PROJECT="$(awk '$1 == "project" { print $2; exit }' "$GEN_FILE")"
-  GENS="$(grep -v '^project ' "$GEN_FILE")"
   valid_project "$PROJECT" || die "$GEN_FILE has no valid project: pull first: \`setup.sh infra\`"
+  read_gens
   for f in $INFRA_CONFIG; do
     is_generation "$(gen_of "$f")" || die "$GEN_FILE has no generation for $f: pull first: \`setup.sh infra\`"
     [ -f "infra/$f" ] || die "there is no infra/$f: pull first: \`setup.sh infra\`"
+    sum="$(sha256_of "infra/$f")" && [ -n "$sum" ] || die "no sha256sum or shasum to check infra/$f with"
+    [ "$sum" = "$(sum_recorded "$f")" ] || changed="$changed $f"
   done
+  if [ -z "$changed" ]; then say "Nothing to push: infra/terraform.tfvars and infra/backend.hcl are as last pulled or pushed."; exit 0; fi
   has gcloud || die "gcloud isn't installed: run bash scripts/setup.sh infra first"
   infra_login
-  for f in $INFRA_CONFIG; do
+  check_bucket
+  for f in $changed; do
     now="$(stored_gen "$f")" || die "couldn't read $(bucket_dir)/$f"
     if [ "$now" != "$(gen_of "$f")" ]; then
       err "$(bucket_dir)/$f changed since this machine's pull: pull first: \`setup.sh infra\`"
       exit 1
     fi
   done
-  for f in $INFRA_CONFIG; do
-    gen="$(gen_of "$f")"
-    gcloud storage cp "infra/$f" "$(bucket_dir)/$f" --if-generation-match="$gen" >/dev/null 2>&1 ||
+  for f in $changed; do
+    gen="$(gen_of "$f")"; sum="$(sha256_of "infra/$f")"
+    out="$(gcloud storage cp "infra/$f" "$(bucket_dir)/$f" --if-generation-match="$gen" --print-created-message 2>&1 >/dev/null)" ||
       die "couldn't store infra/$f (did the stored copy change since this machine's pull? pull first: \`setup.sh infra\`)"
-    now="$(stored_gen "$f")" || die "stored infra/$f, but couldn't read its new generation: run \`setup.sh infra\`"
-    set_gen "$f" "$now"; write_gens
+    now="$(printf '%s\n' "$out" | sed -n 's/^Created: .*#\([0-9][0-9]*\)$/\1/p' | tail -1)"
+    if ! is_generation "$now"; then
+      now="$(stored_gen "$f")" || die "stored infra/$f, but couldn't read its new generation: run \`setup.sh infra\`"
+    fi
+    set_gen "$f" "$now" "$sum"; write_gens
     say "Stored $(bucket_dir)/$f: generation $now"
   done
   exit 0

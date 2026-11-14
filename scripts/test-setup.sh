@@ -806,7 +806,7 @@ ws_list "tool-token .env.workstation"; printf '%s' "$SECRET_MARK" > "$W/repo/.en
 run -- infra-push
 check "infra-push: exits 0"                                 code_is 0
 check "infra-push: uploads tfvars with the recorded generation" \
-  logged "^gcloud storage cp infra/terraform\\.tfvars gs://$PROJ-tfstate/config/terraform\\.tfvars --if-generation-match=1700000000000001\$"
+  logged "^gcloud storage cp infra/terraform\\.tfvars gs://$PROJ-tfstate/config/terraform\\.tfvars --if-generation-match=1700000000000001 --print-created-message\$"
 check "infra-push: skips backend.hcl, unchanged since the pull" not_logged '^gcloud storage cp infra/backend\.hcl'
 check "infra-push: the stored copy is the local edit"       cmp -s "$TFV" "$W/state/bucket/terraform.tfvars"
 check "infra-push: uploads only the changed file"           sh -c "[ \"\$(grep -c '^gcloud storage cp' '$W/log')\" = 1 ] && ! grep -q 'workstation' '$W/log'"
@@ -832,7 +832,7 @@ check "infra-push, stale: uploads nothing"                  not_logged '^gcloud 
 check "infra-push, stale: prints no content"                no_marks
 iworld; run -- infra-push
 check "infra-push before any pull: pull first"              sh -c "[ $CODE = 1 ] && grep -qF 'pull first' '$W/out' && ! grep -q '^gcloud storage cp' '$W/log'"
-iworld; run -- infra --yes; rm "$W/state/gcloud_account"; run -- infra-push
+iworld; run -- infra --yes; printf 'x = 1\n' >> "$W/repo/infra/terraform.tfvars"; rm "$W/state/gcloud_account"; run -- infra-push
 check "infra-push, logged out: prints gcloud auth login, uploads nothing" \
   sh -c "[ $CODE = 1 ] && grep -qF 'gcloud auth login' '$W/out' && ! grep -q '^gcloud storage cp' '$W/log'"
 
