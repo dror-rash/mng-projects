@@ -100,7 +100,12 @@ for c in "/bin/bash scripts/setup.sh infra" "/usr/bin/env bash scripts/setup.sh 
   "bash scripts/setup.sh \"\$SUB\"" "S=infra; bash scripts/setup.sh \$S" "bash scripts/setup.sh \${S}"; do
   expect 2 "refuses: $c"                                Bash "$(bash_ "$c")"
 done
-expect 0 "allows git add of setup.sh and infra/"        Bash "$(bash_ "git add scripts/setup.sh infra")"
+expect 2 "refuses git add of setup.sh and infra/ together (stage them separately)" Bash "$(bash_ "git add scripts/setup.sh infra")"
+expect 2 "refuses git grep -O with a pager command"     Bash "$(bash_ "git grep -Obash infra scripts/setup.sh")"
+expect 2 "refuses PAGER running setup.sh infra"         Bash "$(bash_ "PAGER='bash scripts/setup.sh infra' git log")"
+expect 2 "refuses GIT_PAGER running setup.sh infra-push" Bash "$(bash_ "GIT_PAGER=\"bash scripts/setup.sh infra-push\" git log")"
+expect 2 "refuses core.pager running setup.sh infra"    Bash "$(bash_ "git -c core.pager='bash scripts/setup.sh infra' log")"
+expect 0 "allows git add of setup.sh alone"             Bash "$(bash_ "git add scripts/setup.sh")"
 expect 0 "allows ls of setup.sh and infra/"             Bash "$(bash_ "ls -l scripts/setup.sh infra")"
 expect 0 "allows grep for infra in setup.sh"            Bash "$(bash_ "grep -n infra scripts/setup.sh")"
 expect 0 "allows setup.sh services --yes"               Bash "$(bash_ "bash scripts/setup.sh services --yes")"
