@@ -100,8 +100,6 @@ grep -Eq "remote\.[^[:space:]]+\.(push|mirror)" <<<"$(git_args config)" \
 grep -Eq '(^|[[:space:]])(-[[:alnum:]]*f[[:alnum:]]*|--force)([[:space:]]|$)' <<<"$(git_args add)" \
   && deny "No git add -f/--force: ignored files (.env, *.tfvars, keys) stay out of the repo (CLAUDE.md rule 7). Ask the owner if a file really belongs in git."
 
-grep -Eq "$(git_sub commit)([[:space:]]|$)" <<<"$cmd" || exit 0
-
 # What the shell runs: the command without heredoc bodies (h), and h with the insides of quotes blanked (m, the
 # same length), so a message or a quoted argument can't pass for a command.
 strip_heredocs() {
@@ -120,7 +118,25 @@ h="$(strip_heredocs "$cmd")"
 m="$(perl -0777 -pe 's/"[^"]*"|\x27[^\x27]*\x27/my $q = $&; substr($q, 1, -1) =~ s|.|_|gs; $q/ge' <<<"$h")"
 
 B='(^|[[:space:];&|(/])' SH='(bash|sh|zsh|dash|ksh)([[:space:]]+-[[:alnum:]]+)*'
-if grep -Eq "$B$SH[[:space:]]+-[[:alnum:]]*c[[:alnum:]]*([[:space:]]|$)|$B$SH[[:space:]]*(<|$|[;&|)])|${B}eval([[:space:]]|$)|${B}env([[:space:]]+(-[^[:space:]]*|[A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*))*[[:space:]]+(-C|--chdir)" <<<"$m"; then
+
+# A command that runs another through a shell (bash/sh -c, a heredoc or pipe into a shell), eval or env -C.
+RUNS_SHELL="$B$SH[[:space:]]+-[[:alnum:]]*c[[:alnum:]]*([[:space:]]|$)|$B$SH[[:space:]]*(<|$|[;&|)])|${B}eval([[:space:]]|$)|${B}env([[:space:]]+(-[^[:space:]]*|[A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*))*[[:space:]]+(-C|--chdir)"
+
+# setup.sh infra / infra-push fetch the owner config and workstation secrets: a person runs them, never an agent
+# (task 112, ADR-0013; setup.sh also refuses CLAUDECODE=1, which a command can unset). A run is setup.sh as a
+# command (after a separator, assignments, sudo/env/exec/nohup, lane.sh exec or a shell), checked on m, so a quoted
+# message or argument (a commit, an echo, a grep) isn't one; behind a shell wrapper the words anywhere count.
+ASSIGN='[A-Za-z_][A-Za-z0-9_]*=[^[:space:];&|]*'
+WRAP="(sudo([[:space:]]+-[^[:space:];&|]+)*|env([[:space:]]+(-u[[:space:]]+[^[:space:];&|]+|-[^[:space:];&|]+|$ASSIGN))*|exec|command|time|nohup|nice|((bash|sh)[[:space:]]+)?([^[:space:];&|]*/)?lane\\.sh[[:space:]]+exec[[:space:]]+[0-9]+[[:space:]]+--)"
+INFRA_RUN="(^|[;&|(])[[:space:]]*(($ASSIGN|$WRAP)[[:space:]]+)*($SH[[:space:]]+)?([^[:space:];&|]*/)?setup\\.sh[[:space:]]+infra(-push)?([[:space:];&|)]|$)"
+if grep -Eq "$INFRA_RUN" <<<"$m" \
+  || { grep -Eq "$RUNS_SHELL" <<<"$m" && grep -Eq 'setup\.sh[[:space:]]+infra(-push)?([^[:alnum:]_-]|$)' <<<"$cmd"; }; then
+  deny "setup.sh infra and infra-push fetch the owner's config and workstation secrets: a person runs them in their own terminal, never an agent (ADR-0013, CLAUDE.md rule 7). Ask the owner."
+fi
+
+grep -Eq "$(git_sub commit)([[:space:]]|$)" <<<"$cmd" || exit 0
+
+if grep -Eq "$RUNS_SHELL" <<<"$m"; then
   deny "a git commit in a command that also runs a shell (bash/sh -c, a heredoc or pipe into a shell), eval or env -C can't be checked. Run the commit as its own command."
 fi
 commits="$(grep -Eo "$(git_sub commit)([[:space:]]|$)" <<<"$m" | wc -l | tr -d ' ')"

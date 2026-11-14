@@ -54,6 +54,7 @@ The zones' `dev`/`start` scripts and the Playwright config read `SHELL_PORT`, `E
 - a `drizzle-orm` import under `apps/`;
 - `terraform apply/destroy`;
 - Cloud Run changes by hand on any release track (`gcloud [alpha|beta] run deploy`, `run services replace|update|update-traffic|delete`), and reading a Secret Manager value (`gcloud secrets versions access`);
+- running `scripts/setup.sh infra` or `infra-push` (they fetch the owner's config and workstation secrets; task 112), as a command or behind a shell; the words in a quoted message or argument don't count;
 - force pushes in every spelling (`-f` alone or combined like `-uf`, `--force`, `--force-with-lease`, `--force-if-includes`, a `+refspec`) and destructive pushes (`--mirror`, deleting `main`/`master` with `:main` or `--delete`/`-d`, a `remote.*.push=+…` or `remote.*.mirror` from `git -c`); deleting a feature branch is fine;
 - `git add -f` / `--force` (ignored files stay out; ask the owner);
 - `git commit --no-verify` / `-n`, also inside a short-option cluster (`-nm`, `-anm`); text in a quoted message doesn't count;
