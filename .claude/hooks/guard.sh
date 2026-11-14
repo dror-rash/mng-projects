@@ -70,21 +70,27 @@ GITOPT="(-[Cc][[:space:]]+$WORD|--(git-dir|work-tree|namespace|exec-path|config-
 git_sub() { echo "(^|[^[:alnum:]_-])git([[:space:]]+$GITOPT)*[[:space:]]+$1"; }
 # The arguments of every `git … <sub>` in the command (or in $2), one line each.
 git_args() { grep -Eo "$(git_sub "$1")([[:space:]][^;&|]*)?" <<<"${2-$cmd}" | sed -E "s#^$(git_sub "$1")##"; }
-# gcloud [alpha|beta] [global flags, with or without a value] <group>
+# gcloud [alpha|beta] [global flags, with or without a value] <group>; FL: flags between a group and its verb
 GCLOUD="(^|[^[:alnum:]_-])gcloud([[:space:]]+(alpha|beta|-[^[:space:];&|]+([[:space:]]+[^-[:space:];&|][^[:space:];&|]*)?))*[[:space:]]+"
+FL="([[:space:]]+-[^[:space:];&|]+([[:space:]]+[^-[:space:];&|][^[:space:];&|]*)?)*"
 
-grep -Eq '(^|[^[:alnum:]_-])terraform[[:space:]]+(.*[[:space:]])?(apply|destroy)([[:space:]]|$)' <<<"$cmd" \
-  && deny "terraform apply/destroy runs only in CI or by the owner (CLAUDE.md rule 10). Run terraform plan and put its output in the PR."
-grep -Eq "${GCLOUD}run[[:space:]]+(deploy|services[[:space:]]+(replace|update|update-traffic|delete))([[:space:]]|$)" <<<"$cmd" \
-  && deny "Cloud Run changes go through .github/workflows/deploy.yml and infra/ Terraform, never by hand, on any release track (CLAUDE.md rule 10)."
-grep -Eq "${GCLOUD}secrets[[:space:]]+versions[[:space:]]+access([[:space:]]|$)" <<<"$cmd" \
-  && deny "Secret Manager values are never read by agents (CLAUDE.md rule 7). Ask the owner, or use the local .env."
-# Git takes unambiguous prefixes of long options, so --for… (--force, --force-with-lease, --force-if-includes),
-# --mi… (--mirror), --d… (--delete), --pru… (--prune) and --no-ve… (--no-verify) count as the full option.
-# Force: -f alone or in combined short flags (-uf), --for…[=…], a +refspec.
+# The rules on what a command runs, checked on the command as written and again on its de-quoted words (below).
+cloud_rules() { # text
+  grep -Eq '(^|[^[:alnum:]_-])terraform[[:space:]]+(.*[[:space:]])?(apply|destroy)([[:space:]]|$)' <<<"$1" \
+    && deny "terraform apply/destroy runs only in CI or by the owner (CLAUDE.md rule 10). Run terraform plan and put its output in the PR."
+  grep -Eq "${GCLOUD}run$FL[[:space:]]+(deploy|services$FL[[:space:]]+(replace|update|update-traffic|delete))([[:space:]]|$)" <<<"$1" \
+    && deny "Cloud Run changes go through .github/workflows/deploy.yml and infra/ Terraform, never by hand, on any release track (CLAUDE.md rule 10)."
+  grep -Eq "${GCLOUD}secrets$FL[[:space:]]+versions$FL[[:space:]]+access([[:space:]]|$)" <<<"$1" \
+    && deny "Secret Manager values are never read by agents (CLAUDE.md rule 7). Ask the owner, or use the local .env."
+  # Git takes unambiguous prefixes of long options, so --for… (--force, --force-with-lease, --force-if-includes),
+  # --mi… (--mirror), --d… (--delete), --pru… (--prune) and --no-ve… (--no-verify) count as the full option.
+  # Force: -f alone or in combined short flags (-uf), --for…[=…], a +refspec.
+  grep -Eq "(^|[[:space:]])(-[[:alnum:]]*f[[:alnum:]]*|--for[-a-z]*(=[^[:space:]]*)?|[\"']?\\+[^[:space:]]+)([[:space:]]|$)" <<<"$(git_args push "$1")" \
+    && deny "No force pushes (--force, -f, --force-with-lease, --force-if-includes or a +refspec). Add a commit instead, or ask the owner."
+  return 0
+}
+cloud_rules "$cmd"
 push_args="$(git_args push)"
-grep -Eq "(^|[[:space:]])(-[[:alnum:]]*f[[:alnum:]]*|--for[-a-z]*(=[^[:space:]]*)?|[\"']?\\+[^[:space:]]+)([[:space:]]|$)" <<<"$push_args" \
-  && deny "No force pushes (--force, -f, --force-with-lease, --force-if-includes or a +refspec). Add a commit instead, or ask the owner."
 MAIN="[\"']?(refs/heads/)?(main|master)[\"']?"
 if grep -Eq '(^|[[:space:]])(--mi[a-z]*|--pru[a-z]*)([[:space:]]|$)' <<<"$push_args" \
   || grep -Eq "(^|[[:space:]])[\"']?:(refs/heads/)?(main|master)[\"']?([[:space:]]|$)" <<<"$push_args" \
@@ -100,54 +106,115 @@ grep -Eq "remote\.[^[:space:]]+\.(push|mirror)" <<<"$(git_args config)" \
 grep -Eq '(^|[[:space:]])(-[[:alnum:]]*f[[:alnum:]]*|--force)([[:space:]]|$)' <<<"$(git_args add)" \
   && deny "No git add -f/--force: ignored files (.env, *.tfvars, keys) stay out of the repo (CLAUDE.md rule 7). Ask the owner if a file really belongs in git."
 
-# The rest looks at what the shell runs: only for a commit, or a command that mentions setup or gcloud with its
-# quotes and backslashes removed (a cheap first check; the words can't hide behind quotes from it).
+# The rest looks at what the shell runs: only for a commit, or a command that mentions setup, gcloud, terraform or
+# push with its quotes and backslashes removed (a cheap first check; the words can't hide behind quotes from it).
 dq="$(tr -d "\"'\\\\" <<<"$cmd")"
-scan=0; case "$dq" in *setup*|*gcloud*) scan=1 ;; esac
+scan=0; case "$dq" in *setup*|*gcloud*|*terraform*|*push*) scan=1 ;; esac
+
+# A git alias set on the command line (-c alias.*, --config-env=alias.*, GIT_CONFIG_*) runs any command, unchecked.
+if grep -Eq -- '(^|[[:space:]])(-c[[:space:]]*|--config-env[=[:space:]]+)alias\.|GIT_CONFIG_KEY_[0-9]+=alias\.|GIT_CONFIG_PARAMETERS=.*alias\.' <<<"$dq" &&
+  grep -Eq 'commit|push|setup\.sh' <<<"$dq"; then
+  deny "No git alias set on the command line (-c alias.*, --config-env, GIT_CONFIG_*) with a commit, push or setup.sh: it runs unchecked. Run the real command."
+fi
+
 [ "$scan" = 1 ] || grep -Eq "$(git_sub commit)([[:space:]]|$)" <<<"$cmd" || exit 0
 
-# What the shell runs: the command without heredoc bodies (h), and h with the insides of quotes blanked (m, the
-# same length), so a message or a quoted argument can't pass for a command.
-# A heredoc starts at a << outside quotes that isn't a here-string (<<<); several on a line end in order.
-strip_heredocs() {
-  local line delims="" d tabs t tab=$'\t' q="" i n c rest re="^(-?)[[:space:]]*([\"']?)([A-Za-z_][A-Za-z0-9_]*)"
+# What the shell runs: the command without heredoc bodies (h; the bodies in body), and h with the insides of quotes
+# blanked (m, the same length), so a message or a quoted argument can't pass for a command.
+# A heredoc starts at a << in code: not in quotes, a comment, $((…)) or ${…}, and not a here-string (<<<). Its
+# delimiter is the next word with its quotes and backslashes removed; several on a line end in order. The context
+# (quotes, $(…), $((…)), ${…}) carries over lines; a heredoc body starts on the next line, even inside $(…).
+strip_heredocs() { # sets h and body
+  local line delims="" d tabs t tab=$'\t' nl=$'\n' st="" top i j n c c2 part out="" sq="'" dqc='"'
+  local sep='[[:space:];&|()]'
+  body=""
   while IFS= read -r line || [ -n "$line" ]; do
     if [ -n "$delims" ]; then
-      d="${delims%% *}"; tabs="${d%%:*}"; d="${d#*:}"
+      d="${delims%%"$nl"*}"; tabs="${d%%:*}"; d="${d#*:}"
       t="$line"; [ "$tabs" = 1 ] && t="${t#"${t%%[!$tab]*}"}"
-      [ "$t" = "$d" ] && delims="${delims#* }"
+      if [ "$t" = "$d" ]; then delims="${delims#*"$nl"}"; else body="$body$line$nl"; fi
       continue
     fi
-    printf '%s\n' "$line"
+    out="$out$line$nl"
     i=0; n=${#line}
     while [ "$i" -lt "$n" ]; do
-      c="${line:i:1}"
-      if [ -n "$q" ]; then
-        if [ "$c" = "$q" ]; then q=""; elif [ "$q" = '"' ] && [ "$c" = '\' ]; then i=$((i + 1)); fi
-      elif [ "$c" = "'" ] || [ "$c" = '"' ]; then q="$c"
-      elif [ "$c" = '\' ]; then i=$((i + 1))
-      elif [ "${line:i:2}" = '<<' ]; then
-        if [ "${line:i+2:1}" = '<' ]; then i=$((i + 2))
-        else
-          rest="${line:i+2}"
-          if [[ "$rest" =~ $re ]]; then
-            tabs=0; [ -n "${BASH_REMATCH[1]}" ] && tabs=1
-            delims="$delims$tabs:${BASH_REMATCH[3]} "
-          fi
-          i=$((i + 1))
-        fi
-      fi
+      c="${line:i:1}"; top="${st:${#st}-1:1}"
+      case "$top" in
+        S) [ "$c" = "'" ] && st="${st%?}" ;;
+        D)
+          if [ "$c" = '"' ]; then st="${st%?}"
+          elif [ "$c" = '\' ]; then i=$((i + 1))
+          elif [ "${line:i:3}" = '$((' ]; then st="${st}A"; i=$((i + 2))
+          elif [ "${line:i:2}" = '$(' ]; then st="${st}P"; i=$((i + 1))
+          elif [ "${line:i:2}" = '${' ]; then st="${st}B"; i=$((i + 1))
+          fi ;;
+        A|a)
+          if [ "$c" = '(' ]; then st="${st}a"
+          elif [ "$c" = ')' ]; then
+            st="${st%?}"; [ "$top" = A ] && [ "${line:i+1:1}" = ')' ] && i=$((i + 1))
+          fi ;;
+        B)
+          if [ "$c" = '}' ]; then st="${st%?}"
+          elif [ "$c" = "'" ]; then st="${st}S"
+          elif [ "$c" = '"' ]; then st="${st}D"
+          elif [ "$c" = '\' ]; then i=$((i + 1))
+          elif [ "${line:i:2}" = '${' ]; then st="${st}B"; i=$((i + 1))
+          fi ;;
+        *) # code: the top level, $(…) or (…)
+          if [ "$c" = '#' ] && { [ "$i" = 0 ] || [[ "${line:i-1:1}" =~ $sep ]]; }; then break
+          elif [ "$c" = "'" ]; then st="${st}S"
+          elif [ "$c" = '"' ]; then st="${st}D"
+          elif [ "$c" = '\' ]; then i=$((i + 1))
+          elif [ "${line:i:3}" = '$((' ]; then st="${st}A"; i=$((i + 2))
+          elif [ "${line:i:2}" = '$(' ]; then st="${st}P"; i=$((i + 1))
+          elif [ "${line:i:2}" = '${' ]; then st="${st}B"; i=$((i + 1))
+          elif [ "${line:i:2}" = '((' ]; then st="${st}A"; i=$((i + 1))
+          elif [ "$c" = '(' ]; then st="${st}Q"
+          elif [ "$c" = ')' ]; then case "$top" in P|Q) st="${st%?}" ;; esac
+          elif [ "${line:i:3}" = '<<<' ]; then i=$((i + 2))
+          elif [ "${line:i:2}" = '<<' ]; then
+            j=$((i + 2)); tabs=0
+            [ "${line:j:1}" = - ] && { tabs=1; j=$((j + 1)); }
+            while [ "${line:j:1}" = ' ' ] || [ "${line:j:1}" = "$tab" ]; do j=$((j + 1)); done
+            d=""
+            while [ "$j" -lt "$n" ]; do
+              c2="${line:j:1}"
+              case "$c2" in
+                ' '|"$tab"|';'|'&'|'|'|'<'|'>'|'('|')') break ;;
+                "'") part="${line:j+1}"; part="${part%%"$sq"*}"; d="$d$part"; j=$((j + ${#part} + 2)); continue ;;
+                '"') part="${line:j+1}"; part="${part%%"$dqc"*}"; d="$d$part"; j=$((j + ${#part} + 2)); continue ;;
+                '\') d="$d${line:j+1:1}"; j=$((j + 2)); continue ;;
+                *) d="$d$c2" ;;
+              esac
+              j=$((j + 1))
+            done
+            [ -n "$d" ] && delims="$delims$tabs:$d$nl"
+            i=$((j - 1))
+          fi ;;
+      esac
       i=$((i + 1))
     done
   done <<<"$1"
+  while [ "${out%"$nl"}" != "$out" ]; do out="${out%"$nl"}"; done
+  h="$out"
 }
-h="$(strip_heredocs "$cmd")"
+strip_heredocs "$cmd"
 m="$(perl -0777 -pe 's/"[^"]*"|\x27[^\x27]*\x27/my $q = $&; substr($q, 1, -1) =~ s|.|_|gs; $q/ge' <<<"$h")"
 
 B='(^|[[:space:];&|(/])' SH='(bash|sh|zsh|dash|ksh)([[:space:]]+-[[:alnum:]]+)*'
 
 # A command that runs another through a shell (bash/sh -c, a heredoc or pipe into a shell), eval or env -C.
 RUNS_SHELL="$B$SH[[:space:]]+-[[:alnum:]]*c[[:alnum:]]*([[:space:]]|$)|$B$SH[[:space:]]*(<|$|[;&|)])|${B}eval([[:space:]]|$)|${B}env([[:space:]]+(-[^[:space:]]*|[A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*))*[[:space:]]+(-C|--chdir)"
+
+INFRA_REFUSED="setup.sh infra and infra-push fetch the owner's config and workstation secrets: a person runs them in their own terminal, never an agent (ADR-0013, CLAUDE.md rule 7). Ask the owner."
+# A heredoc body line that would be refused as a command on its own is refused (fail closed: the scanner may
+# misjudge where a body ends). A message line that only mentions them passes.
+if [ -n "$body" ]; then
+  grep -Eq "^[[:space:]]*([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*git([[:space:]]+$GITOPT)*[[:space:]]+commit([[:space:]].*)?[[:space:]](--no-ve[a-z]*|-[aqsvuen]*n[aqsvuen]*[mFC]?)([[:space:]=\"']|$)" <<<"$body" \
+    && deny "a heredoc line is a git commit that skips checks (--no-verify, -n). Run the commit as its own command."
+  tr -d "\"'\\\\" <<<"$body" | grep -Eq '^[[:space:]]*([A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*[[:space:]]+)*((sudo|env|exec|command|time|nohup|nice|xargs|source|\.|timeout([[:space:]]+[0-9][^[:space:]]*)?)([[:space:]]+-[^[:space:]]+)*[[:space:]]+)*(([^[:space:]]*/)?(bash|sh|zsh|dash|ksh)([[:space:]]+-[^[:space:]]*)*[[:space:]]+)?([^[:space:]]*/)?setup\.sh[[:space:]]+(infra|infra-push|[^[:space:]]*\$)' \
+    && deny "a heredoc line runs setup.sh infra or infra-push. $INFRA_REFUSED"
+fi
 
 if [ "$scan" = 1 ]; then
   # h as the shell splits it: one simple command per line, each word with its quotes and backslashes removed and
@@ -172,24 +239,32 @@ if [ "$scan" = 1 ]; then
       push @seg, $w; }
     flush(); print "$_\n" for grep { length } @out;' <<<"$h")"
 
-  grep -Eq "${GCLOUD}secrets[[:space:]]+versions[[:space:]]+access([[:space:]]|$)" <<<"$words" \
-    && deny "Secret Manager values are never read by agents (CLAUDE.md rule 7). Ask the owner, or use the local .env."
+  cloud_rules "$words"
 
   # setup.sh infra / infra-push fetch the owner config and workstation secrets: a person runs them, never an agent
   # (task 112, ADR-0013; setup.sh also refuses CLAUDECODE=1, which a command can unset). Refused: setup.sh followed
   # by infra, infra-push or a word with a variable in any simple command (whatever runs it: a shell by any path,
-  # env, sudo, timeout, source, xargs, { ! ` then do else), except one that only reads files (git, grep, cat, …);
-  # and the words anywhere behind a shell wrapper or a command substitution. A quoted message is one word, so a
-  # commit, echo or grep mentioning them passes.
-  INFRA_REFUSED="setup.sh infra and infra-push fetch the owner's config and workstation secrets: a person runs them in their own terminal, never an agent (ADR-0013, CLAUDE.md rule 7). Ask the owner."
-  if { grep -Eq "$RUNS_SHELL" <<<"$m" || grep -Eq '`|\$\(' <<<"$cmd"; } &&
-    grep -Eq 'setup\.sh[[:space:]]+(infra(-push)?([^[:alnum:]_-]|$)|\$)' <<<"$dq"; then
+  # env, sudo, timeout, source, xargs, { ! ` then do else), except one that only reads files (grep, cat, …, and git
+  # builtins without -c or GIT_CONFIG_*: aliases run commands); and the words anywhere behind a shell wrapper or a
+  # command substitution (outside heredoc bodies). A quoted message is one word, so a commit, echo or grep
+  # mentioning them passes.
+  if { { grep -Eq "$RUNS_SHELL" <<<"$m" || grep -Eq "$RUNS_SHELL" <<<"$h"; } &&
+       grep -Eq 'setup\.sh[[:space:]]+(infra(-push)?([^[:alnum:]_-]|$)|\$)' <<<"$dq"; } ||
+     { grep -Eq '`|\$\(' <<<"$h" &&
+       tr -d "\"'\\\\" <<<"$h" | grep -Eq 'setup\.sh[[:space:]]+(infra(-push)?([^[:alnum:]_-]|$)|\$)'; }; then
     deny "$INFRA_REFUSED"
   fi
   while IFS= read -r seg; do
     case " $seg " in *" setup.sh "*|*"/setup.sh "*) ;; *) continue ;; esac
-    first="$(sed -E 's/^([A-Za-z_][A-Za-z0-9_]*=[^ ]* +)*//' <<<"$seg")"; first="${first%% *}"
-    case "$first" in git|grep|egrep|fgrep|rg|cat|head|tail|wc|ls|diff|stat|file|less|shellcheck) continue ;; esac
+    first="$(sed -E 's/^([A-Za-z_][A-Za-z0-9_]*=[^ ]* +)*//' <<<"$seg")"
+    case "${first%% *}" in
+      grep|egrep|fgrep|rg|cat|head|tail|wc|ls|diff|stat|file|shellcheck) continue ;;
+      git)
+        sub="${first#git }"; sub="${sub%% *}"
+        case "$seg" in *GIT_CONFIG*) ;; *)
+          case "$sub" in add|diff|log|show|status|grep|rm|mv|restore|checkout|switch|blame|ls-files|stash|reset|commit) continue ;; esac ;;
+        esac ;;
+    esac
     if grep -Eq '(^| )([^ ]*/)?setup\.sh +(infra|infra-push|[^ ]*[$`][^ ]*)( |$)' <<<"$seg" ||
       grep -Eq '(^| )xargs( |$)' <<<"$seg"; then
       deny "$INFRA_REFUSED"
