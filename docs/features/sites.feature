@@ -49,7 +49,7 @@ Feature: Sites
     And I press "Save site"
     Then I see the error "Site name is required"
 
-  @task:114
+  @task:114 @build
   Scenario: A site saved before the page has finished loading still opens
     Given my connection is so slow that pages haven't finished loading when I use them
     When I open the new site page for "Acme Ltd"
