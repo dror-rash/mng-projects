@@ -1,6 +1,6 @@
 # Task 114: Flaky `@poc` flow on the preview: the new site's heading doesn't show
 
-- **Status:** in-progress
+- **Status:** in-review
 - **Milestone:** unscheduled (test health; found on PR #103's preview)
 - **Zone / package:** `e2e` (steps), possibly `apps/dashboard` (`features/sites`) if a redirect is really lost
 - **Feature file:** `docs/features/poc-flow.feature` (behavior unchanged); `docs/features/sites.feature`, scenario "A site saved before the page has finished loading still opens" (new, guards the redirect fix)
