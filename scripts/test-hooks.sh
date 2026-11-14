@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Tests for .claude/hooks/guard.sh (tasks 067, 084). Run: bash scripts/test-hooks.sh (CI runs it in verify).
+# Tests for .claude/hooks/guard.sh (tasks 067, 084, 115). Run: bash scripts/test-hooks.sh (CI runs it in verify).
 # Each case feeds a PreToolUse JSON payload to the guard and checks: 0 = allowed, 2 = refused.
 # Cases on this repo count HEAD as "applied" (CI's checkout has no origin/main); set GUARD_BASE_REF to override.
 set -u
@@ -371,7 +371,9 @@ EOF
 # worktree, a repository sharing its git dir, or one with any of its remote URLs. A fake pnpm first on PATH records
 # whether it ran. The guard's repository is a fixture holding a committed copy of guard.sh, so these cases don't
 # depend on the checkout running them.
-GB="$(cd "$(mktemp -d)" && pwd -P)"; trap 'rm -rf "$LINK_DIR" "${BASE:-}" "$GB"' EXIT
+GB="$(mktemp -d)" || exit 1; GB="$(cd "$GB" && pwd -P)" || exit 1
+{ [ -d "$GB" ] && [ "$GB" != "$PWD" ]; } || { echo "bad temp dir: $GB" >&2; exit 1; }
+trap 'rm -rf "$LINK_DIR" "${BASE:-}" "$GB"' EXIT
 FAKEBIN="$GB/bin"; PNPM_LOG="$GB/pnpm.log"; mkdir -p "$FAKEBIN"
 cat > "$FAKEBIN/pnpm" <<'EOF'
 #!/bin/sh

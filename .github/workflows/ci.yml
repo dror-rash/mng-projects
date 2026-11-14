@@ -66,9 +66,11 @@ jobs:
       - run: bash infra/scripts/test-monitoring.sh
       # The workspace setup script (task 111): every environment path, with stubbed tools; installs nothing.
       - run: bash scripts/test-setup.sh
-      # The agents' guard hook (tasks 067, 084): refusals, look-alikes, commits in a second worktree.
+      # The agents' guard hook (tasks 067, 084, 115): refusals, look-alikes, commits in a second worktree, and the
+      # lint/typecheck gate only for this project's commits.
       - run: bash scripts/test-hooks.sh
-        # The script sets it per case too; kept here so no case can ever run lint/typecheck.
+        # The script sets it per case too. The task 115 gate cases unset it and put a fake pnpm first on PATH,
+        # so the real pnpm lint/typecheck never runs in this step.
         env:
           GUARD_SKIP_CHECKS: "1"
 
