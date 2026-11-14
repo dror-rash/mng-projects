@@ -3,7 +3,7 @@
 - **Status:** in-progress
 - **Milestone:** unscheduled (test health; found on PR #103's preview)
 - **Zone / package:** `e2e` (steps), possibly `apps/dashboard` (`features/sites`) if a redirect is really lost
-- **Feature file:** `docs/features/poc-flow.feature` (behavior unchanged)
+- **Feature file:** `docs/features/poc-flow.feature` (behavior unchanged); `docs/features/sites.feature`, scenario "A site saved before the page has finished loading still opens" (new, guards the redirect fix)
 - **Depends on:** nothing open. Related: task 066 (flaky task-assignees scenarios under local load; same `I press` wait).
 
 ## Why
@@ -59,6 +59,7 @@ Rule out each cause with evidence (logs, a reproduction, or a reasoned "can't ha
 - [ ] Locally, the `@poc` scenario passes `--repeat-each=10` under the load setup that reproduced the failure (or that was used to try to reproduce it).
 - [ ] No `retries`, no longer test or expect timeout as the only change, and no `@poc` scenario edited (CLAUDE.md: "flaky tests are bugs: fix or delete, never retry-and-ignore").
 - [ ] `pnpm test:e2e` stays green locally if a shared step (`I press`, `I fill in`, `pressAndWait`, `followLink`) changed.
+- [ ] A site saved from a page whose JavaScript hasn't run yet opens the new site's page with its heading, not a 404. Scenario: `sites.feature` "A site saved before the page has finished loading still opens" (fails without `redirectFromAction`, passes with it).
 
 ## Security notes
 Touches only e2e steps, and possibly the site action if a real app bug turns up. Reproducing against a preview creates throwaway accounts and records in `app_preview` (throwaway data, register SEC-40). Rate limits stay on (rule 13): one worker, existing sign-up pacing. Anything printed to the public CI log must not include passwords, cookies or invite tokens (open question 2). The `security-reviewer` runs only if the fix touches `features/sites/actions.ts`, `withAccess` or auth code, or adds diagnostics to `deploy.yml`.
@@ -68,6 +69,7 @@ Start with the job log and the Cloud Run logs for 11:51 UTC: a 5xx, a slow reque
 
 ## Test plan
 - Acceptance: the existing `@poc` scenario, repeated locally and on N preview runs; the full local suite if a shared step changes.
+- Acceptance (regression guard, reviewer's request): `sites.feature` "A site saved before the page has finished loading still opens" (`@task:114`). Its new step, "my connection is so slow that pages haven't finished loading when I use them", keeps the dashboard's JavaScript from running until after the form is submitted, so the save goes as a plain form post. Show it red with a plain `redirect()` in `createSiteAction`, green with `redirectFromAction`. A Next upgrade or a new action using `redirect()` directly then fails it instead of breaking silently.
 - Unit/component: none, unless an app bug is found (then a failing test for it first).
 - Storybook: none.
 
