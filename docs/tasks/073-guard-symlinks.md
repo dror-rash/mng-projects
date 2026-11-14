@@ -1,6 +1,6 @@
 # Task 073: The guard sees applied migrations through symlinked paths
 
-- **Status:** in-review
+- **Status:** done (PR #43)
 - **Milestone:** POC (2026-11-13), tooling
 - **Zone / package:** `.claude/hooks/guard.sh`, `scripts/test-hooks.sh`
 - **Feature file:** none (developer tooling, no user-visible behavior). Tested by `scripts/test-hooks.sh`.
@@ -24,6 +24,7 @@ The guard compares an edited file's path with `git rev-parse --show-toplevel`, w
 ## Progress log
 - 2026-11-04 – Started in lane 1.
 - 2026-11-04 – Red test, then the fix; `bash scripts/test-hooks.sh`: 30 passed, 0 failed.
+- 2026-11-14 – Status synced: merged in PR #43 (2026-11-04).
 
 ## Parking lot
 - none

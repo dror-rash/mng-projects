@@ -63,7 +63,7 @@ Owner decisions (2026-11-11):
 | M9 | Polish & Hardening | Open parking-lot items: members-page errors, invite hygiene, workspace settings, header, cross-workspace reads, request caching, indexes, test cleanup, SQL counts, dark mode, drag-and-drop, primary contact, chart tooltips (tasks 027–039) | done |
 | M12 | Partner Access | Admin / Auditor / Partner roles; partner companies with assigned customers; partners see only their own projects and customer names; enforced by SQL access functions and row-level security; project cancel/copy; soft delete everywhere (ADR-0006, tasks 046–052, plan `docs/superpowers/plans/2026-10-31-partner-access.md`) | done |
 | M13 | Sites & Field Data | Customers get sub-companies (one level); physical sites with on-site contacts; every project has a site; a Worker role for internal technicians; site visits, photos and files, admin-built reading forms, uploaded and generated reports; offline capture with sync and no data loss; partners and workers see their projects' sites (amends ADR-0004 and ADR-0006; ADR-0008, ADR-0009 offline; design `docs/superpowers/specs/2026-11-02-sites-and-field-data-design.md`, proposed tasks 053–065) | in progress |
-| POC | POC, deployed (2026-11-13) | One flow from customer to report on the public `run.app` URL: agent team (067), first GCP deploy (068, M11), M13 tasks 056–061 and 064, the dashboard as home with a short menu (070), every project under a customer and site in the database (071), customer → site → project pages (072), end-to-end `@poc` scenario (069), demo data on the deployed app (076). Out: offline capture (062–063), generated PDF (065), custom domain. ADR-0010 | in progress |
+| POC | POC, deployed (2026-11-13) | One flow from customer to report on the public `run.app` URL: agent team (067), first GCP deploy (068, M11), M13 tasks 056–061 and 064, the dashboard as home with a short menu (070), every project under a customer and site in the database (071), customer → site → project pages (072), end-to-end `@poc` scenario (069), demo data on the deployed app (076). Out: offline capture (062–063), generated PDF (065), custom domain. ADR-0010 | done (deployed with demo data) |
 | M14 | Hebrew and English | Every screen in Hebrew (right to left) and English; each user switches, the choice is saved per user; dates and numbers by language; a Hebrew font (ADR-0011, tasks 094–100, `language.feature`). Foundation 094–096 first; translating the existing screens (097–100) runs in parallel with M15 | in progress |
 | M15 | Pipeline and communications | Project stages from Inquiry to Closed with history, project types (work, expert opinion, arbitration), a hand-kept communication log with follow-ups, new inquiries in one form, work orders from authorised contacts with payment terms and the order document, a project and customer timeline. Commercial records are seen by admins and auditors only (ADR-0012, tasks 101–108). Flow steps 1, 4, 11, 12 | planned |
 | M16 | Quotes | Quote lines (materials and labour) with cost and price, versions, totals with VAT, a quote document in Hebrew or English (PDF), status and follow-up (sent, accepted, rejected). Needs a money ADR (amounts, ILS, VAT) and a PDF ADR (Hebrew right to left; reused by task 065). Prices and costs follow ADR-0012: admins see and change them, auditors read, workers and partners never see them. Flow steps 2, 3 | not drafted |
@@ -74,25 +74,19 @@ Owner decisions (2026-11-11):
 | Later | External services | Sending from the app by email (provider and custom domain; also SEC-09), capturing emails, WhatsApp Business, Israeli e-invoicing (Tax Authority allocation numbers), e-signature. Each needs an ADR | not drafted |
 
 ## Current milestone
-**POC, due 2026-11-13** (owner, 2026-11-02): deployed on GCP, demo data only, no custom domain. Order:
-1. Task 067 agent team (ADR-0010): agents, hooks, lanes.
-2. In parallel lanes:
-   - 068 first GCP deploy (M11) (done: PR #46, `main` deployed 2026-11-05);
-   - M13 056 worker role → 058 site visits → 059 photos;
-   - 057 storage → 060 form templates → 061 readings → 064 uploaded reports;
-   - 070 home and menu, in parallel with 071 hierarchy in the database (then `reset:local` and `seed:demo` locally) → 072 hierarchy pages (owner, 2026-11-04; all three done: PRs #41, #42, #44).
-3. 069: the `@poc` flow against the deployed preview, walking customer → site → project (after 070–072).
-4. 076: demo data on the deployed app (split from 069): a `seed:demo --deploy` step in the `main` deploy, no files in the seed (owner, 2026-11-07), `DEMO_EMAIL` a repository secret; ready.
+**M14 Hebrew and English, then M15** (owner, 2026-11-11). The POC is done: deployed on GCP with demo data (tasks 067–072, 076, M13's 056–061 and 064). M13 tasks 062, 063 and 065 continue alongside.
 
-M13 tasks 062, 063 and 065 continue after the POC.
+**State on 2026-11-14:**
+- Done since the POC: the P1 security tasks (074, 081, 083, 085–092; owner applies for 091 and 092 done, budget in ILS); 094 language switch (PR #95); 110's preview database rebuild (previews work again); 111–113 workspace setup (`scripts/setup.sh`, `setup.sh infra`, the no-Docker fallback; ADR-0013; the owner's config is in the state bucket); 114 the flaky `@poc` failure (a real redirect bug, PR #106).
+- Left outside the milestones: 109 drop the runtime's transition grants (owner applies, by 2026-11-19); 110's prevention (default B: a divergence check in the preview deploy); task 085's hand check on real Cloud Storage (a 21 MB upload is refused); 066 flaky task-assignees under local load; SEC-09 and SEC-13 (owner decisions).
 
-**Next, after the POC (owner, 2026-11-11):**
-1. M14 foundation: 094 language switch, then 095 (saved per user) and 096 (right-to-left layout) in parallel. ADR-0011 must be accepted first.
+**Order (owner, 2026-11-11):**
+1. M14 foundation: 094 language switch (done), then 095 (saved per user) and 096 (right-to-left layout) in parallel.
 2. M15 from 094 on, so new screens are bilingual from the start: 101 stages first (ADR-0012 accepted first). Then:
    - 102 type and 103 communications in parallel;
    - then 104 follow-ups, 105 new inquiry and 106 work order;
    - then 107 order document and 108 timeline.
-3. Alongside M15, in other lanes: M14's 097–100 (translating the existing screens), M13's 062, 063 and 065. The P1 security tasks (074, 081, 083, 085–092) are all merged (2026-11-12). Left: 110 rebuild the shared preview database (owner Terraform; previews are blocked until then), then task 085's hand check on real Cloud Storage; 109 drop the runtime's transition grants (owner applies, by 2026-11-19); the owner's applies for 091 and 092; SEC-09 and SEC-13 (owner decisions).
+3. Alongside M15, in other lanes: M14's 097–100 (translating the existing screens), M13's 062, 063 and 065.
 4. Then M16–M20 in that order, unless the owner reorders. M17's handover and delivery tracking need no new ADR and can run in a lane alongside M16.
 
 ## Risks & open questions
@@ -203,3 +197,4 @@ M13 tasks 062, 063 and 065 continue after the POC.
 - 2026-11-14 – Task 112 in review: `setup.sh infra` pulls the owner config from the state bucket (bucket ownership checked, sha256 per file so a second machine updates cleanly), fetches workstation secrets listed in `infra/workstation-secrets.list` (`.env.<name>` only), runs `terraform init`; `setup.sh infra-push` stores changed files with generation preconditions. The guard refuses agents running either, and no longer misses heredoc, quoted-verb or git-alias spellings. QA PASS; security re-reviews closed.
 - 2026-11-14 – Drafted task 114: the @poc flow failed once on PR #103's preview at the "Dizengoff store" heading and passed on re-run; flaky tests are bugs.
 - 2026-11-14 – Task 114 in review: the flaky `@poc` failure was a real bug: a server action's redirect from a form posted before hydration dropped the `/dashboard` basePath (404 after saving). `redirectFromAction` on all 27 action redirects; a `@build` regression scenario (production builds only); failure diagnostics in preview logs. Acceptance: 5 consecutive green preview runs on its PR.
+- 2026-11-14 – Synced the plan and task files with what is merged: POC done; "Current milestone" now M14 then M15 with the state on 2026-11-14; tasks 067 and 073 (merged long ago), 112, 113 and 114 set to done; 110 stays in progress for its prevention only.

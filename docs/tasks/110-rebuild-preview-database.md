@@ -29,10 +29,10 @@ Every PR preview deploy stops at the runtime role check, so no PR gets a preview
 - Task 085's hand check itself (it stays in task 085).
 
 ## Acceptance criteria
-- [ ] `terraform plan` for step 1 shows only the `app_preview` replacement (output in the PR).
-- [ ] The `main` deploy after it provisions the preview logins with no skipped-step warning.
-- [ ] A PR's preview deploy passes its migration, the runtime role check and `@smoke`.
-- [ ] `infra/README.md` has the rebuild runbook.
+- [x] `terraform plan` for step 1 shows only the `app_preview` replacement (output in the PR).
+- [x] The `main` deploy after it provisions the preview logins with no skipped-step warning.
+- [x] A PR's preview deploy passes its migration, the runtime role check and `@smoke`.
+- [x] `infra/README.md` has the rebuild runbook.
 - [ ] The prevention the owner chose in question 1 is written down (and, for option B or C, checked by a test).
 
 ## Security notes
@@ -57,6 +57,7 @@ Owner steps 1–3, then the runbook and the chosen prevention. No ADR for the re
 ## Progress log
 - 2026-11-12 – Drafted at the P1 wrap-up: previews stop at the runtime role check since tasks 088's and 087's drafts ran on `app_preview` as `0040`.
 - 2026-11-14 – Owner rebuilt `app_preview` (targeted plan 1/0/1). `main` Deploy re-run (43560341783, attempt 2): "Preview side ok: app_preview's schema grant made, preview logins verified." Runbook added to `infra/README.md`; this PR's preview deploy is the step-3 check. Question 1: default B, as a follow-up task.
+- 2026-11-14 – Steps 1–4 done: the owner's targeted plan was 1 to add, 0 to change, 1 to destroy (pasted in the session; applied); `main` Deploy re-run 43560341783 printed "Preview side ok"; PR #97's preview passed migrations, the role check and `@smoke`/`@poc` 4/4; runbook in `infra/README.md` (PR #97). Left: question 1's prevention (default B: a divergence check in the preview deploy), so the task stays in progress.
 
 ## Parking lot
 - (none yet)

@@ -1,6 +1,6 @@
 # Task 113: Local database and file storage without Docker (setup fallback for sandboxes)
 
-- **Status:** in-review
+- **Status:** done (PR #101)
 - **Milestone:** cross-cutting (tooling)
 - **Zone / package:** `scripts/setup.sh` (the sandbox path and a `services` subcommand), `scripts/test-setup.sh`, `README.md` (one line under Quick start). Commits `test:` → `feat(scripts):` → `docs:`.
 - **Feature file:** none (no app behavior; `scripts/test-setup.sh` is the check)
@@ -214,6 +214,7 @@ helper in `test-setup.sh`. No ADR.
     `--stop` leaves the sleep running), root symlink refusal, never `runuser` when not root, an emulator that exits at
     once, Postgres that doesn't start, `--locale-provider=icu`, "names only Postgres" via `file storage:`.
 - 2026-11-14 – Re-review and QA passed. Two more, test-first (red 305 passed / 6 failed):
+- 2026-11-14 – Merged as PR #101.
   - INF-4: as root, `as_pg` clears the environment (`/usr/bin/env -i PATH=/usr/bin:/bin LANG=C.UTF-8`). Tested with
     a marker variable that initdb and the server stub never see.
   - INF-5: `pid_is` matches the exact paths `"$GCS_BIN "` and `"$PG_BIN/postgres "`. Tested with a fake-gcs-server

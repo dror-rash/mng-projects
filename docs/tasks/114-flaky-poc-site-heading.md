@@ -1,6 +1,6 @@
 # Task 114: Flaky `@poc` flow on the preview: the new site's heading doesn't show
 
-- **Status:** in-review
+- **Status:** done (PR #106)
 - **Milestone:** unscheduled (test health; found on PR #103's preview)
 - **Zone / package:** `e2e` (steps), possibly `apps/dashboard` (`features/sites`) if a redirect is really lost
 - **Feature file:** `docs/features/poc-flow.feature` (behavior unchanged); `docs/features/sites.feature`, scenario "A site saved before the page has finished loading still opens" (new, guards the redirect fix)
@@ -54,12 +54,12 @@ Rule out each cause with evidence (logs, a reproduction, or a reasoned "can't ha
 - Task 066's local task-assignees flakiness, unless the same fix covers it (then note it there).
 
 ## Acceptance criteria
-- [ ] The task records the cause found, with its evidence (log lines, a trace from a local reproduction, or a reasoned elimination of each cause above).
-- [ ] With the fix, the `@poc` scenario passes N consecutive PR preview **Deploy** runs (N from open question 1; proposed 5), counting re-runs of the same run, with no failure in between.
-- [ ] Locally, the `@poc` scenario passes `--repeat-each=10` under the load setup that reproduced the failure (or that was used to try to reproduce it).
-- [ ] No `retries`, no longer test or expect timeout as the only change, and no `@poc` scenario edited (CLAUDE.md: "flaky tests are bugs: fix or delete, never retry-and-ignore").
-- [ ] `pnpm test:e2e` stays green locally if a shared step (`I press`, `I fill in`, `pressAndWait`, `followLink`) changed.
-- [ ] A site saved from a page whose JavaScript hasn't run yet opens the new site's page with its heading, not a 404. Scenario: `sites.feature` "A site saved before the page has finished loading still opens" (fails without `redirectFromAction`, passes with it).
+- [x] The task records the cause found, with its evidence (log lines, a trace from a local reproduction, or a reasoned elimination of each cause above).
+- [x] With the fix, the `@poc` scenario passes N consecutive PR preview **Deploy** runs (N from open question 1; proposed 5), counting re-runs of the same run, with no failure in between.
+- [x] Locally, the `@poc` scenario passes `--repeat-each=10` under the load setup that reproduced the failure (or that was used to try to reproduce it).
+- [x] No `retries`, no longer test or expect timeout as the only change, and no `@poc` scenario edited (CLAUDE.md: "flaky tests are bugs: fix or delete, never retry-and-ignore").
+- [x] `pnpm test:e2e` stays green locally if a shared step (`I press`, `I fill in`, `pressAndWait`, `followLink`) changed.
+- [x] A site saved from a page whose JavaScript hasn't run yet opens the new site's page with its heading, not a 404. Scenario: `sites.feature` "A site saved before the page has finished loading still opens" (fails without `redirectFromAction`, passes with it).
 
 ## Security notes
 Touches only e2e steps, and possibly the site action if a real app bug turns up. Reproducing against a preview creates throwaway accounts and records in `app_preview` (throwaway data, register SEC-40). Rate limits stay on (rule 13): one worker, existing sign-up pacing. Anything printed to the public CI log must not include passwords, cookies or invite tokens (open question 2). The `security-reviewer` runs only if the fix touches `features/sites/actions.ts`, `withAccess` or auth code, or adds diagnostics to `deploy.yml`.
@@ -90,6 +90,7 @@ Start with the job log and the Cloud Run logs for 11:51 UTC: a 5xx, a slow reque
 - 2026-11-14 – Review follow-ups (access and security: no findings; reviewer confirmed the diagnosis against Next's source). The diagnostics now also redact an invite link inside a query value (`/login?next=%2Fdashboard%2Finvite%2F<token>`, from `requireSession`'s login redirect) and give up after 2 s so a hung page can't hold up the teardown; `withBasePath(path)` (`features/navigation/base-path.ts`) is shared by `redirectFromAction` and `requireSession`; the call-site count is 27, not 25; SEC-09's notes say the diagnostics must redact reset and verification token paths once those exist. Rerun: dashboard unit 459, e2e harness 18, full e2e 334 passed (production build), lint and typecheck clean.
 - 2026-11-14 – Regression scenario automated (`sites.feature` "A site saved before the page has finished loading still opens", `@wip` removed). Its new step refuses the dashboard's scripts (`/dashboard/_next/static/**`) for the rest of the scenario, so the save is a plain form post. Production build, lane 1: red with a plain `redirect()` in `createSiteAction` (temporary, reverted): `POST 303 /dashboard/sites/new?customer=… → Location: /sites/<id>`, then `GET 404 /sites/<id>`, failing at `Then I see the heading "Haifa warehouse"`; green with `redirectFromAction`, 5/5 with `--repeat-each=5`; full suite 335 passed. **Open:** under `next dev --turbopack` (the local default for `pnpm test:e2e`) the plain form post fails with a 500 (`TypeError: Cannot read properties of undefined (reading 'bind')`, page `/sites/new`) whichever redirect the action uses, so this scenario fails in dev mode and passes only against a build (`CI=1`).
 - 2026-11-14 – The spec-writer's scenario "A site saved before the page has finished loading" (`sites.feature`) can't run on dev servers (`next dev` answers a form posted without JavaScript with a 500, with or without the fix), so it carries `@build`: against dev servers the default filter is `not @wip and not @build`, CI's `start` servers run it (`e2e/playwright.config.ts`; WORKFLOW.md, ARCHITECTURE.md). `CI=1 pnpm test:e2e` on the production build: 335 passed, the `@build` scenario included. Dev-mode `pnpm test:e2e`: the scenario is excluded, but 42 of 334 failed with 30 s test timeouts and aborted requests at a load average of 18–22 on 8 cores (a 23-minute run). That load isn't this task's doing: `readings.feature` on `main`'s dashboard code failed the same way (5 of 12), and with 2 workers `readings` and `project-hierarchy` passed 17/17 on this branch (task 066's local-load flakiness).
+- 2026-11-14 – Merged as PR #106. Preview Deploy run 43605855665: attempts 1–5 all green (`@smoke` and `@poc` 4/4 each). No shared step changed, so the local-suite criterion holds trivially (full e2e on a production build: 335 passed).
 
 ## Open questions
 1. How many consecutive green preview runs of the `@poc` scenario count as fixed? This draft proposes 5, the count task 066 used. **Answer:** 5 (the default; the owner didn't object, 2026-11-14).
