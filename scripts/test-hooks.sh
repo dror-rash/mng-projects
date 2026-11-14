@@ -445,6 +445,36 @@ gate 2 0 "refuses a commit behind bash -c in another repository"       "bash -c 
 gate 2 0 "refuses an unresolvable cd to another repository"            "cd \"\$X\" && $D" "$GP"
 gate 2 0 "refuses GIT_COMMON_DIR= pointing at the project from another repository" "cd '$OTHER' && GIT_COMMON_DIR='$GP/.git' $D" "$GP"
 gate 2 0 "refuses export GIT_COMMON_DIR= before a commit"              "export GIT_COMMON_DIR='$GP/.git'; $D" "$OTHER"
+# Before a commit only a leading literal cd and git add may run (security review SUP-1): anything else could point
+# the commit at this project behind the guard's back
+ln -s "$OTHER" "$GB/olink"
+for c in "export \"GIT_DIR=$GP/.git\" && $D" "export GIT_D''IR='$GP/.git'; $D" "export GIT_\\DIR=$GP/.git; $D" \
+  "V=GIT_DIR; export \$V=$GP/.git; $D" ". '$GB/env.sh' && $D" "source '$GB/env.sh'; $D" \
+  "declare -x \"GIT_COMMON_DIR=$GP/.git\"; $D" "typeset -x GIT_DIR=$GP/.git; $D" "FOO=1; $D" \
+  "ln -sfn '$GP' '$GB/olink' && git -C '$GB/olink' commit -m 'docs: x'" "rm -rf .git && ln -s '$GP/.git' .git && $D" \
+  "mv .git .old && $D" "(export GIT_DIR=$GP/.git); $D" "git add -A && export GIT_DIR=$GP/.git && $D" \
+  "env \"GIT_DIR=$GP/.git\" $D" "env GIT_D''IR=$GP/.git $D" "git add \$(ln -s a b) && $D" "git add \"\$(id)\" && $D" \
+  "git add x > .git/HEAD && $D" "git add x | true; $D" "true && $D" "/usr/bin/env GIT_DIR=$GP/.git $D"; do
+  gate 2 0 "refuses before a commit: $c"                               "$c" "$OTHER"
+done
+gate 2 0 "refuses git add through lane.sh exec before a commit"        "scripts/lane.sh exec 3 -- git add -A && $D" "$GP"
+# ... and the usual flows still pass
+MSGH="git commit -m \"\$(cat <<'EOF'
+docs: x
+
+Body; export GIT_DIR=y, ln -s, source z.
+
+Co-Authored-By: x <x@example.com>
+EOF
+)\""
+gate 0 0 "allows cd <other> && git add && git commit"                  "cd '$OTHER' && git add README.md && $D" "$GP"
+gate 0 0 "allows cd <other> && git add && a heredoc message"           "cd '$OTHER' && git add -A && $MSGH" "$GP"
+gate 0 0 "allows cd <other> && a heredoc message"                      "cd '$OTHER' && $MSGH" "$GP"
+gate 0 0 "allows git -C <other> add && git -C <other> commit"          "git -C '$OTHER' add -A && git -C '$OTHER' commit -m 'docs: x'" "$GP"
+gate 0 0 "allows git add a b;git commit"                               "git add a b;$D" "$OTHER"
+gate 0 0 "allows env with a variable before git commit"                "env FOO=1 $D" "$OTHER"
+gate 0 1 "runs lint for cd <project> && git add && a heredoc message"  "cd '$GP' && git add -A && $MSGH" "$OTHER"
+
 # Fail closed: a guard that can't tell its own repository runs the gate
 gate 2 1 "runs lint when the guard isn't in a repository"              "$D" "$OTHER" 1 "$NOREPO/guard.sh"
 gate 0 1 "allows that commit when lint passes"                         "$D" "$OTHER" 0 "$NOREPO/guard.sh"
