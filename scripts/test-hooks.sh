@@ -465,6 +465,20 @@ for c in "export \"GIT_DIR=$GP/.git\" && $D" "export GIT_D''IR='$GP/.git'; $D" "
   gate 2 0 "refuses before a commit: $c"                               "$c" "$OTHER"
 done
 gate 2 0 "refuses git add through lane.sh exec before a commit"        "scripts/lane.sh exec 3 -- git add -A && $D" "$GP"
+# After lane.sh exec the commit must be the exec's own command: one chained after it runs in the cwd, not the lane
+for c in "scripts/lane.sh exec 3 -- true && $D" "scripts/lane.sh exec 3 -- true; $D" "scripts/lane.sh exec 3 -- pnpm lint && $D" \
+  "scripts/lane.sh exec 3 --
+$D" "scripts/lane.sh exec 3 -- FOO=1
+$D" "scripts/lane.sh exec 3 -- env
+$D" "FOO=1
+$D" "pnpm lint && $D"; do
+  gate 2 0 "refuses a commit chained after: $(printf '%s' "$c" | tr '\n' '/')" "$c" "$GP"
+done
+gate 2 1 "runs lint for lane.sh exec -- env FOO=1 git commit"          "scripts/lane.sh exec 3 -- env FOO=1 $D" "$GP" 1
+gate 2 1 "runs lint for lane.sh exec -- a heredoc message"             "scripts/lane.sh exec 3 -- git commit -m \"\$(cat <<'EOF'
+docs: x
+EOF
+)\"" "$GP" 1
 # ... and the usual flows still pass
 MSGH="git commit -m \"\$(cat <<'EOF'
 docs: x
