@@ -87,6 +87,29 @@ expect 0 "allows grep for setup.sh infra, quoted"       Bash "$(bash_ "grep -n '
 expect 0 "allows grep for setup.sh infra, unquoted"     Bash "$(bash_ "grep -rn setup.sh infra")"
 expect 0 "allows a commit message about setup.sh infra" Bash "$(bash_ "git commit -m 'docs: setup.sh infra and setup.sh infra-push'")"
 expect 0 "allows echo of setup.sh infra"                Bash "$(bash_ "echo \"run bash scripts/setup.sh infra\"")"
+# ... in every common spelling (security review SUP-1)
+for c in "/bin/bash scripts/setup.sh infra" "/usr/bin/env bash scripts/setup.sh infra" "bash -- scripts/setup.sh infra" \
+  "bash scripts/setup.sh>/dev/null infra" "bash scripts/setup.sh 2>&1 infra-push" "bash scripts/setup.sh </dev/null infra" \
+  "bash scripts/setup.sh 'infra'" "bash scripts/setup.sh \"infra-push\"" "bash scripts/setup.sh \\infra" \
+  "bash scripts/setup.sh in''fra" "bash \"scripts/setup.sh\" infra" "bash scripts/set'up'.sh infra" \
+  "{ bash scripts/setup.sh infra; }" "! bash scripts/setup.sh infra" "echo \`bash scripts/setup.sh infra\`" \
+  "x=\$(bash scripts/setup.sh infra)" "if true; then bash scripts/setup.sh infra; fi" \
+  "for i in 1; do bash scripts/setup.sh infra; done" "if false; then :; else bash scripts/setup.sh infra; fi" \
+  "timeout 600 bash scripts/setup.sh infra" "xargs bash scripts/setup.sh infra </dev/null" \
+  "echo infra | xargs bash scripts/setup.sh" "source scripts/setup.sh infra" ". scripts/setup.sh infra" \
+  "bash scripts/setup.sh \"\$SUB\"" "S=infra; bash scripts/setup.sh \$S" "bash scripts/setup.sh \${S}"; do
+  expect 2 "refuses: $c"                                Bash "$(bash_ "$c")"
+done
+expect 0 "allows git add of setup.sh and infra/"        Bash "$(bash_ "git add scripts/setup.sh infra")"
+expect 0 "allows ls of setup.sh and infra/"             Bash "$(bash_ "ls -l scripts/setup.sh infra")"
+expect 0 "allows grep for infra in setup.sh"            Bash "$(bash_ "grep -n infra scripts/setup.sh")"
+expect 0 "allows setup.sh services --yes"               Bash "$(bash_ "bash scripts/setup.sh services --yes")"
+expect 0 "allows sed on setup.sh and infra/README.md"   Bash "$(bash_ "sed -n 1,5p scripts/setup.sh infra/README.md")"
+# Reading a Secret Manager value with the words quoted or escaped
+for c in "gcloud secrets versions \"access\" latest --secret=x" "gcloud 'secrets' versions access latest --secret=x" \
+  "gcloud secrets versions acc\\ess latest --secret=x" "g''cloud secrets versions access latest --secret=x"; do
+  expect 2 "refuses: $c"                                Bash "$(bash_ "$c")"
+done
 
 # Force pushes in every spelling
 expect 2 "refuses a +refspec push"                      Bash "$(bash_ "git push origin +main")"
@@ -153,6 +176,13 @@ expect 2 "refuses -n in combined short flags"           Bash "$(bash_ "git commi
 expect 2 "refuses -n in combined short flags -anm"      Bash "$(bash_ "git commit -anm 'docs: x'")"
 expect 0 "allows -n after a ; inside a message"         Bash "$(bash_ "git commit -m 'docs: a; b -n c'")"
 expect 2 "refuses a --no-verify prefix"                 Bash "$(bash_ "git commit --no-ve -m 'docs: x'")"
+# A here-string or a quoted "<<EOF" isn't a heredoc: the lines after it still count (security review SUP-2)
+expect 2 "refuses --no-verify after a here-string <<<EOF" Bash "$(bash_ "cat <<<EOF
+git commit --no-verify -m 'docs: x'")"
+expect 2 "refuses --no-verify after a quoted \"<<EOF\""  Bash "$(bash_ "echo \"<<EOF\"
+git commit --no-verify -m 'docs: x'")"
+expect 2 "refuses --no-verify after a quoted '<<EOF'"    Bash "$(bash_ "echo '<<EOF'
+git commit --no-verify -m 'docs: x'")"
 expect 0 "allows -main in a message"                    Bash "$(bash_ "git commit -m \"docs: the -main flag\"")"
 expect 0 "allows -only and -config in a message"        Bash "$(bash_ "git commit -m 'docs: -only and -config'")"
 
