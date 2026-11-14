@@ -3,6 +3,8 @@
 # Exit 2 refuses the tool call; stderr goes back to the agent as the reason.
 # Env: GUARD_BASE_REF (default origin/main): what counts as "applied" for migrations.
 #      GUARD_SKIP_CHECKS=1 skips lint/typecheck on commit (tests only).
+# The lint/typecheck gate runs only for commits in this project (task 115): the main checkout, a lane worktree, or a
+# repository with one of its remote URLs. Commits in other repositories get every other check.
 set -uo pipefail
 
 input="$(cat)"
@@ -328,8 +330,8 @@ commit_repo() { # sets root, or refuses
   mseg="$(grep -Eo "$(git_sub commit)" <<<"$mrest" | head -1)"
   prefix="${mrest%%"$mseg"*}"
   seg="${rest:${#prefix}:${#mseg}}"
-  if grep -Eq '(^|[[:space:];&|(`{])(cd|pushd|popd)([[:space:];&|)]|$)|(^|[^[:alnum:]_])GIT_(DIR|WORK_TREE)=|lane\.sh[[:space:]]+exec' <<<"$prefix"; then
-    unresolved "a cd, pushd, GIT_DIR or lane.sh exec that isn't at the start of the command"
+  if grep -Eq '(^|[[:space:];&|(`{])(cd|pushd|popd)([[:space:];&|)]|$)|(^|[^[:alnum:]_])GIT_(DIR|WORK_TREE|COMMON_DIR)=|lane\.sh[[:space:]]+exec' <<<"$prefix"; then
+    unresolved "a cd, pushd, GIT_DIR, GIT_WORK_TREE, GIT_COMMON_DIR or lane.sh exec that isn't at the start of the command"
   fi
   grep -Eq -- '--(git-dir|work-tree)' <<<"$seg" && unresolved "--git-dir/--work-tree"
   local c_re="(^|[[:space:]])-C[[:space:]]+$WORD(.*)$"
@@ -366,7 +368,33 @@ if { git -C "$root" diff --cached -U0 -- apps; if [ "$staging" = 1 ]; then git -
   deny "the commit adds a drizzle-orm import under apps/. Import query operators from @repo/db (CLAUDE.md rule 12)."
 fi
 
-if [ "${GUARD_SKIP_CHECKS:-}" != 1 ]; then
+# Is the commit's repository this project? Decided by git's own resolution, never by a name or path from the command:
+# the same git common dir as the repository holding this script (main checkout, lane worktrees, a .git file or link
+# into it), or any remote URL in common with it. Fails closed: when either common dir is unknown, it is this project.
+common_of() { # dir: its git common dir, canonical
+  local c; c="$(git -C "$1" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" && [ -n "$c" ] &&
+    (cd "$c" 2>/dev/null && pwd -P)
+}
+normalize_url() { # lowercase; no scheme, user@, trailing / or .git; host:path as host/path
+  tr '[:upper:]' '[:lower:]' | sed -E 's#^[a-z0-9+.-]+://##; s#^[^@/]*@##; s#^([^/:]+):#\1/#; s#/+$##; s#\.git$##; s#/+$##'
+}
+remote_urls() { # dir: every fetch and push URL of every remote, normalized, one per line
+  local r
+  git -C "$1" remote 2>/dev/null | while IFS= read -r r; do
+    git -C "$1" remote get-url --all "$r" 2>/dev/null; git -C "$1" remote get-url --push --all "$r" 2>/dev/null
+  done | normalize_url | grep -v '^$' | sort -u
+}
+is_this_project() { # root of the commit's repository
+  local here mine theirs ours
+  here="$(cd "$(dirname "${BASH_SOURCE[0]}")" 2>/dev/null && pwd -P)" || return 0
+  mine="$(common_of "$here")" || return 0
+  theirs="$(common_of "$1")" || return 0
+  [ "$mine" = "$theirs" ] && return 0
+  ours="$(remote_urls "$here")"; [ -n "$ours" ] || return 1
+  grep -Fqx -- "$ours" <<<"$(remote_urls "$1")" # a variable, not a pipe: grep -q exiting early + pipefail
+}
+
+if [ "${GUARD_SKIP_CHECKS:-}" != 1 ] && is_this_project "$root"; then
   if ! out="$(cd "$root" && pnpm -s lint 2>&1 && pnpm -s typecheck 2>&1)"; then
     deny "pnpm lint && pnpm typecheck must pass before any commit. Last lines:
 $(tail -n 30 <<<"$out")"
