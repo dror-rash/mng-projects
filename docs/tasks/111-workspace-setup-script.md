@@ -94,26 +94,26 @@ Checked by `scripts/test-setup.sh`: a temporary clone and stubs on `PATH` that r
 environment comes from the stubbed `uname`, environment variables and a test `/proc/version` path.
 
 Part A: one per environment path
-- [ ] **macOS** with jq and Docker missing, `--yes`: runs `brew install jq` and the Docker Desktop cask, then the
+- [x] **macOS** with jq and Docker missing, `--yes`: runs `brew install jq` and the Docker Desktop cask, then the
       remaining steps. With Homebrew missing and `--yes`, it still asks before installing Homebrew; declining
       installs nothing and exits 1 with the install command.
-- [ ] **Linux** (also with `CODESPACES=true`) with jq missing, `--yes`: runs `sudo apt-get install -y jq` (no
+- [x] **Linux** (also with `CODESPACES=true`) with jq missing, `--yes`: runs `sudo apt-get install -y jq` (no
       `sudo` when root), then the remaining steps.
-- [ ] **Cloud Shell** (`CLOUD_SHELL=true`) with every tool present and nvm on the wrong Node: runs only
+- [x] **Cloud Shell** (`CLOUD_SHELL=true`) with every tool present and nvm on the wrong Node: runs only
       `nvm install` / `nvm use` for the `.nvmrc` version, no apt or brew.
-- [ ] **WSL** with Docker not reachable: installs no `docker.io`, prints the WSL-integration fix naming the distro,
+- [x] **WSL** with Docker not reachable: installs no `docker.io`, prints the WSL-integration fix naming the distro,
       exits 1; with `--no-docker` it finishes with exit 0.
-- [ ] **Windows outside WSL** (`uname` = `MINGW64_NT-…`): prints the WSL2 instruction, exits 1, changes nothing.
-- [ ] **Sandbox without Docker** (Linux, not WSL, Docker absent and not installable): finishes `.env`,
+- [x] **Windows outside WSL** (`uname` = `MINGW64_NT-…`): prints the WSL2 instruction, exits 1, changes nothing.
+- [x] **Sandbox without Docker** (Linux, not WSL, Docker absent and not installable): finishes `.env`,
       `pnpm install` and the browsers, prints the task 113 message, exits 1; with `--no-docker` exit 0.
 
 Part A: common behavior
-- [ ] `--no-install` with jq missing and Node 20: installs nothing, prints the command for each, exits 1, creates no
+- [x] `--no-install` with jq missing and Node 20: installs nothing, prints the command for each, exits 1, creates no
       `.env` and runs no `pnpm install`. No terminal and no `--yes`: the same.
-- [ ] A fresh clone gets a `.env` with mode 600 and a `BETTER_AUTH_SECRET` that isn't the placeholder; two clones
+- [x] A fresh clone gets a `.env` with mode 600 and a `BETTER_AUTH_SECRET` that isn't the placeholder; two clones
       get different secrets; the secret never appears in the output. An existing `.env` with a key missing stays
       byte-for-byte unchanged, and the key's name is printed.
-- [ ] Steps run in order (install, `db:up`, migrate, chromium) and never `db:generate`, `gcloud`, `gh` or
+- [x] Steps run in order (install, `db:up`, migrate, chromium) and never `db:generate`, `gcloud`, `gh` or
       `terraform`. When the database never gets healthy it fails within the timeout naming port 5433. A second run
       installs nothing, changes no file and exits 0. A wrong sha256 for the fnm binary fails before anything runs.
 
@@ -147,11 +147,25 @@ browsers, summary), tested with stubs like `test-lane.sh`. No new ADR (ADR-0013 
   - the script installs missing tools, with `--no-install` and `--yes`;
   - onboarding stays simple for more people.
 - 2026-11-14 – Owner took both defaults: Homebrew installed only when absent, after its own prompt (`--yes` doesn't
-- 2026-11-14 – Started in lane 1 (`chore/workspace-setup-script`).
   skip it); the no-Docker fallback split into task 113. This task stops in a sandbox with the task 113 message.
+- 2026-11-14 – Started in lane 1 (`chore/workspace-setup-script`).
+- 2026-11-14 – Implemented:
+  - `scripts/test-setup.sh` red first (27 passed, 56 failed: no `setup.sh`), then green (87 checks, with
+    `--skip-browsers` and the port warning added); in CI's `verify` job.
+  - `scripts/setup.sh`: fnm 1.39.0 pinned by the release assets' sha256 (GitHub's release API `digest`, checked
+    against the downloaded `fnm-linux.zip` and `fnm-arm64.zip`). Homebrew's cask is `docker-desktop` (`docker` is
+    its old name). `setup.sh infra` says it comes with task 112.
+  - README: Quick start, the Windows line and "Onboarding a new person". The leaver step points at ADR-0013:
+    `infra/README.md` has no runbook for removing a GCP admin yet.
+  - A real `--no-install` run on the owner's Mac (lane 1): Node 23.6.0 fails the `.nvmrc` major (22) check, as
+    specified; the main checkout's containers hold 5433 and 4443, so a lane (another compose project) warns.
 
 ## Parking lot
 - `.devcontainer/devcontainer.json` (Node 22, docker-in-docker, forwarded ports) for Codespaces.
 - A `--check` flag that runs lint, typecheck and unit tests at the end.
 - Copying personal Claude Code settings or memory between machines.
 - A `setup.ps1` that installs WSL2 from native Windows.
+- Shell profile lines for a freshly installed fnm (`eval "$(fnm env --use-on-cd)"`): the script prints the hint
+  instead of editing `~/.bashrc` / `~/.zshrc`.
+- Port warnings that recognize another checkout's compose containers (`docker ps --filter publish=<port>`).
+- A runbook in `infra/README.md` for removing a GCP admin (remove in Terraform, rotate the generated secrets).
