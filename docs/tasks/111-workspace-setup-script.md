@@ -1,6 +1,6 @@
 # Task 111: One command to set up a new workspace for local development
 
-- **Status:** todo
+- **Status:** in-progress
 - **Milestone:** cross-cutting (tooling)
 - **Zone / package:** `scripts/setup.sh` (new), `scripts/test-setup.sh` (new), `.github/workflows/ci.yml` (the `verify` job runs the test), `README.md` (Quick start, Windows line, "Onboarding a new person"), `CLAUDE.md` Commands line (drafted for the owner, who edits it). Commits `test:` → `feat(scripts):` → `docs:`.
 - **Feature file:** none (no app behavior; `scripts/test-setup.sh` is the check, as `scripts/test-lane.sh` is for lanes)
@@ -147,6 +147,7 @@ browsers, summary), tested with stubs like `test-lane.sh`. No new ADR (ADR-0013 
   - the script installs missing tools, with `--no-install` and `--yes`;
   - onboarding stays simple for more people.
 - 2026-11-14 – Owner took both defaults: Homebrew installed only when absent, after its own prompt (`--yes` doesn't
+- 2026-11-14 – Started in lane 1 (`chore/workspace-setup-script`).
   skip it); the no-Docker fallback split into task 113. This task stops in a sandbox with the task 113 message.
 
 ## Parking lot
