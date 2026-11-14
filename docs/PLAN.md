@@ -78,7 +78,7 @@ Owner decisions (2026-11-11):
 
 **State on 2026-11-14:**
 - Done since the POC: the P1 security tasks (074, 081, 083, 085–092; owner applies for 091 and 092 done, budget in ILS); 094 language switch (PR #95); 110's preview database rebuild (previews work again); 111–113 workspace setup (`scripts/setup.sh`, `setup.sh infra`, the no-Docker fallback; ADR-0013; the owner's config is in the state bucket); 114 the flaky `@poc` failure (a real redirect bug, PR #106).
-- Left outside the milestones: 109 drop the runtime's transition grants (owner applies, by 2026-11-19); 110's prevention (default B: a divergence check in the preview deploy); task 085's hand check on real Cloud Storage (a 21 MB upload is refused); 066 flaky task-assignees under local load; SEC-09 and SEC-13 (owner decisions). 115: the guard's lint/typecheck gate only for this project's commits (in review).
+- Left outside the milestones: 109 drop the runtime's transition grants (owner applies, by 2026-11-19); 110's prevention (default B: a divergence check in the preview deploy); task 085's hand check on real Cloud Storage (a 21 MB upload is refused); 066 flaky task-assignees under local load; SEC-09 and SEC-13 (owner decisions). 116: the shadcn agent skill, pinned (in review).
 
 **Order (owner, 2026-11-11):**
 1. M14 foundation: 094 language switch (done), then 095 (saved per user) and 096 (right-to-left layout) in parallel.
@@ -200,3 +200,5 @@ Owner decisions (2026-11-11):
 - 2026-11-14 – Synced the plan and task files with what is merged: POC done; "Current milestone" now M14 then M15 with the state on 2026-11-14; tasks 067 and 073 (merged long ago), 112, 113 and 114 set to done; 110 stays in progress for its prevention only.
 - 2026-11-14 – Drafted task 115 (owner request): the guard's `pnpm lint && pnpm typecheck` gate runs only for commits in this project (same git common dir as the guard's own repository, or a remote URL matching one of its remotes), so agents can commit in other repositories such as a notes clone in the scratchpad; every other commit refusal stays, `GIT_COMMON_DIR=` is refused, and an unknown repository keeps the gate. Security-reviewer runs. Defaults taken for its five questions; no feature file (cases in `scripts/test-hooks.sh`).
 - 2026-11-14 – Task 115 in review: the guard runs `pnpm lint && pnpm typecheck` only for commits in this project (same git common dir as the guard's repository, or a shared remote URL); commits in other repositories keep every other check; `GIT_COMMON_DIR=` before a commit is refused. `scripts/test-hooks.sh` 279/0 on bash 3.2 and 5.3. Review fixes: only a leading `cd` and `git add` may precede a commit (SUP-1), more URL spellings match (SUP-2); 315/0.
+- 2026-11-14 – Task 115 done (PR #108).
+- 2026-11-14 – Task 116 (owner request): the `shadcn` agent skill from `shadcn-ui/ui` in `.claude/skills/shadcn/`, its CLI pinned to 4.23.0 and its pre-approved `allowed-tools` removed; `migrate-radix-to-base` not installed.
