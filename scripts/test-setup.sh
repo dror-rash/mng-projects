@@ -747,7 +747,7 @@ check "secrets: refuses a name that isn't a secret id"      sh -c "[ $CODE = 1 ]
 
 # infra-push
 iworld; run -- infra --yes; TFV="$W/repo/infra/terraform.tfvars"; printf 'budget = "%s"\n' "$LOCAL_MARK" >> "$TFV"
-ws_list "tool-token .env.workstation"; printf '%s' "$SECRET_MARK" > "$W/repo/.env.workstation"
+ws_list "tool-token .env.workstation"; printf '%s' "$SECRET_MARK" > "$W/repo/.env.workstation"; cp "$W/repo/.env.workstation" "$W/state/secrets/tool-token"
 run -- infra-push
 check "infra-push: exits 0"                                 code_is 0
 check "infra-push: uploads tfvars with the recorded generation" \

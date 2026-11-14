@@ -20,6 +20,8 @@ tfplan
 *.tfplan
 infra/terraform.tfvars
 infra/backend.hcl
+# setup.sh infra: the generations of the owner config it pulled (task 112)
+infra/.config-generation
 .features-gen
 e2e/screenshots
 next-env.d.ts
