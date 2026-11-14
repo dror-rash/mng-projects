@@ -434,6 +434,13 @@ gate 2 1 "runs lint in a clone whose origin is the project's (https, no .git)" "
 gate 0 1 "allows that clone's commit when lint passes"                 "$D" "$CL_HTTPS"
 gate 2 1 "runs lint with the project's URL on upstream (ssh://, .git/)" "$D" "$CL_UP" 1
 gate 2 1 "runs lint with the project's URL as a push URL"              "$D" "$CL_PUSH" 1
+# ... in every spelling of the URL: a port, a / after the scp colon, doubled slashes, www. (security review SUP-2)
+i=0
+for u in "https://github.com:443/example/proj.git" "ssh://git@github.com:22/example/proj" "git@github.com:/example/proj.git" \
+  "https://www.github.com/example/proj" "https://github.com//example//proj/" "git@www.github.com:example/proj"; do
+  i=$((i+1)); r="$GB/url-$i"; newrepo "$r"; git -C "$r" remote add origin "$u"
+  gate 2 1 "runs lint in a clone whose origin is $u"                   "$D" "$r" 1
+done
 gate 2 1 "runs lint where .git is a file pointing at the project's git dir" "$D" "$GITFILE" 1
 gate 2 1 "runs lint where .git links to the project's git dir"         "$D" "$GITLINK" 1
 gate 2 1 "runs lint via git -C <gitfile dir> from another repository"  "git -C '$GITFILE' commit -m 'docs: x'" "$OTHER" 1
