@@ -431,6 +431,16 @@ check "download_checked: a failed download leaves nothing"  sh -c "[ ! -e '$W/ho
 world; state download 'a pinned release'; absent sha256sum shasum
 call -- "download_checked https://example.test/tool.zip $SUM '$W/home/tool.zip' || echo refused"
 check "download_checked: no sha256 tool fails closed"       sh -c "grep -qx refused '$W/out' && [ ! -e '$W/home/tool.zip' ]"
+world; state download 'a pinned release'; call -- "download_checked https://example.test/tool.zip $SUM '$W/home/tool.zip'"
+check "download_checked: https only, redirects too"         logged '^curl --proto =https --proto-redir =https '
+for bad in "" "${SUM%?}" "$(printf '%s' "$SUM" | tr 'a-f' 'A-F')" "${SUM%?}g"; do
+  world; state download 'a pinned release'; call -- "download_checked https://example.test/tool.zip '$bad' '$W/home/tool.zip' || echo refused"
+  check "download_checked: refuses the pin '${bad:-(empty)}' before downloading" \
+    sh -c "grep -qx refused '$W/out' && grep -q 'sha256' '$W/out' && [ ! -s '$W/log' ] && [ ! -e '$W/home/tool.zip' ]"
+done
+world; state download 'a pinned release'; absent sha256sum shasum; stub sha256sum 'exit 0'; present sha256sum
+call -- "download_checked https://example.test/tool.zip $SUM '$W/home/tool.zip' || echo refused"
+check "download_checked: an empty computed hash fails closed" sh -c "grep -qx refused '$W/out' && [ ! -e '$W/home/tool.zip' ]"
 
 world; call -- 'ensure_brew && echo ready'
 check "ensure_brew: Homebrew there: asks and installs nothing" sh -c "grep -qx ready '$W/out' && ! grep -q 'Install Homebrew' '$W/out' && ! grep -q '^curl' '$W/log'"
@@ -439,29 +449,60 @@ check "ensure_brew: no terminal: exits 1 with the installer"  sh -c "[ $CODE = 1
 world; absent brew; answer y; call SETUP_INTERACTIVE=1 SETUP_BREW_PREFIXES="$W/newbrew" -- 'ensure_brew && has brew && echo ready'; STDIN=
 check "ensure_brew: yes runs Homebrew's installer"          sh -c "grep -q '^curl .*Homebrew/install/HEAD/install\.sh' '$W/log' && grep -q 'ready\$' '$W/out'"
 
-apt_repo_world() { # a Linux world with gpg, where the keyring and sources.list.d go under $W/aptroot
-  world; state uname Linux; APT="$W/aptroot"; KR="$APT/keyrings/example.gpg"
+FPR="0123456789ABCDEF0123456789ABCDEF01234567"
+apt_repo_world() { # a Linux world with gpg; apt's files go under $W/aptroot (SETUP_APT_ROOT, honored when sourced)
+  world; state uname Linux; APT="$W/aptroot"; KR="/etc/apt/keyrings/example.gpg"
   LINE="deb [arch=amd64 signed-by=$KR] https://example.test/apt stable main"
-  stub gpg 'echo dearmored; cat'; present gpg
+  printf 'pub:-:4096:1:89ABCDEF01234567:1600000000:::-:::scESC::::::23::0:\nfpr:::::::::%s:\nsub:-:4096:1:FEDCBA9876543210:1600000000::::::e::::::23:\nfpr:::::::::FEDCBA9876543210FEDCBA9876543210FEDCBA98:\n' "$FPR" > "$W/state/gpg_keys"
+  stub gpg 'case "$*" in *--show-keys*) cat "$STUB_STATE/gpg_keys";; *) echo dearmored; cat;; esac'; present gpg
 }
-add_repo() { call SETUP_APT_SOURCES="$APT/sources.list.d" -- "add_apt_repo https://example.test/key.asc '$KR' '$1' && echo added"; }
+add_repo() { # line [keyring] [fingerprint]
+  call SETUP_APT_ROOT="$APT" -- "add_apt_repo https://example.test/key.asc '${2:-$KR}' '$1' '${3-$FPR}' && echo added"; }
+added_nothing() { ! grep -qx added "$W/out" && [ ! -e "$APT" ] && ! grep -q 'apt-get update' "$W/log"; }
 apt_repo_world; add_repo "$LINE"
-check "add_apt_repo: fetches the key"                       logged '^curl .*https://example\.test/key\.asc$'
-check "add_apt_repo: the keyring is the key through gpg --dearmor" sh -c "grep -q '^gpg .*--dearmor' '$W/log' && [ \"\$(head -1 '$KR')\" = dearmored ]"
-check "add_apt_repo: the keyring is mode 644"               sh -c "ls -l '$KR' | grep -q '^-rw-r--r--'"
-check "add_apt_repo: the list holds the line"               test "$(cat "$APT/sources.list.d/example.list" 2>/dev/null)" = "$LINE"
+check "add_apt_repo: fetches the key, https only"           logged '^curl --proto =https --proto-redir =https .*https://example\.test/key\.asc$'
+check "add_apt_repo: checks the key's fingerprint first"    in_order '^gpg .*--show-keys' '^gpg .*--dearmor'
+check "add_apt_repo: the keyring is the key through gpg --dearmor" sh -c "grep -q '^gpg .*--dearmor' '$W/log' && [ \"\$(head -1 '$APT$KR')\" = dearmored ]"
+check "add_apt_repo: the keyring is mode 644"               sh -c "ls -l '$APT$KR' | grep -q '^-rw-r--r--'"
+check "add_apt_repo: the list holds the line"               test "$(cat "$APT/etc/apt/sources.list.d/example.list" 2>/dev/null)" = "$LINE"
 check "add_apt_repo: writes through sudo"                   logged '^sudo (cp|mkdir|chmod)'
-check "add_apt_repo: then apt-get update"                   in_order '^gpg ' '^apt-get update$'
+check "add_apt_repo: then apt-get update"                   in_order '^gpg .*--dearmor' '^apt-get update$'
 check "add_apt_repo: true when added, no temp dir left"     sh -c "grep -qx added '$W/out' && [ -z \"\$(ls -A '$W/tmp')\" ]"
+apt_repo_world; add_repo "$LINE" "$KR" "0123 4567 89ab cdef 0123  4567 89AB CDEF 0123 4567"
+check "add_apt_repo: a fingerprint with spaces or lower case matches" sh -c "grep -qx added '$W/out'"
 apt_repo_world; state uid 0; add_repo "$LINE"
 check "add_apt_repo: as root, no sudo"                      sh -c "grep -qx added '$W/out' && ! grep -q '^sudo' '$W/log'"
+apt_repo_world; add_repo "$LINE" "$KR" "FEDCBA9876543210FEDCBA9876543210FEDCBA98"
+check "add_apt_repo: another key's fingerprint is refused"  sh -c "grep -q 'fingerprint' '$W/out'"
+check "add_apt_repo: a wrong fingerprint adds nothing"      added_nothing
+check "add_apt_repo: a wrong fingerprint doesn't dearmor"   not_logged '^gpg .*--dearmor'
+apt_repo_world; cat "$W/state/gpg_keys" "$W/state/gpg_keys" > "$W/state/two"; mv "$W/state/two" "$W/state/gpg_keys"; add_repo "$LINE"
+check "add_apt_repo: a key file with two keys is refused"   sh -c "grep -q 'more than one key' '$W/out'"
+check "add_apt_repo: two keys add nothing"                  added_nothing
+for bad in "" "0123" "${FPR}00" "Z123456789ABCDEF0123456789ABCDEF01234567"; do
+  apt_repo_world; add_repo "$LINE" "$KR" "$bad"
+  check "add_apt_repo: refuses the fingerprint '${bad:-(empty)}' before fetching" sh -c "grep -q 'fingerprint' '$W/out' && [ ! -s '$W/log' ] && [ ! -e '$APT' ]"
+done
 apt_repo_world; add_repo "deb https://example.test/apt stable main"
 check "add_apt_repo: a line not signed by the keyring is refused" sh -c "[ $CODE != 0 ] && grep -q 'signed-by' '$W/out' && ! grep -qx added '$W/out'"
 check "add_apt_repo: a refused line fetches and writes nothing" sh -c "[ ! -s '$W/log' ] && [ ! -e '$APT' ]"
+apt_repo_world; add_repo "deb [signed-by=$KR trusted=yes] https://example.test/apt stable main"
+check "add_apt_repo: a trusted= line is refused"            sh -c "grep -q 'trusted=' '$W/out' && [ ! -s '$W/log' ] && [ ! -e '$APT' ]"
+apt_repo_world; add_repo "$LINE
+deb [trusted=yes] https://evil.test/apt stable main"
+check "add_apt_repo: a line with a newline is refused"      sh -c "grep -q 'one line' '$W/out' && [ ! -s '$W/log' ] && [ ! -e '$APT' ]"
+for kr in /tmp/example.gpg /etc/apt/keyrings/sub/example.gpg /etc/apt/keyrings/../example.gpg /etc/apt/keyrings/.gpg \
+  "/etc/apt/keyrings/ex ample.gpg" etc/apt/keyrings/example.gpg /usr/share/keyrings/; do
+  apt_repo_world; add_repo "deb [signed-by=$kr] https://example.test/apt stable main" "$kr"
+  check "add_apt_repo: refuses the keyring '$kr'"           sh -c "grep -q 'keyring' '$W/out' && [ ! -s '$W/log' ] && [ ! -e '$APT' ]"
+done
+apt_repo_world; KR=/usr/share/keyrings/example-archive.keyring.gpg; LINE="deb [signed-by=$KR] https://example.test/apt stable main"
+add_repo "$LINE"
+check "add_apt_repo: a keyring in /usr/share/keyrings"      sh -c "grep -qx added '$W/out' && [ -f '$APT$KR' ] && [ -f '$APT/etc/apt/sources.list.d/example-archive.keyring.list' ]"
 apt_repo_world; stub curl 'exit 22'; present curl; add_repo "$LINE"
-check "add_apt_repo: a failed key download adds nothing"    sh -c "! grep -qx added '$W/out' && [ ! -e '$APT' ] && ! grep -q 'apt-get update' '$W/log'"
+check "add_apt_repo: a failed key download adds nothing"    added_nothing
 apt_repo_world; stub gpg 'exit 2'; present gpg; add_repo "$LINE"
-check "add_apt_repo: a key gpg can't read adds nothing"     sh -c "! grep -qx added '$W/out' && [ ! -e '$APT' ] && ! grep -q 'apt-get update' '$W/log'"
+check "add_apt_repo: a key gpg can't read adds nothing"     added_nothing
 apt_repo_world; absent gpg; add_repo "$LINE"
 check "add_apt_repo: without gpg it says so, adds nothing"  sh -c "! grep -qx added '$W/out' && grep -q gpg '$W/out' && [ ! -e '$APT' ]"
 
