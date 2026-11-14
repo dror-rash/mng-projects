@@ -8,7 +8,11 @@
   - task 111 (`scripts/setup.sh`, done: PR #99);
   - the shared `refactor(scripts):` commit on `refactor/setup-seams`, merged first. It adds subcommand dispatch with
     a parser per subcommand, usage as a heredoc, `download_checked`, `ensure_brew`, `add_apt_repo`, an empty
-    `services` arm that keeps today's message, and test helpers per task.
+    `services` arm that keeps today's message, and test helpers per task. After its security review,
+    `add_apt_repo <key-url> <keyring> <list-line> <fingerprint>` takes the repository's pinned key fingerprint (one
+    key, checked with `gpg --show-keys` before anything is written), a keyring under `/usr/share/keyrings/` or
+    `/etc/apt/keyrings/`, and a one-line `signed-by=` list line without `trusted=`; `download_checked` needs a
+    64-hex sha256 pin and fetches over https only.
 
   Split from task 111 (owner, 2026-11-14).
 
@@ -33,7 +37,10 @@ storage as `docker-compose.yml`, so `.env.example` works unchanged.
       `/etc/postgresql-common/createcluster.conf` (as root), so the package doesn't create and start a default `16/main`
       cluster on 5432.
     - `postgresql-16` comes from the distro when it has it (Ubuntu 24.04), else from the PostgreSQL apt repository
-      (`apt.postgresql.org`, its signed key) through `add_apt_repo`.
+      (`apt.postgresql.org`, its signed key) through `add_apt_repo`. The PostgreSQL (PGDG) key's fingerprint is looked
+      up during this task from postgresql.org's apt instructions, checked against the downloaded key, and pinned in
+      `setup.sh` with a comment naming the source (like the fnm hashes). Docker stays on the distro's packages
+      (`docker.io`); if Docker's own apt repository is ever added, its key gets a pinned fingerprint too.
 
     The script:
     - finds `initdb` and `pg_ctl` in `/usr/lib/postgresql/16/bin` (not on `PATH` on Debian or Ubuntu; only `psql` is,

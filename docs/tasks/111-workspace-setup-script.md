@@ -185,6 +185,16 @@ browsers, summary), tested with stubs like `test-lane.sh`. No new ADR (ADR-0013 
   - Sourced, `setup.sh` only defines its helpers: `test-setup.sh`'s `call` checks them directly. `infra_world` and
     `pg_world` are the per-task stub hooks in `world()`.
   - `test-setup.sh`: 179 passed (the 132 unchanged plus 47), under /bin/bash 3.2 and bash 5.2 (Ubuntu 24.04).
+- 2026-11-14 – Security review of the refactor (no Medium or higher); hardened test-first:
+  - SUP-1: `add_apt_repo` takes a fourth argument, the key's pinned fingerprint, checked with
+    `gpg --show-keys --with-colons` (exactly one key) before anything is written; curl is https only
+    (`--proto '=https' --proto-redir '=https'`) in `add_apt_repo` and `download_checked`;
+  - SUP-2: list lines with a newline or `trusted=` are refused; keyrings only `/usr/share/keyrings/<name>` or
+    `/etc/apt/keyrings/<name>` (`[A-Za-z0-9._-]`, no leading dot);
+  - SUP-3: `download_checked` refuses a pin that isn't 64 lower-case hex digits and an empty computed hash;
+  - SUP-4: the test hook is now `SETUP_APT_ROOT`, honored only when `setup.sh` is sourced;
+  - tasks 112 and 113 note the fingerprints they pin (Google Cloud, GitHub CLI; PostgreSQL);
+  - `test-setup.sh`: 206 passed.
 
 ## Parking lot
 - `.devcontainer/devcontainer.json` (Node 22, docker-in-docker, forwarded ports) for Codespaces.

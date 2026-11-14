@@ -8,7 +8,11 @@
   - task 111 (`scripts/setup.sh`, done: PR #99);
   - the shared `refactor(scripts):` commit on `refactor/setup-seams`, merged first. It adds subcommand dispatch with
     a parser per subcommand, usage as a heredoc, `download_checked`, `ensure_brew`, `add_apt_repo`, empty `infra` /
-    `infra-push` arms that keep today's message, and test helpers per task;
+    `infra-push` arms that keep today's message, and test helpers per task. After its security review,
+    `add_apt_repo <key-url> <keyring> <list-line> <fingerprint>` takes each repository's pinned key fingerprint (one
+    key, checked with `gpg --show-keys` before anything is written), a keyring under `/usr/share/keyrings/` or
+    `/etc/apt/keyrings/`, and a one-line `signed-by=` list line without `trusted=`; `download_checked` needs a
+    64-hex sha256 pin and fetches over https only;
   - ADR-0013 (accepted 2026-11-14).
 
   One owner step comes before the first pull from another machine: the first upload (README one-liner).
@@ -33,9 +37,13 @@ Manager. None exists for workstations today, but the script has to be ready to f
        `ensure_brew`). On Linux, the HashiCorp release zip pinned by version and one sha256 per architecture
        (`amd64`, `arm64`), fetched with `download_checked`. `unzip` is installed when missing.
      - gcloud: `brew install --cask google-cloud-sdk` on macOS; on Linux, Google's apt repository through
-       `add_apt_repo` (its signed key; `gpg` installed when missing). Cloud Shell has it.
-     - gh: `brew install gh` on macOS; on Linux, GitHub's apt repository through `add_apt_repo` (its signed key).
-       Codespaces has it.
+       `add_apt_repo` (its signed key, pinned by fingerprint; `gpg` installed when missing). Cloud Shell has it.
+     - gh: `brew install gh` on macOS; on Linux, GitHub's apt repository through `add_apt_repo` (its signed key,
+       pinned by fingerprint). Codespaces has it.
+     - The Google Cloud and GitHub CLI key fingerprints are looked up during this task from each vendor's published
+       install instructions, checked against the downloaded keys, and pinned next to `FNM_VERSION` with a comment
+       naming where they come from (like the fnm hashes). Terraform comes as a zip (sha256), not from HashiCorp's apt
+       repository; if that changes, its key gets a pinned fingerprint too.
   2. **Logins:** an active gcloud account and application-default credentials, or it prints `gcloud auth login`,
      `gcloud auth application-default login` and `gcloud auth application-default set-quota-project <id>` and exits
      1. When `gh auth status` fails, it warns with `gh auth login` and continues: no infra step uses gh
