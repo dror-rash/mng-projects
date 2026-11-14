@@ -17,6 +17,12 @@ describe("redactUrl", () => {
     );
   });
 
+  it("hides an invite token inside a query value, like the login page's return path", () => {
+    expect(redactUrl("https://shell.example.app/login?next=%2Fdashboard%2Finvite%2Fs3cr3t-token")).toBe(
+      "/login?next=%2Fdashboard%2Finvite%2F%5Bredacted%5D",
+    );
+  });
+
   it("returns something readable for a URL it can't parse", () => {
     expect(redactUrl("about:blank")).toBe("about:blank");
   });

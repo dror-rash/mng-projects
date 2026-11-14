@@ -9,6 +9,11 @@ const SECRET_PARAM = /token|secret|code|password|key/i;
 const REDACTED = "[redacted]";
 const MAX_TEXT = 80;
 
+/** An invite link's token, wherever the link appears in `text`. */
+function redactInvite(text: string) {
+  return text.replace(/\/invite\/[^/?#&]+/g, `/invite/${REDACTED}`);
+}
+
 /** The URL's path and query, without the origin, invite tokens or secret-looking query values. */
 export function redactUrl(raw: string): string {
   let url: URL;
@@ -20,11 +25,12 @@ export function redactUrl(raw: string): string {
   if (!url.pathname.startsWith("/")) {
     return raw;
   }
-  url.pathname = url.pathname.replace(/\/invite\/[^/]+/, `/invite/${REDACTED}`);
-  for (const name of [...url.searchParams.keys()]) {
-    if (SECRET_PARAM.test(name)) url.searchParams.set(name, REDACTED);
-  }
-  return `${url.pathname}${url.search}`;
+  url.pathname = redactInvite(url.pathname);
+  // Values come decoded, so a return path (`next=%2Fdashboard%2Finvite%2F<token>`) is redacted too.
+  const query = new URLSearchParams(
+    [...url.searchParams].map(([name, value]) => [name, SECRET_PARAM.test(name) ? REDACTED : redactInvite(value)]),
+  ).toString();
+  return `${url.pathname}${query ? `?${query}` : ""}`;
 }
 
 function shorten(text: string) {

@@ -88,22 +88,29 @@ export async function userId(page: Page): Promise<string> {
   return (await response.json()).user.id;
 }
 
-/** Every scenario gets its own unique account, so runs never collide in a persistent database. */
 /**
  * When a scenario fails against a deployment (BASE_URL), where the page was and what it showed, as a text
  * attachment the reporters print with the failure (task 114). Traces stay off there: the CI log is public.
  */
 async function attachPageOnFailure(page: Page, testInfo: TestInfo) {
   if (!process.env.BASE_URL || testInfo.status === testInfo.expectedStatus || page.isClosed()) return;
+  let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     const shown = (role: "heading" | "alert") => page.getByRole(role).filter({ visible: true }).allInnerTexts();
-    const [headings, errors] = await Promise.all([shown("heading"), shown("alert")]);
+    // A hung page mustn't hold up the teardown: give the reads 2 seconds.
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error("page diagnostics timed out")), 2_000);
+    });
+    const [headings, errors] = await Promise.race([Promise.all([shown("heading"), shown("alert")]), timeout]);
     await testInfo.attach("page at failure", { body: describePage({ url: page.url(), headings, errors }), contentType: "text/plain" });
   } catch {
-    // The page may be gone or navigating; the failure itself is what matters.
+    // The page may be gone, navigating or hung; the failure itself is what matters.
+  } finally {
+    clearTimeout(timer);
   }
 }
 
+/** Every scenario gets its own unique account, so runs never collide in a persistent database. */
 export const test = base.extend<{ account: Account; state: ScenarioState; people: People; authTimeline: void; pageOnFailure: void }>({
   authTimeline: [
     async ({ context }, use) => {
