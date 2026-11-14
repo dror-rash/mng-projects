@@ -11,10 +11,11 @@
 # outside Docker (task 113); `setup.sh services [--stop]` starts or stops them after a restart.
 #
 # Bash 3.2 compatible (macOS's bash): it runs before Node or pnpm exist. It never prints a secret, never changes
-# an existing .env, never runs pnpm db:generate, gcloud, gh or terraform, and uses sudo only for apt-get (its own,
-# and Playwright's --with-deps once approved), an apt repository's key and list (add_apt_repo), and, on Linux without
-# Docker, the createcluster.d drop-in that keeps postgresql-16 from creating a default cluster (task 113; it stays,
-# system-wide). Rerunning on a set-up workspace installs nothing and changes no file.
+# an existing .env, and uses sudo only for apt-get (its own, and Playwright's --with-deps once approved), an apt
+# repository's key and list (add_apt_repo), and, on Linux without Docker, the createcluster.d drop-in that keeps
+# postgresql-16 from creating a default cluster (task 113; it stays, system-wide). The developer setup never runs
+# pnpm db:generate, gcloud, gh or terraform; setup.sh infra (task 112) runs gcloud and terraform init, never plan or
+# apply. Rerunning on a set-up workspace installs nothing and changes no file.
 # Tests: bash scripts/test-setup.sh, under /bin/bash; CI (Ubuntu) runs it with bash 5, so bash 3.2 is checked by
 # running it on macOS.
 #
@@ -34,6 +35,27 @@ set -u
 FNM_VERSION="1.39.0"
 FNM_SHA256_LINUX_X64="7807664f39d39fc518da1c35ba0181e4b3267603c4b1dedeb4b5fc6ae440a224"
 FNM_SHA256_LINUX_ARM64="4eaff58b2c5bf30d0934027572dd0b5bbb60d2a1af309230b53662d4b1d45599"
+
+# setup.sh infra (task 112). Terraform for Linux and WSL: HashiCorp's release zip. To upgrade: change the version
+# and both hashes together. The hashes come from terraform_<version>_SHA256SUMS, whose signature was checked with
+# HashiCorp's key C874 011F 0AB4 0511 0D02 1055 3436 5D94 72D7 468F (https://www.hashicorp.com/security):
+#   https://releases.hashicorp.com/terraform/<version>/ (terraform_<version>_linux_amd64.zip, _linux_arm64.zip)
+TERRAFORM_VERSION="1.17.2"
+TERRAFORM_SHA256_LINUX_AMD64="e6f16b2f0b137ee5729caa8c4e79a3bae4ee261acd198a1fcfa8584a6296605b"
+TERRAFORM_SHA256_LINUX_ARM64="858e08c181a76b6b223e8c767a8e983922eebe2d062db949a2de66ce040c368c"
+# gcloud's apt repository, as https://cloud.google.com/sdk/docs/install#deb sets it up. Google publishes no
+# fingerprint, so this pin is TOFU (keyserver cross-check): apt-key.gpg's only key ("Artifact Registry Repository
+# Signer") as downloaded on 2026-11-14, the same key as on keyserver.ubuntu.com.
+GCLOUD_APT_KEY_URL="https://packages.cloud.google.com/apt/doc/apt-key.gpg"
+GCLOUD_KEYRING="/usr/share/keyrings/cloud.google.gpg"
+GCLOUD_APT_LINE="deb [signed-by=$GCLOUD_KEYRING] https://packages.cloud.google.com/apt cloud-sdk main"
+GCLOUD_APT_KEY_FPR="35BAA0B33E9EB396F59CA838C0BA5CE6DC6315A3"
+# gh's apt repository: its keyring holds the two keys whose fingerprints GitHub lists in
+#   https://github.com/cli/cli/blob/trunk/docs/install_linux.md (the first expired 2026-09-05; the file still has it)
+GH_APT_KEY_URL="https://cli.github.com/packages/githubcli-archive-keyring.asc"
+GH_KEYRING="/etc/apt/keyrings/githubcli-archive-keyring.gpg"
+GH_APT_LINE="deb [signed-by=$GH_KEYRING] https://cli.github.com/packages stable main"
+GH_APT_KEY_FPR="2C6106201985B60E6C7AC87323F3D4EA75716059,7F38BBB59D064DBCB3D84D725612B36462313325"
 # shellcheck disable=SC2016 # printed, not run
 HOMEBREW_INSTALL='/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"'
 # Without Docker (task 113). The PostgreSQL apt repository (PGDG), for a distro without postgresql-16. Its key's
@@ -62,6 +84,17 @@ usage() {
 
   services         Linux without Docker: start the database and file storage setup.sh runs there (after a restart)
   services --stop  stop them
+
+  bash scripts/setup.sh infra [--project <id>] [--force] [--no-install] [--yes]
+  bash scripts/setup.sh infra-push
+
+  infra            GCP admins (task 112): installs Terraform, gcloud and gh, checks the logins, pulls the owner
+                   config from gs://<id>-tfstate/config/ into infra/ (mode 600), fetches the secrets listed in
+                   infra/workstation-secrets.list, then terraform init (never plan or apply)
+  --project <id>   the GCP project (default: gcloud config get project)
+  --force          replace a local terraform.tfvars or backend.hcl that differs from the stored copy
+  infra-push       stores this machine's terraform.tfvars and backend.hcl; refused when the stored copy changed
+                   since this machine's pull
 EOF
 }
 
@@ -143,16 +176,20 @@ download_checked() {
 # key-url keyring list-line fingerprint: an apt repository signed by its own key, as root, then apt-get update.
 # - keyring: /usr/share/keyrings/<name> or /etc/apt/keyrings/<name>, name of [A-Za-z0-9._-] not starting with a dot;
 # - list-line: one line, signed-by=<keyring>, no trusted=; it goes into sources.list.d/<name without extension>.list;
-# - fingerprint: the key's pinned primary fingerprint (40 or 64 hex digits; spaces and case don't matter). The key is
-#   fetched (https only) and must hold exactly one key with that fingerprint (gpg --show-keys) before it goes
-#   through gpg --dearmor into keyring (mode 644).
+# - fingerprint: the key's pinned primary fingerprint (40 or 64 hex digits; spaces and case don't matter); for a key
+#   file with several keys, all their fingerprints separated by commas. The key is fetched (https only) and must hold
+#   exactly the pinned keys (gpg --show-keys) before it goes through gpg --dearmor into keyring (mode 644).
 # False with the reason; nothing is written before every check passes. The caller installs gpg first when missing.
 add_apt_repo() {
-  local key_url="$1" keyring="$2" line="$3" want sources="$APT_ROOT/etc/apt/sources.list.d" name dir tmp keys ok=1
-  local nl=$'\n' cr=$'\r'
-  want="$(printf '%s' "${4:-}" | tr -d ' ' | tr 'a-f' 'A-F')"
-  case "$want" in *[!0-9A-F]*|"") want="" ;; esac
-  case "${#want}" in 40|64) ;; *) err "the pinned key fingerprint for $key_url isn't 40 or 64 hex digits"; return 1 ;; esac
+  local key_url="$1" keyring="$2" line="$3" pins="${4:-}," pin want="" sources="$APT_ROOT/etc/apt/sources.list.d"
+  local name dir tmp keys ok=1 nl=$'\n' cr=$'\r'
+  while [ -n "$pins" ]; do
+    pin="$(printf '%s' "${pins%%,*}" | tr -d ' ' | tr 'a-f' 'A-F')"; pins="${pins#*,}"
+    case "$pin" in *[!0-9A-F]*|"") pin="" ;; esac
+    case "${#pin}" in 40|64) ;; *) err "the pinned key fingerprint for $key_url isn't 40 or 64 hex digits"; return 1 ;; esac
+    want="$want$pin$nl"
+  done
+  want="$(printf '%s' "$want" | LC_ALL=C sort -u)"
   name="${keyring##*/}"; dir="${keyring%/*}"
   case "$dir" in /usr/share/keyrings|/etc/apt/keyrings) ;; *) name="" ;; esac
   case "$name" in ""|.*|*[!A-Za-z0-9._-]*)
@@ -172,8 +209,11 @@ add_apt_repo() {
   elif ! keys="$(gpg --batch --show-keys --with-colons "$tmp/key" 2>/dev/null)"; then err "$key_url isn't a key gpg can read"
   elif ! keys="$(printf '%s\n' "$keys" | awk -F: '$1 == "pub" { p = 1; next } $1 == "fpr" && p { print $10; p = 0 }')" ||
     [ -z "$keys" ]; then err "$key_url isn't a key gpg can read"
-  elif [ "$(printf '%s\n' "$keys" | wc -l | tr -d ' ')" != 1 ]; then err "$key_url holds more than one key"
-  elif [ "$keys" != "$want" ]; then err "$key_url's fingerprint $keys isn't the pinned $want; nothing added"
+  elif keys="$(printf '%s\n' "$keys" | LC_ALL=C sort)" &&
+    [ "$(printf '%s\n' "$keys" | wc -l)" -gt "$(printf '%s\n' "$want" | wc -l)" ]; then
+    err "$key_url holds more than one key for each pinned fingerprint"
+  elif [ "$keys" != "$want" ]; then
+    err "$key_url's fingerprint $(printf '%s' "$keys" | tr '\n' ' ') isn't the pinned $(printf '%s' "$want" | tr '\n' ' '); nothing added"
   elif ! gpg --batch --dearmor < "$tmp/key" > "$tmp/keyring"; then err "$key_url isn't a key gpg can read"
   elif ! printf '%s\n' "$line" > "$tmp/list"; then err "couldn't write the apt line"
   elif ! as_root mkdir -p "$APT_ROOT$dir" "$sources"; then err "couldn't create $APT_ROOT$dir or $sources"
@@ -379,7 +419,7 @@ export COREPACK_ENABLE_DOWNLOAD_PROMPT=0
 # --- Subcommand and its flags --------------------------------------------------------------------------------------
 SUBCOMMAND="${1:-}" # "" is the developer setup
 case "$SUBCOMMAND" in infra|infra-push|services) shift ;; *) SUBCOMMAND="" ;; esac
-NO_INSTALL=0; YES=0; NO_DOCKER=0; SKIP_BROWSERS=0; SERVICES_STOP=0
+NO_INSTALL=0; YES=0; NO_DOCKER=0; SKIP_BROWSERS=0; PROJECT=""; FORCE=0; SERVICES_STOP=0
 parse_args() { # the flags $SUBCOMMAND takes. One with a value: `sub:--flag) need_value "$@"; VAR="$2"; shift ;;`
   while [ $# -gt 0 ]; do
     case "$SUBCOMMAND:$1" in
@@ -388,6 +428,10 @@ parse_args() { # the flags $SUBCOMMAND takes. One with a value: `sub:--flag) nee
       :--yes|:-y) YES=1 ;;
       :--no-docker) NO_DOCKER=1 ;;
       :--skip-browsers) SKIP_BROWSERS=1 ;;
+      infra:--project) need_value "$@"; PROJECT="$2"; shift ;;
+      infra:--force) FORCE=1 ;;
+      infra:--no-install) NO_INSTALL=1 ;;
+      infra:--yes|infra:-y) YES=1 ;;
       services:--stop) SERVICES_STOP=1 ;;
       *) err "unknown option '$1'"; usage >&2; exit 1 ;;
     esac
@@ -412,12 +456,324 @@ case "$KERNEL" in
 esac
 
 # --- Subcommands branch off here -----------------------------------------------------------------------------------
-run_infra() { # setup.sh infra and infra-push (task 112)
-  echo "setup.sh $SUBCOMMAND comes with task 112 (owner and GCP admin setup)." >&2
-  exit 1
+# setup.sh infra and infra-push (task 112, ADR-0013). The owner config (class 2: terraform.tfvars, backend.hcl) lives
+# in the state bucket's config/; workstation secrets (class 3) in Secret Manager, fetched only for the entries of
+# infra/workstation-secrets.list. Both are for a person's terminal: agent sessions are refused (and the guard
+# refuses the command). Never prints a config or secret value; never runs terraform plan or apply.
+INFRA_CONFIG="terraform.tfvars backend.hcl"
+# git-ignored: "project <id>", then "<file> <generation> <sha256>" per config file, as last pulled or pushed here
+GEN_FILE="infra/.config-generation"
+WS_LIST="infra/workstation-secrets.list"
+TF_HOME="$HOME/.local/bin"
+GENS=""; INFRA_TMP=""
+infra_cleanup() { if [ -n "$INFRA_TMP" ]; then rm -rf "$INFRA_TMP"; fi; }
+
+infra_start() { # both subcommands: a person, on macOS, Linux or WSL2
+  if [ "${CLAUDECODE:-}" = 1 ]; then
+    err "setup.sh $SUBCOMMAND is for a person's terminal, not an agent session: agents never fetch the owner config or workstation secrets (ADR-0013)."
+    exit 1
+  fi
+  if [ "$ENV" = windows ]; then
+    say "Run this inside WSL2: \`wsl --install -d Ubuntu\`, then clone the repo inside WSL and rerun \`bash scripts/setup.sh $SUBCOMMAND\`."
+    exit 1
+  fi
+  [ "$ENV" = unknown ] && die "unsupported system '$KERNEL': macOS, Linux and WSL2 are supported"
+  INFRA_TMP="$(mktemp -d)" || die "mktemp failed"
+  trap infra_cleanup EXIT
+  trap 'infra_cleanup; exit 130' INT
+  trap 'infra_cleanup; exit 143' TERM
 }
 
-# Task 112 fills run_infra above and task 113 run_services below, each in its own lane.
+valid_project() { [[ "$1" =~ ^[a-z][a-z0-9-]{4,28}[a-z0-9]$ ]]; }
+is_generation() { [[ "$1" =~ ^[0-9]{1,20}$ ]]; }
+gen_of() { printf '%s\n' "$GENS" | awk -v f="$1" '$1 == f { print $2; exit }'; }
+sum_recorded() { printf '%s\n' "$GENS" | awk -v f="$1" '$1 == f { print $3; exit }'; }
+set_gen() { # file generation sha256
+  GENS="$(printf '%s\n' "$GENS" | awk -v f="$1" '$1 != f && NF')"$'\n'"$1 $2 $3"
+}
+write_gens() { # GENS into infra/.config-generation (through a temp file)
+  { printf 'project %s\n%s\n' "$PROJECT" "$(printf '%s\n' "$GENS" | awk 'NF')" > "$INFRA_TMP/generations" &&
+    mv -f "$INFRA_TMP/generations" "$GEN_FILE"; } || die "couldn't write $GEN_FILE"
+}
+read_gens() { # what this machine last pulled or pushed for $PROJECT (nothing for another project)
+  GENS=""
+  [ -f "$GEN_FILE" ] && [ "$(awk '$1 == "project" { print $2; exit }' "$GEN_FILE")" = "$PROJECT" ] &&
+    GENS="$(grep -v '^project ' "$GEN_FILE")"
+  return 0
+}
+bucket_dir() { echo "gs://$PROJECT-tfstate/config"; }
+stored_gen() { # file: the stored copy's generation; false when it's missing or unreadable
+  local g
+  g="$(gcloud storage objects describe "$(bucket_dir)/$1" --format='value(generation)' 2>/dev/null)" && is_generation "$g" && echo "$g"
+}
+check_bucket() { # gs://<project>-tfstate must belong to the project (a bucket name is global: anyone can take it)
+  local want got
+  want="$(gcloud projects describe "$PROJECT" --format='value(projectNumber)' 2>/dev/null)"
+  got="$(gcloud storage buckets describe "gs://$PROJECT-tfstate" --raw --format='value(projectNumber)' 2>/dev/null)"
+  [[ "$want" =~ ^[0-9]+$ ]] || die "can't read project $PROJECT's number (gcloud projects describe $PROJECT): nothing done"
+  [[ "$got" =~ ^[0-9]+$ ]] || die "can't read the bucket gs://$PROJECT-tfstate (does it exist, and may you read it?): nothing done"
+  [ "$got" = "$want" ] || die "gs://$PROJECT-tfstate belongs to another project, not $PROJECT: nothing done"
+}
+
+# --- 1. Tools: Terraform >= 1.9 (infra/versions.tf), gcloud, gh
+terraform_ok() {
+  local v major minor
+  v="$(terraform version 2>/dev/null | sed -n '1s/^Terraform v\([0-9]*\)\.\([0-9]*\).*/\1 \2/p')"
+  [ -n "$v" ] || return 1
+  major="${v% *}"; minor="${v#* }"
+  [ "$major" -gt 1 ] || { [ "$major" = 1 ] && [ "$minor" -ge 9 ]; }
+}
+infra_install_cmd() { # tool: how this environment installs it
+  case "$ENV:$1" in
+    macos:terraform) echo "brew install hashicorp/tap/terraform" ;;
+    macos:gcloud) echo "brew install --cask gcloud-cli" ;;
+    macos:gh) echo "brew install gh" ;;
+    *:terraform) echo "Terraform $TERRAFORM_VERSION from releases.hashicorp.com (sha256 checked) into $TF_HOME" ;;
+    *:gcloud) echo "Google's apt repository (key $GCLOUD_APT_KEY_FPR), then ${SUDO}apt-get install -y google-cloud-cli" ;;
+    *:gh) echo "GitHub's apt repository (keys $GH_APT_KEY_FPR), then ${SUDO}apt-get install -y gh" ;;
+  esac
+}
+download_terraform() { # dest: the pinned zip for this machine, sha256 checked
+  local arch sha
+  case "$(uname -m)" in
+    x86_64|amd64) arch=amd64; sha="$TERRAFORM_SHA256_LINUX_AMD64" ;;
+    aarch64|arm64) arch=arm64; sha="$TERRAFORM_SHA256_LINUX_ARM64" ;;
+    *) die "no pinned Terraform for $(uname -m): install Terraform >= 1.9 yourself, then rerun" ;;
+  esac
+  download_checked "https://releases.hashicorp.com/terraform/${TERRAFORM_VERSION}/terraform_${TERRAFORM_VERSION}_linux_${arch}.zip" \
+    "$sha" "$1" || die "Terraform $TERRAFORM_VERSION not installed; nothing installed"
+}
+infra_tools() {
+  local missing="" apt="" t now tf_zip=""
+  terraform_ok || missing="terraform"
+  has gcloud || missing="$missing gcloud"
+  has gh || missing="$missing gh"
+  if [ -z "$missing" ]; then say "Tools: Terraform, gcloud and gh present."; return 0; fi
+  say "Missing or wrong:"
+  for t in $missing; do
+    now="not found"
+    if [ "$t" = terraform ] && has terraform; then now="$(terraform version 2>/dev/null | head -1), need >= 1.9"; fi
+    say "  - $t: $now. Install: $(infra_install_cmd "$t")"
+  done
+  if [ "$NO_INSTALL" = 1 ]; then say "Check only (--no-install): nothing changed."; exit 1; fi
+  if [ "$ENV" != macos ]; then
+    case "$missing" in *terraform*) has unzip || apt="unzip" ;; esac
+    case "$missing" in *gcloud*|*gh*) has gpg || apt="$apt gpg" ;; esac
+    if { [ -n "$apt" ] || [ "$missing" != terraform ]; } && { ! has apt-get || ! can_root; }; then
+      say "Installing these needs apt-get and root (sudo): install them yourself, then rerun bash scripts/setup.sh infra."
+      exit 1
+    fi
+  fi
+  if [ "$YES" != 1 ] && ! interactive; then
+    say "No terminal to ask in: nothing installed. Rerun with --yes to install the above, or install them yourself."
+    exit 1
+  fi
+  if [ "$YES" != 1 ] && ! ask "Install these?"; then say "Nothing installed. The commands are listed above."; exit 1; fi
+
+  if [ "$ENV" = macos ]; then
+    ensure_brew
+    for t in $missing; do
+      # shellcheck disable=SC2046 # the formula, and --cask for gcloud
+      brew install $(infra_install_cmd "$t" | sed 's/^brew install //') || die "$(infra_install_cmd "$t") failed"
+      installed "$t (Homebrew)"
+    done
+  else
+    # The Terraform zip is checked before anything is installed.
+    case "$missing" in *terraform*) tf_zip="$INFRA_TMP/terraform.zip"; download_terraform "$tf_zip" ;; esac
+    if [ -n "$apt" ]; then
+      as_root apt-get update || warn "apt-get update failed; trying the install anyway"
+      # shellcheck disable=SC2086 # a list of packages
+      as_root apt-get install -y $apt || die "apt-get install -y $apt failed"
+    fi
+    if [ -n "$tf_zip" ]; then
+      { unzip -q -o "$tf_zip" terraform -d "$INFRA_TMP" && mkdir -p "$TF_HOME" && mv -f "$INFRA_TMP/terraform" "$TF_HOME/terraform" &&
+        chmod 755 "$TF_HOME/terraform"; } || die "couldn't install Terraform into $TF_HOME"
+      installed "Terraform $TERRAFORM_VERSION in $TF_HOME"
+    fi
+    case "$missing" in *gcloud*)
+      add_apt_repo "$GCLOUD_APT_KEY_URL" "$GCLOUD_KEYRING" "$GCLOUD_APT_LINE" "$GCLOUD_APT_KEY_FPR" || die "gcloud not installed"
+      as_root apt-get install -y google-cloud-cli || die "apt-get install -y google-cloud-cli failed"
+      installed "gcloud (Google's apt repository)" ;;
+    esac
+    case "$missing" in *gh*)
+      add_apt_repo "$GH_APT_KEY_URL" "$GH_KEYRING" "$GH_APT_LINE" "$GH_APT_KEY_FPR" || die "gh not installed"
+      as_root apt-get install -y gh || die "apt-get install -y gh failed"
+      installed "gh (GitHub's apt repository)" ;;
+    esac
+  fi
+  terraform_ok || die "Terraform >= 1.9 still isn't first on PATH"
+  has gcloud || die "gcloud still isn't on PATH (open a new terminal and rerun)"
+  has gh || die "gh still isn't on PATH"
+}
+
+# --- 2. Logins, then the project
+infra_login() {
+  local account hint="$PROJECT"
+  account="$(gcloud auth list --filter=status:ACTIVE --format='value(account)' 2>/dev/null | head -1)"
+  if [ -z "$account" ] || ! gcloud auth application-default print-access-token >/dev/null 2>&1; then
+    [ -n "$hint" ] || hint="$(gcloud config get project 2>/dev/null | head -1)"
+    valid_project "$hint" || hint="<project-id>"
+    say "Log in to Google Cloud first (your own account, with 2-step verification), then rerun:"
+    say "  gcloud auth login"
+    say "  gcloud auth application-default login"
+    say "  gcloud auth application-default set-quota-project $hint"
+    exit 1
+  fi
+  say "gcloud: logged in as $account"
+}
+infra_project() {
+  if [ -z "$PROJECT" ]; then PROJECT="$(gcloud config get project 2>/dev/null | head -1)"; fi
+  [ -n "$PROJECT" ] || die "no GCP project: rerun with --project <id> (or gcloud config set project <id>)"
+  valid_project "$PROJECT" || die "'$PROJECT' isn't a GCP project id: rerun with --project <id>"
+  say "Project: $PROJECT"
+}
+
+# --- 3. Owner config: both stored copies at the generations just read, checked before anything is written. A local
+# file that still matches what this machine last pulled or pushed (its recorded sha256) follows the stored copy.
+infra_pull() {
+  local f gen sum bucket refused=0
+  read_gens
+  local recorded="$GENS"
+  GENS=""
+  for f in $INFRA_CONFIG; do
+    if ! gen="$(stored_gen "$f")"; then
+      say "There is no $(bucket_dir)/$f (or you can't read it). The owner uploads the config once, from the machine"
+      say "that has it:"
+      say "  gcloud storage cp infra/terraform.tfvars infra/backend.hcl gs://$PROJECT-tfstate/config/"
+      exit 1
+    fi
+    ( umask 077; gcloud storage cp "$(bucket_dir)/$f#$gen" "$INFRA_TMP/$f" >/dev/null 2>&1 ) ||
+      die "couldn't download $(bucket_dir)/$f"
+    sum="$(sha256_of "$INFRA_TMP/$f")" && [ -n "$sum" ] || die "no sha256sum or shasum to check infra/$f with"
+    GENS="$GENS$f $gen $sum"$'\n'
+  done
+  bucket="$(sed -n 's/^[[:space:]]*bucket[[:space:]]*=[[:space:]]*"\([^"]*\)".*/\1/p' "$INFRA_TMP/backend.hcl" | head -1)"
+  [ "$bucket" = "$PROJECT-tfstate" ] ||
+    die "the stored backend.hcl doesn't name the bucket $PROJECT-tfstate: nothing written (fix it on the machine that has it, then infra-push)"
+  for f in $INFRA_CONFIG; do
+    [ -f "infra/$f" ] || continue
+    cmp -s "infra/$f" "$INFRA_TMP/$f" && continue
+    [ "$FORCE" = 1 ] && continue
+    sum="$(printf '%s\n' "$recorded" | awk -v f="$f" '$1 == f { print $3; exit }')"
+    [ -n "$sum" ] && [ "$(sha256_of "infra/$f")" = "$sum" ] && continue # untouched since this machine's pull or push
+    refused=1
+    if [ -n "$sum" ] && [ "$(printf '%s\n' "$recorded" | awk -v f="$f" '$1 == f { print $2; exit }')" = "$(gen_of "$f")" ]; then
+      err "infra/$f differs from the stored copy: it has a local edit that isn't pushed. Run \`setup.sh infra-push\`, or \`--force\` to drop the edit."
+    else
+      err "infra/$f differs from the stored copy, and the stored copy changed since this machine's pull (or was never pulled here)."
+      err "  To keep your edit: keep a copy (cp infra/$f ~/$f.mine), run \`setup.sh infra --force\`, re-apply the edit, then \`setup.sh infra-push\`."
+    fi
+  done
+  [ "$refused" = 0 ] || exit 1
+  mkdir -p infra || die "couldn't create infra/"
+  for f in $INFRA_CONFIG; do
+    { chmod 600 "$INFRA_TMP/$f" && mv -f "$INFRA_TMP/$f" "infra/$f" && chmod 600 "infra/$f"; } || die "couldn't write infra/$f"
+  done
+  write_gens
+  say "Owner config: infra/terraform.tfvars and infra/backend.hcl from $(bucket_dir)/ (mode 600)"
+}
+
+# --- 4. Workstation secrets: every entry checked before any is fetched. One path shape only: .env.<name> at the
+# repo's top (git-ignored by .env.*), never .env, .env.example or the owner config.
+infra_secrets() {
+  local line trimmed name path extra entries="" bad=0
+  if [ -f "$WS_LIST" ]; then
+    while IFS= read -r line || [ -n "$line" ]; do
+      trimmed="${line#"${line%%[![:space:]]*}"}"
+      case "$trimmed" in ""|"#"*) continue ;; esac
+      name=""; path=""; extra=""
+      read -r name path extra <<<"$trimmed"
+      if [ -z "$path" ] || [ -n "$extra" ]; then err "$WS_LIST: '$trimmed' isn't '<secret name> <path in the repo>'"; bad=1; continue; fi
+      if ! [[ "$name" =~ ^[A-Za-z0-9_-]{1,255}$ ]]; then err "$WS_LIST: '$name' isn't a Secret Manager secret name"; bad=1; continue; fi
+      case "$path" in /*) err "$WS_LIST: $path is absolute; use .env.<name> in the repo"; bad=1; continue ;; esac
+      case "/$path/" in */../*) err "$WS_LIST: $path has '..'; use .env.<name> in the repo"; bad=1; continue ;; esac
+      case "$path" in .env|.env.example|infra/terraform.tfvars|infra/backend.hcl|infra/.config-generation)
+        err "$WS_LIST: $path is never a workstation secret's file"; bad=1; continue ;;
+      esac
+      if ! [[ "$path" =~ ^\.env\.[a-z0-9][a-z0-9-]*$ ]]; then
+        err "$WS_LIST: $path isn't .env.<name> (lower-case letters, digits and -) at the repo's top"; bad=1; continue
+      fi
+      if [ -d "$path" ] || ! git check-ignore -q -- "$path" 2>/dev/null; then
+        err "$WS_LIST: $path isn't a git-ignored file: a secret never goes where git could commit it"; bad=1; continue
+      fi
+      entries="$entries$name $path"$'\n'
+    done < "$WS_LIST"
+  fi
+  [ "$bad" = 0 ] || die "nothing fetched: fix $WS_LIST"
+  if [ -z "$entries" ]; then say "No workstation secrets listed ($WS_LIST)."; return 0; fi
+  while read -r name path; do
+    [ -n "$name" ] || continue
+    ( umask 077; gcloud secrets versions access latest --secret="$name" --project "$PROJECT" > "$INFRA_TMP/secret" ) ||
+      die "couldn't read the secret $name (does it exist, and may you read it?)"
+    { chmod 600 "$INFRA_TMP/secret" && mv -f "$INFRA_TMP/secret" "$path" && chmod 600 "$path"; } || die "couldn't write $path"
+    say "Workstation secret $name: $path (mode 600)"
+  done <<<"$entries"
+}
+
+run_infra() { # bash scripts/setup.sh infra
+  local on_path=1
+  say "Environment: $ENV_LABEL"
+  infra_start
+  case ":$PATH:" in *":$TF_HOME:"*) ;; *) on_path=0 ;; esac
+  PATH="$TF_HOME:$PATH"; export PATH # a Terraform installed here comes first for this run
+  infra_tools
+  if [ "$NO_INSTALL" = 1 ]; then say "Check only (--no-install): everything is installed."; exit 0; fi
+  infra_login
+  infra_project
+  gh auth status >/dev/null 2>&1 || warn "gh isn't logged in (no infra step needs it): gh auth login"
+  check_bucket
+  infra_pull
+  infra_secrets
+  terraform -chdir=infra init -backend-config=backend.hcl || die "terraform init failed"
+  if [ "$on_path" = 0 ] && [ -x "$TF_HOME/terraform" ]; then
+    say "Terraform is in $TF_HOME: add it to PATH in your shell profile (export PATH=\"\$HOME/.local/bin:\$PATH\")."
+  fi
+  say ""
+  say 'Ready: `cd infra && terraform plan`'
+  exit 0
+}
+
+# bash scripts/setup.sh infra-push: each config file edited since this machine's pull or push (its sha256 differs
+# from the recorded one), only over the generation recorded for it.
+run_infra_push() {
+  local f gen now sum out changed=""
+  infra_start
+  [ -f "$GEN_FILE" ] || die "this machine has no pulled config ($GEN_FILE): pull first: \`setup.sh infra\`"
+  PROJECT="$(awk '$1 == "project" { print $2; exit }' "$GEN_FILE")"
+  valid_project "$PROJECT" || die "$GEN_FILE has no valid project: pull first: \`setup.sh infra\`"
+  read_gens
+  for f in $INFRA_CONFIG; do
+    is_generation "$(gen_of "$f")" || die "$GEN_FILE has no generation for $f: pull first: \`setup.sh infra\`"
+    [ -f "infra/$f" ] || die "there is no infra/$f: pull first: \`setup.sh infra\`"
+    sum="$(sha256_of "infra/$f")" && [ -n "$sum" ] || die "no sha256sum or shasum to check infra/$f with"
+    [ "$sum" = "$(sum_recorded "$f")" ] || changed="$changed $f"
+  done
+  if [ -z "$changed" ]; then say "Nothing to push: infra/terraform.tfvars and infra/backend.hcl are as last pulled or pushed."; exit 0; fi
+  has gcloud || die "gcloud isn't installed: run bash scripts/setup.sh infra first"
+  infra_login
+  check_bucket
+  for f in $changed; do
+    now="$(stored_gen "$f")" || die "couldn't read $(bucket_dir)/$f"
+    if [ "$now" != "$(gen_of "$f")" ]; then
+      err "$(bucket_dir)/$f changed since this machine's pull: pull first: \`setup.sh infra\`"
+      exit 1
+    fi
+  done
+  for f in $changed; do
+    gen="$(gen_of "$f")"; sum="$(sha256_of "infra/$f")"
+    out="$(gcloud storage cp "infra/$f" "$(bucket_dir)/$f" --if-generation-match="$gen" --print-created-message 2>&1 >/dev/null)" ||
+      die "couldn't store infra/$f (did the stored copy change since this machine's pull? pull first: \`setup.sh infra\`)"
+    now="$(printf '%s\n' "$out" | sed -n 's/^Created: .*#\([0-9][0-9]*\)$/\1/p' | tail -1)"
+    if ! is_generation "$now"; then
+      now="$(stored_gen "$f")" || die "stored infra/$f, but couldn't read its new generation: run \`setup.sh infra\`"
+    fi
+    set_gen "$f" "$now" "$sum"; write_gens
+    say "Stored $(bucket_dir)/$f: generation $now"
+  done
+  exit 0
+}
+
+# Task 113 fills run_services below, in its own lane.
 
 run_services() { # setup.sh services [--stop] (task 113): the database and file storage of the no-Docker setup
   local code=0 pid
@@ -456,7 +812,8 @@ run_services() { # setup.sh services [--stop] (task 113): the database and file 
 }
 
 case "$SUBCOMMAND" in
-  infra|infra-push) run_infra ;;
+  infra) run_infra ;;
+  infra-push) run_infra_push ;;
   services) run_services ;;
 esac
 
@@ -846,5 +1203,5 @@ else
 fi
 say "  Next: pnpm dev (http://localhost:3000), sign up, then"
 say "        pnpm --filter @repo/dashboard seed:demo --email <you>"
-say "  GCP admins: bash scripts/setup.sh infra (coming with task 112)."
+say "  GCP admins: bash scripts/setup.sh infra"
 exit "$STATUS"
