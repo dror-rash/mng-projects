@@ -175,6 +175,16 @@ browsers, summary), tested with stubs like `test-lane.sh`. No new ADR (ADR-0013 
   `refactor/setup-seams` before tasks 112 and 113 start: subcommand dispatch with a parser per subcommand and usage as a
   heredoc, `download_checked` (fnm moved onto it), `ensure_brew`, `add_apt_repo`, empty `infra` / `infra-push` /
   `services` arms that keep today's messages, and test helpers per task in `test-setup.sh`.
+- 2026-11-14 – Shared refactor on `refactor/setup-seams` (lane 1), behavior-preserving for the developer flow:
+  - `SUBCOMMAND` is the first argument; `parse_args` takes only that subcommand's flags (`need_value` for one with a
+    value) and rejects the rest; usage is a heredoc. `run_infra` keeps the task 112 message, `run_services` names
+    task 113; both exit 1 right after environment detection. A subcommand after a flag is an unknown option, and
+    `infra --no-docker` is refused (it took the infra message before).
+  - `download_checked` (fnm moved onto it; its mismatch message now names the URL), `ensure_brew`, `add_apt_repo`
+    (signed-by its keyring, gpg --dearmor, `SETUP_APT_SOURCES` test hook; unused until 112/113).
+  - Sourced, `setup.sh` only defines its helpers: `test-setup.sh`'s `call` checks them directly. `infra_world` and
+    `pg_world` are the per-task stub hooks in `world()`.
+  - `test-setup.sh`: 179 passed (the 132 unchanged plus 47), under /bin/bash 3.2 and bash 5.2 (Ubuntu 24.04).
 
 ## Parking lot
 - `.devcontainer/devcontainer.json` (Node 22, docker-in-docker, forwarded ports) for Codespaces.
