@@ -437,9 +437,8 @@ check "ensure_brew: Homebrew there: asks and installs nothing" sh -c "grep -qx r
 world; absent brew; call -- 'ensure_brew; echo after'
 check "ensure_brew: no terminal: exits 1 with the installer"  sh -c "[ $CODE = 1 ] && grep -q 'Homebrew/install/HEAD/install.sh' '$W/out' && ! grep -q after '$W/out' && [ ! -s '$W/log' ]"
 world; absent brew; answer y; call SETUP_INTERACTIVE=1 SETUP_BREW_PREFIXES="$W/newbrew" -- 'ensure_brew && has brew && echo ready'; STDIN=
-check "ensure_brew: yes runs Homebrew's installer"          sh -c "grep -q '^curl .*Homebrew/install/HEAD/install\.sh' '$W/log' && grep -qx ready '$W/out'"
+check "ensure_brew: yes runs Homebrew's installer"          sh -c "grep -q '^curl .*Homebrew/install/HEAD/install\.sh' '$W/log' && grep -q 'ready\$' '$W/out'"
 
-APT="$W/aptroot"
 apt_repo_world() { # a Linux world with gpg, where the keyring and sources.list.d go under $W/aptroot
   world; state uname Linux; APT="$W/aptroot"; KR="$APT/keyrings/example.gpg"
   LINE="deb [arch=amd64 signed-by=$KR] https://example.test/apt stable main"
