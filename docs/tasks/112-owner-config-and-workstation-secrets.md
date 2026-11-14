@@ -1,6 +1,6 @@
 # Task 112: The owner's infra config (and any workstation secret) on any machine
 
-- **Status:** todo
+- **Status:** in-progress
 - **Milestone:** cross-cutting (infra tooling)
 - **Zone / package:** `scripts/setup.sh` (subcommands `infra` and `infra-push`), `scripts/test-setup.sh`, `infra/workstation-secrets.list` (new, committed, no entries), `.claude/hooks/guard.sh` + `scripts/test-hooks.sh` (refuse both subcommands in agent sessions), `.gitignore` (`infra/.config-generation`), `infra/README.md` ("Working from another machine", "Onboarding a GCP admin", rotation), `README.md` (the leaver step in "Onboarding a new person" points at `infra/README.md` instead of ADR-0013). No Terraform change. Commits `test:` → `feat(scripts):` → `docs:`.
 - **Feature file:** none (tooling; `scripts/test-setup.sh` and `scripts/test-hooks.sh` are the checks)
@@ -158,6 +158,7 @@ No new ADR (ADR-0013).
 - 2026-11-14 – Drafted with task 111. Owner's rule (ADR-0013): no secrets → state bucket; real secrets → Secret
   Manager. Only the owner for now; onboarding a GCP admin waits for the bucket IAM in Terraform.
 - 2026-11-14 – Readiness check against task 111's merged script (planner). Task text corrected:
+- 2026-11-14 – Started in lane 1.
   - the shared refactor is a dependency, and the subcommands branch off after environment detection;
   - task 111's placeholders are removed;
   - `CLAUDECODE=1`, and the guard pattern doesn't catch commit messages;
