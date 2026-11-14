@@ -2,10 +2,10 @@
 
 import { and, eq, getDb, schema, sql, withAccess } from "@repo/db";
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 
 import { requireActionSession } from "@/features/auth/require-session";
 import { type FormState, invalid } from "@/features/forms/form-state";
+import { redirectFromAction } from "@/features/navigation/redirect-from-action";
 import { requireProjectWorkAccess } from "@/features/projects/require-project-access";
 import { todayUtc } from "@/features/tasks/due-dates";
 import { isAssignable } from "@/features/workspaces/members";
@@ -90,7 +90,7 @@ export async function createVisitAction(_prev: FormState, formData: FormData): P
     return result;
   }
   revalidateVisits(result.projectId);
-  redirect(`/projects/${result.projectId}/visits/${result.visitId}`);
+  return redirectFromAction(`/projects/${result.projectId}/visits/${result.visitId}`);
 }
 
 /** The visit of the form's project, if the user may change it; otherwise the not-found refusal. */
@@ -123,7 +123,7 @@ export async function updateVisitAction(_prev: FormState, formData: FormData): P
     return result;
   }
   revalidateVisits(result.projectId);
-  redirect(`/projects/${result.projectId}/visits/${result.visitId}`);
+  return redirectFromAction(`/projects/${result.projectId}/visits/${result.visitId}`);
 }
 
 /** Soft delete (design rule 8) through `delete_visit`; an admin restores it from the Deleted page. */
@@ -139,5 +139,5 @@ export async function deleteVisitAction(formData: FormData) {
     return project.id;
   });
   revalidateVisits(projectId);
-  redirect(`/projects/${projectId}`);
+  return redirectFromAction(`/projects/${projectId}`);
 }

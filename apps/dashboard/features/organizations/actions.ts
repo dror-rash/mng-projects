@@ -2,11 +2,11 @@
 
 import { eq, getDb, schema, withAccess } from "@repo/db";
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 
 import { requireAdmin } from "@/features/access/require-change";
 import { requireActionSession } from "@/features/auth/require-session";
 import { type FormState, invalid } from "@/features/forms/form-state";
+import { redirectFromAction } from "@/features/navigation/redirect-from-action";
 import { listParentProjectsAtSitesOf } from "@/features/sites/queries";
 import { requireWorkspaceForAction } from "@/features/workspaces/require-workspace";
 
@@ -47,7 +47,7 @@ export async function createCustomerAction(_prev: FormState, formData: FormData)
     return result;
   }
   revalidateCustomerNames();
-  redirect(`/customers/${result.id}`);
+  return redirectFromAction(`/customers/${result.id}`);
 }
 
 export async function updateCustomerAction(_prev: FormState, formData: FormData): Promise<FormState> {
@@ -84,7 +84,7 @@ export async function updateCustomerAction(_prev: FormState, formData: FormData)
     return result;
   }
   revalidateCustomerNames();
-  redirect(`/customers/${result.id}`);
+  return redirectFromAction(`/customers/${result.id}`);
 }
 
 /**
@@ -125,8 +125,8 @@ export async function deleteCustomerAction(formData: FormData) {
     return null;
   });
   if (blocked) {
-    redirect(`/customers/${blocked}/delete`);
+    return redirectFromAction(`/customers/${blocked}/delete`);
   }
   revalidateCustomerNames();
-  redirect("/customers");
+  return redirectFromAction("/customers");
 }

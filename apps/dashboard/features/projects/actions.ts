@@ -1,10 +1,10 @@
 "use server";
 
 import { eq, getDb, schema, withAccess } from "@repo/db";
-import { redirect } from "next/navigation";
 
 import { requireActionSession } from "@/features/auth/require-session";
 import { type FormState, invalid } from "@/features/forms/form-state";
+import { redirectFromAction } from "@/features/navigation/redirect-from-action";
 import { requireWorkspaceForAction } from "@/features/workspaces/require-workspace";
 
 import { parseProjectInput } from "./project-input";
@@ -43,7 +43,7 @@ export async function createProjectAction(_prev: FormState, formData: FormData):
     return result;
   }
   revalidateOverviews();
-  redirect(`/projects/${result.id}`);
+  return redirectFromAction(`/projects/${result.id}`);
 }
 
 /** The owner never changes (rule 4a); the customer must still suit it, and the site the customer (task 055). */
@@ -70,7 +70,7 @@ export async function updateProjectAction(_prev: FormState, formData: FormData):
     return result;
   }
   revalidateOverviews();
-  redirect(`/projects/${result.id}`);
+  return redirectFromAction(`/projects/${result.id}`);
 }
 
 /**
@@ -92,7 +92,7 @@ export async function setProjectLifecycleAction(formData: FormData) {
     return project.id;
   });
   revalidateOverviews();
-  redirect(`/projects/${id}`);
+  return redirectFromAction(`/projects/${id}`);
 }
 
 /**
@@ -109,5 +109,5 @@ export async function deleteProjectAction(formData: FormData) {
       .where(eq(schema.project.id, project.id));
   });
   revalidateOverviews();
-  redirect("/");
+  return redirectFromAction("/");
 }

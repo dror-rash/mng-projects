@@ -2,12 +2,12 @@
 
 import { and, eq, getDb, isNull, schema, withAccess } from "@repo/db";
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 
 import { canChangeCustomer } from "@/features/access/predicates";
 import { requireAdmin } from "@/features/access/require-change";
 import { requireActionSession } from "@/features/auth/require-session";
 import { type FormState, invalid } from "@/features/forms/form-state";
+import { redirectFromAction } from "@/features/navigation/redirect-from-action";
 import { requireWorkspaceForAction } from "@/features/workspaces/require-workspace";
 
 import { parsePartnerName } from "./partner-name";
@@ -29,7 +29,7 @@ export async function createPartnerAction(_prev: FormState, formData: FormData):
     return result;
   }
   revalidatePath("/partners");
-  redirect(`/partners/${result.id}`);
+  return redirectFromAction(`/partners/${result.id}`);
 }
 
 /**
@@ -126,5 +126,5 @@ export async function deletePartnerAction(formData: FormData) {
   });
   // Partner names show on the members page and in role choices; projects lose their partner's users.
   revalidatePath("/", "layout");
-  redirect("/partners");
+  return redirectFromAction("/partners");
 }

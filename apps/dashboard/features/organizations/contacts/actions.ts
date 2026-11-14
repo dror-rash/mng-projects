@@ -2,10 +2,10 @@
 
 import { and, eq, exists, getDb, isNull, schema, withAccess } from "@repo/db";
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 
 import { requireActionSession } from "@/features/auth/require-session";
 import { type FormState, invalid } from "@/features/forms/form-state";
+import { redirectFromAction } from "@/features/navigation/redirect-from-action";
 
 import { requireOrganizationAccess } from "../require-organization-access";
 import { parseContactInput } from "./contact-input";
@@ -74,7 +74,7 @@ export async function updateContactAction(_prev: FormState, formData: FormData):
     return result;
   }
   revalidateCustomer(result.customerId);
-  redirect(`/customers/${result.customerId}`);
+  return redirectFromAction(`/customers/${result.customerId}`);
 }
 
 /** Soft delete: an admin restores the contact from the Deleted page (still the primary one if it was). */

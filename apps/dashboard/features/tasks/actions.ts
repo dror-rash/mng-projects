@@ -2,10 +2,10 @@
 
 import { and, eq, getDb, isNull, schema, sql, withAccess } from "@repo/db";
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 
 import { requireActionSession } from "@/features/auth/require-session";
 import { type FormState, invalid } from "@/features/forms/form-state";
+import { redirectFromAction } from "@/features/navigation/redirect-from-action";
 import { isCustomerChoice } from "@/features/organizations/customer-names";
 import { isAssignable } from "@/features/workspaces/members";
 import { revalidateOverviews } from "@/features/projects/revalidate";
@@ -192,5 +192,5 @@ export async function deleteTaskFromPageAction(formData: FormData) {
     "change",
   );
   revalidateProject(projectId);
-  redirect(`/projects/${projectId}`);
+  return redirectFromAction(`/projects/${projectId}`);
 }

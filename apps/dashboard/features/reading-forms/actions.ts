@@ -2,10 +2,10 @@
 
 import { and, desc, eq, getDb, schema, sql, withAccess } from "@repo/db";
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 
 import { requireAdmin } from "@/features/access/require-change";
 import { type FormState, invalid } from "@/features/forms/form-state";
+import { redirectFromAction } from "@/features/navigation/redirect-from-action";
 import { requireWorkspaceForAction } from "@/features/workspaces/require-workspace";
 
 import { parseFieldInput, parseFormInput } from "./field-input";
@@ -70,7 +70,7 @@ export async function createReadingFormAction(_prev: FormState, formData: FormDa
     return result;
   }
   revalidatePath("/forms");
-  redirect(`/forms/${result.id}`);
+  return redirectFromAction(`/forms/${result.id}`);
 }
 
 /** Adds a field at the end of a draft form. */

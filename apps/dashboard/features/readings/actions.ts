@@ -2,10 +2,10 @@
 
 import { getDb, schema, withAccess } from "@repo/db";
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 
 import { requireActionSession } from "@/features/auth/require-session";
 import { type FormState, invalid } from "@/features/forms/form-state";
+import { redirectFromAction } from "@/features/navigation/redirect-from-action";
 import { requireProjectWorkAccess } from "@/features/projects/require-project-access";
 import { getProjectVisit } from "@/features/visits/queries";
 
@@ -66,5 +66,5 @@ export async function createReadingAction(_prev: FormState, formData: FormData):
     return result;
   }
   revalidatePath(`/projects/${result.projectId}`, "layout");
-  redirect(`/projects/${result.projectId}/visits/${result.visitId}/readings/${result.readingId}`);
+  return redirectFromAction(`/projects/${result.projectId}/visits/${result.visitId}/readings/${result.readingId}`);
 }

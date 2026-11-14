@@ -3,10 +3,10 @@
 import { and, type Db, eq, getDb, schema, withAccess } from "@repo/db";
 import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
-import { redirect } from "next/navigation";
 
 import { isAdmin } from "@/features/access/require-change";
 import { type FormState, invalid } from "@/features/forms/form-state";
+import { redirectFromAction } from "@/features/navigation/redirect-from-action";
 
 import { WORKSPACE_COOKIE } from "./current-workspace";
 import { requireWorkspaceForAction } from "./require-workspace";
@@ -89,5 +89,5 @@ export async function deleteWorkspaceAction(_prev: FormState, formData: FormData
   }
   await removeWorkspaceFiles(result.deletedId);
   (await cookies()).delete(WORKSPACE_COOKIE);
-  redirect("/");
+  return redirectFromAction("/");
 }

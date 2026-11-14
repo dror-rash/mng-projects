@@ -2,11 +2,11 @@
 
 import { and, eq, getDb, isNull, schema, withAccess } from "@repo/db";
 import { revalidatePath } from "next/cache";
-import { redirect } from "next/navigation";
 
 import { requireSiteChange } from "@/features/access/require-change";
 import { requireActionSession } from "@/features/auth/require-session";
 import { type FormState, invalid } from "@/features/forms/form-state";
+import { redirectFromAction } from "@/features/navigation/redirect-from-action";
 import { parseContactInput } from "@/features/organizations/contacts/contact-input";
 import { requireOrganizationAccess } from "@/features/organizations/require-organization-access";
 
@@ -52,7 +52,7 @@ export async function createSiteAction(_prev: FormState, formData: FormData): Pr
     return result;
   }
   revalidateSite(result.id);
-  redirect(`/sites/${result.id}`);
+  return redirectFromAction(`/sites/${result.id}`);
 }
 
 export async function updateSiteAction(_prev: FormState, formData: FormData): Promise<FormState> {
@@ -73,7 +73,7 @@ export async function updateSiteAction(_prev: FormState, formData: FormData): Pr
     return result;
   }
   revalidateSite(result.id);
-  redirect(`/sites/${result.id}`);
+  return redirectFromAction(`/sites/${result.id}`);
 }
 
 /**
@@ -96,7 +96,7 @@ export async function deleteSiteAction(formData: FormData) {
     return found;
   });
   revalidateSite(site.id);
-  redirect(`/customers/${site.organizationId}`);
+  return redirectFromAction(`/customers/${site.organizationId}`);
 }
 
 /** The form's contact of the site, not deleted. */
@@ -148,7 +148,7 @@ export async function updateSiteContactAction(_prev: FormState, formData: FormDa
     return result;
   }
   revalidateSite(result.siteId);
-  redirect(`/sites/${result.siteId}`);
+  return redirectFromAction(`/sites/${result.siteId}`);
 }
 
 /** Soft delete: an admin restores the contact from the Deleted page. */
