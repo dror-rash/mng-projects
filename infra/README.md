@@ -25,7 +25,7 @@ gcloud storage buckets update gs://<PROJECT_ID>-tfstate --versioning
 
 cd infra
 cp backend.hcl.example backend.hcl            # edit
-cp terraform.tfvars.example terraform.tfvars  # edit (region = "me-west1", alert_email, billing_account, monthly_budget)
+cp terraform.tfvars.example terraform.tfvars  # edit (region = "me-west1", alert_email, billing_account, monthly_budget, budget_currency)
 terraform init -backend-config=backend.hcl
 terraform plan
 terraform apply
@@ -336,7 +336,7 @@ role check, nothing is deployed: the old revision keeps serving as `app`.
 
 ## Alerts and budget
 `infra/monitoring.tf` (task 092, register SEC-17). Everything emails one channel, the owner's address
-(`alert_email`). `alert_email`, `billing_account` and `monthly_budget` have no default: they are set in the
+(`alert_email`). `alert_email`, `billing_account`, `monthly_budget` and `budget_currency` have no default: they are set in the
 git-ignored `terraform.tfvars` only (`terraform.tfvars.example` has placeholders), and the address and billing
 account are `sensitive`, so `terraform plan` prints neither. `bash infra/scripts/test-monitoring.sh` (in
 `pnpm test:infra` and CI) checks all of this, with probes.
@@ -349,7 +349,7 @@ account are `sensitive`, so `terraform plan` prints neither. `bash infra/scripts
 | Security config changed | by anyone, deployers included: a Workload Identity pool or provider created, updated, deleted or undeleted; a custom role likewise; an HMAC key created; a secret version added, disabled or destroyed, or a secret deleted; a Cloud SQL user created, updated or deleted, or the instance updated; a Cloud Run job created, replaced or updated; a log sink or exclusion created, updated or deleted; a bucket's settings updated; an alert policy or notification channel updated or deleted (silencing these alerts); at most one per 5 minutes | expected after your own `terraform apply`. Otherwise: check the method and principal, undo it (`terraform plan` shows the drift), remove that principal's access; for a new secret version or SQL password, rotate the secret |
 | main: more than 5% 5xx responses | 5xx / all requests above 5% **and** at least 3 5xx responses in a 5-minute window, for the same `main` service (`shell`, `example-zone`, `dashboard`) | the service's error logs; if the latest deploy caused it, route traffic back to the previous revision or revert on `main`. `too many connections` points at the next alert |
 | Cloud SQL: connections above 80% | backends of all databases above 17.6 (80% of `db-f1-micro`'s 22 login connections) for 5 minutes | `pg_stat_activity` by user and database as `app`; previews take at most 10 (Known limits). Lower `main`'s `max_instances` or move to a bigger tier. The threshold follows `db_tier` through `local.sql_max_connections`; a tier missing there fails the plan (precondition), so add its limit with the tier change |
-| Budget | 50%, 90% and 100% of `monthly_budget` (USD, this project's current monthly spend) | the billing report by service; Cloud SQL is most of the normal spend |
+| Budget | 50%, 90% and 100% of `monthly_budget` (in `budget_currency`, this project's current monthly spend) | the billing report by service; Cloud SQL is most of the normal spend |
 
 - The log alerts read the Admin Activity audit log (always on, free); the filters were checked against the
   project's own entries (the deployers' `ReplaceService` calls fall outside the Cloud Run alert, your own
@@ -363,7 +363,7 @@ account are `sensitive`, so `terraform plan` prints neither. `bash infra/scripts
   the account). If CI moves to direct Workload Identity access (a `principal://` subject), every deploy would alert
   until the exclusion changes.
 - The budget emails the billing account's admins as well as the channel. Its currency must be the billing
-  account's (USD). It uses a second `google` provider (`google.billing`) that sends the project as quota project,
+  account's (`budget_currency`; the API answers 400 "invalid argument" otherwise). It uses a second `google` provider (`google.billing`) that sends the project as quota project,
   which the Billing Budget API needs with user credentials. Creating it needs Billing Account Administrator (or
   Costs Manager) on the billing account; if your account lacks it, `apply` fails on `google_billing_budget.monthly`
   only (task 092 moves the budget to a follow-up then).

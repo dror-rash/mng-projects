@@ -84,11 +84,21 @@ variable "billing_account" {
 }
 
 variable "monthly_budget" {
-  description = "Monthly budget of the project in USD (whole dollars). Alerts at 50%, 90% and 100% of it."
+  description = "Monthly budget of the project, in whole units of var.budget_currency. Alerts at 50%, 90% and 100% of it."
   type        = number
 
   validation {
     condition     = var.monthly_budget > 0 && floor(var.monthly_budget) == var.monthly_budget
-    error_message = "monthly_budget must be a whole number of dollars above 0."
+    error_message = "monthly_budget must be a whole number above 0 (in var.budget_currency)."
+  }
+}
+
+variable "budget_currency" {
+  description = "The billing account's currency (ISO 4217, e.g. USD or ILS): `gcloud billing accounts describe <id> --format='value(currencyCode)'`. The Budget API refuses any other."
+  type        = string
+
+  validation {
+    condition     = can(regex("^[A-Z]{3}$", var.budget_currency))
+    error_message = "budget_currency must be a three-letter currency code such as USD or ILS."
   }
 }
