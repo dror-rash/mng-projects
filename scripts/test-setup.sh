@@ -653,8 +653,8 @@ if command -v python3 >/dev/null 2>&1; then
 fi
 if command -v python3 >/dev/null 2>&1; then
   sandbox; gcs_ready; run -- --yes; eventually logged '^fake-gcs-server '
-  state docker ok; present docker; run SETUP_PORTS="5433" -- --yes
-  check "ports: Docker runs here, so the fallback's own Postgres on 5433 warns" said "port 5433 is in use"
+  run SETUP_PORTS="5433" -- --yes --no-docker
+  check "ports: with --no-docker the fallback's own Postgres on 5433 warns" said "port 5433 is in use"
 fi
 for p in $PORTS_HELD; do kill "$p" 2>/dev/null; wait "$p" 2>/dev/null; done
 
@@ -729,7 +729,7 @@ check "without root or sudo: exits 1"                        code_is 1
 sandbox; state pg_in_distro yes; touch "$W/state/pg_apt_fails"; gcs_ready; run -- --yes
 check "apt-get install postgresql-16 fails: no initdb, exits 1" sh -c "[ $CODE = 1 ] && ! grep -q '^initdb' '$W/log' && grep -qF 'PostgreSQL 16' '$W/out'"
 
-sandbox; gcs_ready; touch "$W/state/gcs_exits"; run -- --yes
+sandbox; gcs_ready; touch "$W/state/gcs_exits"; run SETUP_GCS_WAIT=2 -- --yes
 check "an emulator that exits at once: didn't start"         said "fake-gcs-server didn't start"
 check "an emulator that exits at once: no pid file left"     test ! -e "$W/$DATA/fake-gcs-server.pid"
 check "an emulator that exits at once: exits 1"              code_is 1
@@ -752,7 +752,7 @@ run -- services
 P1="$(pg_pid)"; G1="$(gcs_pid)"
 check "services: starts the database again"                  sh -c "grep -q '^pg_ctl .* start$' '$W/log' && kill -0 '$P1'"
 check "services: starts the storage emulator again"          sh -c "kill -0 '$G1'"
-check "services: with the same arguments"                    eventually logged_f "fake-gcs-server $GCS_ARGS -data "
+check "services: with the same arguments"                    eventually logged_f "fake-gcs-server $GCS_ARGS -backend memory -data "
 check "services: runs no initdb, install or migration"       not_logged '^initdb|apt-get|^curl|^pnpm'
 check "services: exits 0"                                    code_is 0
 run -- services
@@ -771,7 +771,7 @@ check "services, pid files naming another process: starts Postgres" sh -c "grep 
 printf '%s\n' "$UNRELATED" > "$W/$DATA/fake-gcs-server.pid"; run -- services --stop
 check "services --stop: leaves another process in a pid file running" kill -0 "$UNRELATED"
 check "services --stop: drops that stale pid file"           test ! -e "$W/$DATA/fake-gcs-server.pid"
-kill "$UNRELATED" 2>/dev/null
+kill "$UNRELATED" 2>/dev/null; wait "$UNRELATED" 2>/dev/null
 rm -f "$W"/pgbin/*; run -- services
 check "services, Postgres uninstalled (data kept): says to rerun setup.sh" sh -c "[ $CODE = 1 ] && grep -qF 'rerun bash scripts/setup.sh' '$W/out' && grep -qF 'kept' '$W/out'"
 world; state uname Linux; run -- services
