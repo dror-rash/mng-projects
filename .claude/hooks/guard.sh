@@ -100,18 +100,45 @@ grep -Eq "remote\.[^[:space:]]+\.(push|mirror)" <<<"$(git_args config)" \
 grep -Eq '(^|[[:space:]])(-[[:alnum:]]*f[[:alnum:]]*|--force)([[:space:]]|$)' <<<"$(git_args add)" \
   && deny "No git add -f/--force: ignored files (.env, *.tfvars, keys) stay out of the repo (CLAUDE.md rule 7). Ask the owner if a file really belongs in git."
 
+# The rest looks at what the shell runs: only for a commit, or a command that mentions setup or gcloud with its
+# quotes and backslashes removed (a cheap first check; the words can't hide behind quotes from it).
+dq="$(tr -d "\"'\\\\" <<<"$cmd")"
+scan=0; case "$dq" in *setup*|*gcloud*) scan=1 ;; esac
+[ "$scan" = 1 ] || grep -Eq "$(git_sub commit)([[:space:]]|$)" <<<"$cmd" || exit 0
+
 # What the shell runs: the command without heredoc bodies (h), and h with the insides of quotes blanked (m, the
 # same length), so a message or a quoted argument can't pass for a command.
+# A heredoc starts at a << outside quotes that isn't a here-string (<<<); several on a line end in order.
 strip_heredocs() {
-  local line delim="" tabs=0 t tab=$'\t' re="<<(-?)[[:space:]]*[\"']?([A-Za-z_][A-Za-z0-9_]*)"
+  local line delims="" d tabs t tab=$'\t' q="" i n c rest re="^(-?)[[:space:]]*([\"']?)([A-Za-z_][A-Za-z0-9_]*)"
   while IFS= read -r line || [ -n "$line" ]; do
-    if [ -n "$delim" ]; then
+    if [ -n "$delims" ]; then
+      d="${delims%% *}"; tabs="${d%%:*}"; d="${d#*:}"
       t="$line"; [ "$tabs" = 1 ] && t="${t#"${t%%[!$tab]*}"}"
-      [ "$t" = "$delim" ] && delim=""
+      [ "$t" = "$d" ] && delims="${delims#* }"
       continue
     fi
     printf '%s\n' "$line"
-    if [[ "$line" =~ $re ]]; then delim="${BASH_REMATCH[2]}"; tabs=0; [ -n "${BASH_REMATCH[1]}" ] && tabs=1; fi
+    i=0; n=${#line}
+    while [ "$i" -lt "$n" ]; do
+      c="${line:i:1}"
+      if [ -n "$q" ]; then
+        if [ "$c" = "$q" ]; then q=""; elif [ "$q" = '"' ] && [ "$c" = '\' ]; then i=$((i + 1)); fi
+      elif [ "$c" = "'" ] || [ "$c" = '"' ]; then q="$c"
+      elif [ "$c" = '\' ]; then i=$((i + 1))
+      elif [ "${line:i:2}" = '<<' ]; then
+        if [ "${line:i+2:1}" = '<' ]; then i=$((i + 2))
+        else
+          rest="${line:i+2}"
+          if [[ "$rest" =~ $re ]]; then
+            tabs=0; [ -n "${BASH_REMATCH[1]}" ] && tabs=1
+            delims="$delims$tabs:${BASH_REMATCH[3]} "
+          fi
+          i=$((i + 1))
+        fi
+      fi
+      i=$((i + 1))
+    done
   done <<<"$1"
 }
 h="$(strip_heredocs "$cmd")"
@@ -122,16 +149,52 @@ B='(^|[[:space:];&|(/])' SH='(bash|sh|zsh|dash|ksh)([[:space:]]+-[[:alnum:]]+)*'
 # A command that runs another through a shell (bash/sh -c, a heredoc or pipe into a shell), eval or env -C.
 RUNS_SHELL="$B$SH[[:space:]]+-[[:alnum:]]*c[[:alnum:]]*([[:space:]]|$)|$B$SH[[:space:]]*(<|$|[;&|)])|${B}eval([[:space:]]|$)|${B}env([[:space:]]+(-[^[:space:]]*|[A-Za-z_][A-Za-z0-9_]*=[^[:space:]]*))*[[:space:]]+(-C|--chdir)"
 
-# setup.sh infra / infra-push fetch the owner config and workstation secrets: a person runs them, never an agent
-# (task 112, ADR-0013; setup.sh also refuses CLAUDECODE=1, which a command can unset). A run is setup.sh as a
-# command (after a separator, assignments, sudo/env/exec/nohup, lane.sh exec or a shell), checked on m, so a quoted
-# message or argument (a commit, an echo, a grep) isn't one; behind a shell wrapper the words anywhere count.
-ASSIGN='[A-Za-z_][A-Za-z0-9_]*=[^[:space:];&|]*'
-WRAP="(sudo([[:space:]]+-[^[:space:];&|]+)*|env([[:space:]]+(-u[[:space:]]+[^[:space:];&|]+|-[^[:space:];&|]+|$ASSIGN))*|exec|command|time|nohup|nice|((bash|sh)[[:space:]]+)?([^[:space:];&|]*/)?lane\\.sh[[:space:]]+exec[[:space:]]+[0-9]+[[:space:]]+--)"
-INFRA_RUN="(^|[;&|(])[[:space:]]*(($ASSIGN|$WRAP)[[:space:]]+)*($SH[[:space:]]+)?([^[:space:];&|]*/)?setup\\.sh[[:space:]]+infra(-push)?([[:space:];&|)]|$)"
-if grep -Eq "$INFRA_RUN" <<<"$m" \
-  || { grep -Eq "$RUNS_SHELL" <<<"$m" && grep -Eq 'setup\.sh[[:space:]]+infra(-push)?([^[:alnum:]_-]|$)' <<<"$cmd"; }; then
-  deny "setup.sh infra and infra-push fetch the owner's config and workstation secrets: a person runs them in their own terminal, never an agent (ADR-0013, CLAUDE.md rule 7). Ask the owner."
+if [ "$scan" = 1 ]; then
+  # h as the shell splits it: one simple command per line, each word with its quotes and backslashes removed and
+  # its inner spaces as _ (so a quoted message stays one word), redirections and their targets dropped.
+  words="$(perl -e '
+    my $s = do { local $/; <STDIN> }; my (@seg, @out);
+    sub flush { push @out, join(" ", @seg); @seg = (); }
+    sub word { my $w = "";
+      while (length $s && $s !~ /^[\s;&|()`<>]/) {
+        if ($s =~ s/^\x27([^\x27]*)\x27?//) { $w .= $1 }
+        elsif ($s =~ s/^"((?:[^"\\]|\\.)*)"?//s) { my $x = $1; $x =~ s/\\(.)/$1/gs; $w .= $x }
+        elsif ($s =~ s/^\\(.)//s) { $w .= $1 }
+        elsif ($s =~ s/^([^\s;&|()`<>\x27"\\]+)//) { $w .= $1 }
+        else { last } }
+      $w =~ s/\s/_/g; return $w; }
+    while (length $s) {
+      next if $s =~ s/^[ \t]+// || $s =~ s/^\\\n//;
+      if ($s =~ s/^(?:&>>?|\d*(?:<<<|<<-?|<>|>>|>\||>&|<&|<|>))//) { $s =~ s/^[ \t]*//; word(); next }
+      if ($s =~ s/^[\n;&|()`]//) { flush(); next }
+      my $len = length $s; my $w = word();
+      if (length $s == $len) { substr($s, 0, 1) = ""; next }
+      push @seg, $w; }
+    flush(); print "$_\n" for grep { length } @out;' <<<"$h")"
+
+  grep -Eq "${GCLOUD}secrets[[:space:]]+versions[[:space:]]+access([[:space:]]|$)" <<<"$words" \
+    && deny "Secret Manager values are never read by agents (CLAUDE.md rule 7). Ask the owner, or use the local .env."
+
+  # setup.sh infra / infra-push fetch the owner config and workstation secrets: a person runs them, never an agent
+  # (task 112, ADR-0013; setup.sh also refuses CLAUDECODE=1, which a command can unset). Refused: setup.sh followed
+  # by infra, infra-push or a word with a variable in any simple command (whatever runs it: a shell by any path,
+  # env, sudo, timeout, source, xargs, { ! ` then do else), except one that only reads files (git, grep, cat, …);
+  # and the words anywhere behind a shell wrapper or a command substitution. A quoted message is one word, so a
+  # commit, echo or grep mentioning them passes.
+  INFRA_REFUSED="setup.sh infra and infra-push fetch the owner's config and workstation secrets: a person runs them in their own terminal, never an agent (ADR-0013, CLAUDE.md rule 7). Ask the owner."
+  if { grep -Eq "$RUNS_SHELL" <<<"$m" || grep -Eq '`|\$\(' <<<"$cmd"; } &&
+    grep -Eq 'setup\.sh[[:space:]]+(infra(-push)?([^[:alnum:]_-]|$)|\$)' <<<"$dq"; then
+    deny "$INFRA_REFUSED"
+  fi
+  while IFS= read -r seg; do
+    case " $seg " in *" setup.sh "*|*"/setup.sh "*) ;; *) continue ;; esac
+    first="$(sed -E 's/^([A-Za-z_][A-Za-z0-9_]*=[^ ]* +)*//' <<<"$seg")"; first="${first%% *}"
+    case "$first" in git|grep|egrep|fgrep|rg|cat|head|tail|wc|ls|diff|stat|file|less|shellcheck) continue ;; esac
+    if grep -Eq '(^| )([^ ]*/)?setup\.sh +(infra|infra-push|[^ ]*[$`][^ ]*)( |$)' <<<"$seg" ||
+      grep -Eq '(^| )xargs( |$)' <<<"$seg"; then
+      deny "$INFRA_REFUSED"
+    fi
+  done <<<"$words"
 fi
 
 grep -Eq "$(git_sub commit)([[:space:]]|$)" <<<"$cmd" || exit 0
