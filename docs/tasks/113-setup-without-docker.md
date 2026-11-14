@@ -119,7 +119,11 @@ Docker one, and listens on localhost. `sudo` only for `apt-get`.
   user, and a symlinked `PG_PARENT` or `PG_DATA` is refused.
 - **Well-known password (INF-3).** User `postgres` with password `postgres` on localhost:5433, as in the compose file.
   On a shared host, other local users can log in with it (TCP needs the password, which is public). Run the
-  fallback only on a machine of your own or in a single-user sandbox.
+  fallback only on a machine of your own or in a single-user sandbox. Whoever logs in is a superuser and could run
+  `COPY … TO PROGRAM 'env'`. So as root the Postgres commands run through `runuser -u postgres -- env -i
+  PATH=/usr/bin:/bin LANG=C.UTF-8` (INF-4): root's environment and any tokens in it never reach the server.
+- **Pid files, exact paths (INF-5).** The command line must hold the exact `$GCS_BIN` or `$PG_BIN/postgres` path, not
+  just the program's name.
 - **System-wide drop-in.** `/etc/postgresql-common/createcluster.d/mng-projects.conf` stays after setup and applies to
   every later `postgresql-*` install (README says so).
 - **Test hooks.** `SETUP_OS_RELEASE` and `SETUP_APT_ROOT` are read only when `setup.sh` is sourced (SUP-1, SUP-4).
@@ -209,6 +213,12 @@ helper in `test-setup.sh`. No ADR.
     the world. New checks: memory backend, pid reuse (an unrelated `sleep` in both pid files: `services` starts both,
     `--stop` leaves the sleep running), root symlink refusal, never `runuser` when not root, an emulator that exits at
     once, Postgres that doesn't start, `--locale-provider=icu`, "names only Postgres" via `file storage:`.
+- 2026-11-14 – Re-review and QA passed. Two more, test-first (red 305 passed / 6 failed):
+  - INF-4: as root, `as_pg` clears the environment (`/usr/bin/env -i PATH=/usr/bin:/bin LANG=C.UTF-8`). Tested with
+    a marker variable that initdb and the server stub never see.
+  - INF-5: `pid_is` matches the exact paths `"$GCS_BIN "` and `"$PG_BIN/postgres "`. Tested with a fake-gcs-server
+    and a `.../bin/postgres` at other paths in the pid files: `services` starts ours, and `--stop` leaves those
+    running.
 
 ## Parking lot
 - dnf and apk (Fedora, Alpine) for the fallback.
