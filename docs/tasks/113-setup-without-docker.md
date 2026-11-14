@@ -1,6 +1,6 @@
 # Task 113: Local database and file storage without Docker (setup fallback for sandboxes)
 
-- **Status:** todo
+- **Status:** in-review
 - **Milestone:** cross-cutting (tooling)
 - **Zone / package:** `scripts/setup.sh` (the sandbox path and a `services` subcommand), `scripts/test-setup.sh`, `README.md` (one line under Quick start). Commits `test:` → `feat(scripts):` → `docs:`.
 - **Feature file:** none (no app behavior; `scripts/test-setup.sh` is the check)
@@ -85,20 +85,20 @@ Checked by `scripts/test-setup.sh` with stubs that record their calls: `uname`, 
 `curl` and `pnpm` on `PATH`, and `initdb` and `pg_ctl` in `SETUP_PG_BIN`. The stubs go in this task's own helper
 (e.g. `pg_world`), not on the shared `present` line, so task 112's lane doesn't conflict. The test world isn't a git
 repo, so "the repo stays clean" means that nothing is written inside the repo (the snapshot helper).
-- [ ] Sandbox (Linux, no Docker and it can't be installed), `--yes`: writes `create_main_cluster = false`, then
+- [x] Sandbox (Linux, no Docker and it can't be installed), `--yes`: writes `create_main_cluster = false`, then
       installs `postgresql-16`. It runs `initdb` from `SETUP_PG_BIN` outside the repo, then `pg_ctl` on 5433
       (localhost only). It creates `app` for `postgres`/`postgres`, then migrates. Nothing is written inside the
       repo.
-- [ ] Without `--yes`, with a terminal, it asks before installing Postgres; declining installs nothing for it and
+- [x] Without `--yes`, with a terminal, it asks before installing Postgres; declining installs nothing for it and
       exits 1. With no terminal and no `--yes`, it installs nothing for it. With `--no-docker`, no fallback step runs
       and it exits 0.
-- [ ] A rerun runs no `initdb` and creates no role or database, warns about neither 5433 nor 4443, and exits 0.
-- [ ] A distro without `postgresql-16` adds the PostgreSQL apt repository first; a server other than 16.15 prints
+- [x] A rerun runs no `initdb` and creates no role or database, warns about neither 5433 nor 4443, and exits 0.
+- [x] A distro without `postgresql-16` adds the PostgreSQL apt repository first; a server other than 16.15 prints
       the `rls-pins` warning.
-- [ ] The fake-gcs-server binary is checked against its sha256 and started on 4443 with the compose file's
+- [x] The fake-gcs-server binary is checked against its sha256 and started on 4443 with the compose file's
       arguments and a `-filesystem-root` outside the repo; a wrong sha256 fails before it runs.
-- [ ] `services` run twice leaves one of each running; `services --stop` stops both.
-- [ ] Without root or `sudo`: it says Postgres can't be installed, still starts the emulator and finishes
+- [x] `services` run twice leaves one of each running; `services --stop` stops both.
+- [x] Without root or `sudo`: it says Postgres can't be installed, still starts the emulator and finishes
       `pnpm install`, and exits 1 naming only Postgres.
 
 ## Security notes
@@ -106,6 +106,30 @@ Touches `scripts/` (the `security-reviewer` runs). Downloaded code: the fake-gcs
 and Postgres comes from apt (and the PostgreSQL repository's signed key) after a confirmation. The database listens
 on localhost only, with the compose file's throwaway credentials; the storage emulator checks no signatures, like the
 Docker one, and listens on localhost. `sudo` only for `apt-get`.
+- **fake-gcs-server path traversal (WEB-1, SEC-52).** 1.52.2's filesystem backend joins object names to its root
+  unescaped, so `POST /upload/storage/v1/b/app-files/o?uploadType=media&name=../../../../.bashrc` writes wherever the
+  emulator's user can (as root: anywhere). CORS is `*`, so any web page could send that request to it. The fallback
+  therefore runs it with `-backend memory` and no filesystem root, on 127.0.0.1. Uploaded dev files are lost when the
+  emulator restarts (README and the summary say so). The Docker path keeps its filesystem backend, contained by the
+  container, but still publishes 4443 on all interfaces.
+- **Pid files (INF-1).** A pid file is trusted only when that process's command line names the program
+  (`/proc/<pid>/cmdline`, else `ps`). A stale or reused pid is dropped, never stopped. Postgres needs a verified
+  `postmaster.pid` as well as `pg_ctl status`.
+- **Root (INF-2).** The data directory is created (`mkdir -m 700`) and written (`postgresql.conf`) by the postgres
+  user, and a symlinked `PG_PARENT` or `PG_DATA` is refused.
+- **Well-known password (INF-3).** User `postgres` with password `postgres` on localhost:5433, as in the compose file.
+  On a shared host, other local users can log in with it (TCP needs the password, which is public). Run the
+  fallback only on a machine of your own or in a single-user sandbox. Whoever logs in is a superuser and could run
+  `COPY … TO PROGRAM 'env'`. So as root the Postgres commands run through `runuser -u postgres -- env -i
+  PATH=/usr/bin:/bin LANG=C.UTF-8` (INF-4): root's environment and any tokens in it never reach the server.
+- **Pid files, exact paths (INF-5).** The command line must hold the exact `$GCS_BIN` or `$PG_BIN/postgres` path, not
+  just the program's name.
+- **System-wide drop-in.** `/etc/postgresql-common/createcluster.d/mng-projects.conf` stays after setup and applies to
+  every later `postgresql-*` install (README says so).
+- **Test hooks.** `SETUP_OS_RELEASE` and `SETUP_APT_ROOT` are read only when `setup.sh` is sourced (SUP-1, SUP-4).
+  `SETUP_PG_BIN` and `SETUP_GCS_WAIT` are also read in a normal run, because the tests run the whole setup with stub
+  servers. `SETUP_PG_BIN` only names programs run as the database's owner (and psql), which whoever sets the
+  environment could already put on `PATH`.
 
 ## Approach (brief)
 Functions in `scripts/setup.sh` (install Postgres, init and start, fetch and start the emulator, `services`). They use
@@ -135,6 +159,66 @@ helper in `test-setup.sh`. No ADR.
 
   Orchestrator's choices: `create_main_cluster = false` before installing (no stray server on 5432); without root
   the emulator still starts and the exit names only Postgres.
+- 2026-11-14 – Started in lane 2.
+- 2026-11-14 – Implemented in lane 2 (`test:` red 226 passed / 56 failed, then `feat(scripts):`, `docs:`):
+  - Pinned values. The PGDG key `B97B0AFCAA1A47F044F244A07FCC7D46ACCC4CF8`, as postgresql.org's apt instructions
+    show it (https://www.postgresql.org/download/linux/ubuntu/, "gpg --show-key"; wiki.postgresql.org/wiki/Apt) and as
+    `gpg --show-keys` reads it from https://www.postgresql.org/media/keys/ACCC4CF8.asc (one key, "PostgreSQL Debian
+    Repository"). fake-gcs-server 1.52.2 per the release's `checksums.txt`, matching the downloaded archives:
+    `Linux_amd64` `de4cd120…69337` and `Linux_arm64` `dae42a5a…dda1b`. The Darwin archives aren't pinned, because
+    macOS uses Docker Desktop.
+  - `create_main_cluster = false` goes into a drop-in, `/etc/postgresql-common/createcluster.d/mng-projects.conf`
+    (`install -D -m 644`, as root), not into `createcluster.conf` itself. postgresql-common installs that file
+    through `ucf`, which asks about a copy edited before the install. The drop-in directory has been read since
+    postgresql-common 183, and the criterion is unchanged.
+  - As root (sandboxes often are), initdb refuses to run. The database goes in the postgres user's home
+    (`getent passwd postgres`, else `/var/lib/postgresql`), at `.../mng-projects/postgres`, and `initdb`/`pg_ctl`
+    run through `runuser -u postgres --`. The emulator, its pid file and its log stay in
+    `${XDG_DATA_HOME:-~/.local/share}/mng-projects`.
+  - initdb gets `-U postgres --pwfile` (password `postgres`), `--auth-host=scram-sha-256 --auth-local=trust` (like the
+    Docker image), `-E UTF8 --locale=C.UTF-8 --locale-provider=icu --icu-locale=en-US` (en-US collation without the
+    `locales` package), and `unix_socket_directories` in its own data directory, because `/var/run/postgresql`
+    belongs to the postgres user. pg_ctl gets `-o "-p 5433 -h localhost"`. The emulator binds `-host 127.0.0.1`.
+  - `setup.sh services` is for Linux only (elsewhere it points to `pnpm db:up`) and downloads nothing: before a
+    setup it says to run setup.sh. A running server is left alone.
+  - Test hooks: `SETUP_PG_BIN` (passed by `run`/`call` so a CI runner's own `/usr/lib/postgresql/16/bin` never runs)
+    and `SETUP_OS_RELEASE`. Writes to the system (the PGDG repository) are checked through `call` with
+    `SETUP_APT_ROOT`, which keeps SUP-4.
+  - Task 111's checks: "sandbox: prints the task 113 message" and "sandbox without sudo: prints the task 113
+    message" are now fallback checks. So are "sandbox: no database steps" and "sandbox: exits 1" (now: migrates,
+    exits 0) and "services: comes with task 113" (now: services on macOS points to `pnpm db:up`).
+  - `test-setup.sh`: 283 passed under /bin/bash 3.2 (macOS). Under bash 5.2 (Ubuntu 24.04 container) 282 passed;
+    the one failure, `.gitignore: ignores .env.* temp files`, comes from the container, since the worktree's `.git`
+    points outside it. `test-hooks.sh`: 148 passed.
+- 2026-11-14 – Review fixes (security review and reviewer). The coordinator accepted both deviations (the
+  createcluster.d drop-in; `runuser -u postgres` as root). Red first: 288 passed / 19 failed.
+  - WEB-1 / SEC-52: the emulator runs with `-backend memory`, no `-filesystem-root`, on 127.0.0.1. Uploads are lost
+    when it stops (README, summary, `services`). Register row SEC-52 (P3), counts recomputed.
+  - INF-1: pid files are trusted only when `/proc/<pid>/cmdline` (else `ps -ww -o args=`) names `fake-gcs-server` or
+    `.../bin/postgres`. A stale emulator pid file is dropped and never killed. A stale `postmaster.pid` is removed
+    before `pg_ctl start`, and `pg_running` needs it verified as well as `pg_ctl status`. The port warnings know
+    the fallback's servers only when the fallback runs (Linux, not `--no-docker`, Docker not running).
+  - INF-2: `PG_PARENT` is made by the database's owner (`as_pg mkdir -p -m 700`) and `postgresql.conf` is appended
+    through `as_pg tee -a`. A symlinked `PG_PARENT` or `PG_DATA` is refused. The `unix_socket_directories` line is
+    added when it's missing, not only right after initdb.
+  - The summary shows `Database: … data in $PG_DATA` (the postgres user's home as root) and the in-memory storage.
+  - `services`: with Docker running and no fallback database it says "Uses Docker here: pnpm db:up". With the data
+    kept but the package gone (a restarted sandbox) it says to rerun setup.sh.
+  - The emulator start watches the process for `SETUP_GCS_WAIT` seconds (1; tests 0.2) instead of `sleep 1`, and
+    fails as soon as it has ended. It doesn't stop early on an answering port: on a machine where Docker's emulator
+    already holds 4443, that would accept a process about to exit.
+  - `SETUP_OS_RELEASE` is now read only when sourced. `SETUP_PG_BIN` and `SETUP_GCS_WAIT` stay readable in a normal
+    run (documented in the header and Security notes), because the run-mode tests need stub servers.
+  - Test stubs: the server stubs' command lines name `.../bin/postgres` and `fake-gcs-server`; `ps` is linked into
+    the world. New checks: memory backend, pid reuse (an unrelated `sleep` in both pid files: `services` starts both,
+    `--stop` leaves the sleep running), root symlink refusal, never `runuser` when not root, an emulator that exits at
+    once, Postgres that doesn't start, `--locale-provider=icu`, "names only Postgres" via `file storage:`.
+- 2026-11-14 – Re-review and QA passed. Two more, test-first (red 305 passed / 6 failed):
+  - INF-4: as root, `as_pg` clears the environment (`/usr/bin/env -i PATH=/usr/bin:/bin LANG=C.UTF-8`). Tested with
+    a marker variable that initdb and the server stub never see.
+  - INF-5: `pid_is` matches the exact paths `"$GCS_BIN "` and `"$PG_BIN/postgres "`. Tested with a fake-gcs-server
+    and a `.../bin/postgres` at other paths in the pid files: `services` starts ours, and `--stop` leaves those
+    running.
 
 ## Parking lot
 - dnf and apk (Fedora, Alpine) for the fallback.
