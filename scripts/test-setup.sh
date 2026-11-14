@@ -97,8 +97,8 @@ run() { # [VAR=value ...] [-- args...]: runs setup.sh in the world's repo; sets 
   CODE=$?
 }
 
-logged()     { grep -Eq "$1" "$W/log"; }
-not_logged() { ! grep -Eq "$1" "$W/log"; }
+logged()     { grep -Eq -- "$1" "$W/log"; }
+not_logged() { ! grep -Eq -- "$1" "$W/log"; }
 said()       { grep -Fq -- "$1" "$W/out"; }
 not_said()   { ! grep -Fq -- "$1" "$W/out"; }
 code_is()    { [ "$CODE" = "$1" ]; }
@@ -248,7 +248,7 @@ check "chromium deps, no terminal: prints the command"      said "$WITH_DEPS"
 check "chromium deps, no terminal: exits 0"                 code_is 0
 world; state uname Linux; absent brew; answer n; run SETUP_INTERACTIVE=1; STDIN=
 check "chromium deps, declined: asks"                       said "chromium system libraries"
-check "chromium deps, declined: no --with-deps"             not_logged -- '--with-deps'
+check "chromium deps, declined: no --with-deps"             not_logged '--with-deps'
 world; state uname Linux; absent brew; answer y; run SETUP_INTERACTIVE=1; STDIN=
 check "chromium deps, accepted: --with-deps"                logged "$CHROMIUM --with-deps chromium$"
 
@@ -289,7 +289,7 @@ check ".env: an existing one stays byte-for-byte"           cmp -s "$W/env.befor
 check ".env: names the key it lacks"                        said "STORAGE_BUCKET"
 check ".env: never prints an existing value"                not_said "hand-made-value-1234567890abcdef"
 
-world; mv_stub 'kill -TERM $PPID; sleep 1'; run -- --yes
+world; mv_stub 'kill -TERM $PPID; exit 1'; run -- --yes
 check ".env: an interrupted write leaves no temp file"      no_leftovers
 check ".env: an interrupted write leaves no .env"           no_env
 world; mv_stub 'echo existing > .env'; run -- --yes
