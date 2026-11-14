@@ -69,7 +69,7 @@ for p in \"\$@\"; do case \"\$p\" in
 for p in \"\$@\"; do case \"\$p\" in
   -*) ;; docker.io|docker-compose-v2) [ -f $S/apt_docker_fails ] && exit 100; cp -P $A/docker $B/docker; echo ok > $S/docker;;
   *) rm -f $B/\$p; cp -P $A/\$p $B/\$p;; esac; done"
-  present git curl jq perl openssl node pnpm corepack docker brew gcloud gh terraform sudo unzip
+  present git curl jq perl openssl node pnpm corepack docker brew apt-get gcloud gh terraform sudo unzip
 }
 
 nvm_in_home() { # a nvm the way Cloud Shell has it: a function in ~/.nvm/nvm.sh
@@ -249,6 +249,21 @@ check "fnm download: fetches the pinned release"            logged '^curl .*gith
 check "fnm download: a wrong sha256 fails"                  sh -c "[ $CODE != 0 ] && grep -q 'sha256' '$W/out'"
 check "fnm download: a wrong sha256 runs nothing after it"  not_logged '^(unzip|fnm|pnpm install)'
 check "fnm download: a wrong sha256 leaves no fnm binary"   test ! -e "$W/home/.local/share/fnm/fnm"
+
+# --- Ports, --skip-browsers ----------------------------------------------------------------------------------------
+world; run -- --yes --skip-browsers
+check "--skip-browsers: no chromium"                         not_logged "$CHROMIUM"
+check "--skip-browsers: the summary says so"                 said "--skip-browsers"
+if command -v python3 >/dev/null 2>&1; then
+  python3 -I -c 'import socket, time
+s = socket.socket(); s.bind(("127.0.0.1", 0)); s.listen(1)
+print(s.getsockname()[1], flush=True); time.sleep(30)' > "$TMP/port" &
+  LISTENER=$!; for _ in 1 2 3 4 5 6 7 8 9 10; do [ -s "$TMP/port" ] && break; sleep 0.2; done; PORT="$(cat "$TMP/port")"
+  world; run SETUP_PORTS="$PORT" -- --yes
+  check "ports: warns when one is taken"                     said "port $PORT is in use"
+  check "ports: a taken port doesn't fail the setup"         code_is 0
+  kill "$LISTENER" 2>/dev/null; wait "$LISTENER" 2>/dev/null
+fi
 
 echo; echo "$pass passed, $fail failed"
 [ "$fail" = 0 ]
