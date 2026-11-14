@@ -1,6 +1,6 @@
 # Task 115: The guard's lint/typecheck gate applies only to this project's commits
 
-- **Status:** todo
+- **Status:** in-review
 - **Milestone:** unscheduled (agent tooling; owner request 2026-11-14)
 - **Zone / package:** `.claude/hooks/guard.sh`, `scripts/test-hooks.sh`, `docs/AGENT-TEAM.md`
 - **Feature file:** none (tooling; the acceptance tests are cases in `scripts/test-hooks.sh`)
@@ -32,15 +32,15 @@ The guard runs `pnpm lint && pnpm typecheck` in the commit's repository before e
 
 ## Acceptance criteria
 Each is a case in `scripts/test-hooks.sh` (fake `pnpm` records whether lint/typecheck ran):
-- [ ] A commit in another repository without `package.json` (throwaway repo, no remote) is allowed and the fake `pnpm` is not called; also via `cd /abs/other && git commit` and `git -C /abs/other commit` from a session whose cwd is this project.
-- [ ] A commit in the guard's own repository runs lint and typecheck: allowed when the fake `pnpm` passes, refused (exit 2, "pnpm lint && pnpm typecheck must pass") when it fails.
-- [ ] A commit in a lane worktree of the guard's repository (`cd <lane> && git commit`, `scripts/lane.sh exec <n> -- git commit`, and `git -C "$(scripts/lane.sh path <n>)" commit`) runs lint and typecheck.
-- [ ] A crafted repository that pretends to be this project still gets the gate: (a) a separate repo whose remote `origin` is set to the guard repository's origin URL (in a different spelling, ssh vs https, with/without `.git`); (b) a repo with a different remote name (`upstream`) carrying that URL; (c) a repo whose `.git` is a gitfile pointing at the guard repository's git dir. In each the fake `pnpm` is called; with a failing fake `pnpm` the commit is refused.
-- [ ] A repository merely named like this project (directory `mng-projects`, no remote of this project) is treated as another repository (no gate). This shows the decision doesn't come from a name.
-- [ ] `git commit --no-verify` and `-nm` in another repository are still refused; so are two commits in one command, a commit behind `bash -c`, and an unresolvable `cd "$X" && git commit` there.
-- [ ] `cd /abs/other && GIT_COMMON_DIR=<guard repo's .git> git commit -m 'docs: x'` is refused (can't tell which repository).
-- [ ] When the guard copy sits outside any git repository, a commit in another repository runs the gate (fail closed).
-- [ ] All existing cases in `scripts/test-hooks.sh` still pass; `bash scripts/test-hooks.sh` passes in CI's `verify` job.
+- [x] A commit in another repository without `package.json` (throwaway repo, no remote) is allowed and the fake `pnpm` is not called; also via `cd /abs/other && git commit` and `git -C /abs/other commit` from a session whose cwd is this project.
+- [x] A commit in the guard's own repository runs lint and typecheck: allowed when the fake `pnpm` passes, refused (exit 2, "pnpm lint && pnpm typecheck must pass") when it fails.
+- [x] A commit in a lane worktree of the guard's repository (`cd <lane> && git commit`, `scripts/lane.sh exec <n> -- git commit`, and `git -C "$(scripts/lane.sh path <n>)" commit`) runs lint and typecheck.
+- [x] A crafted repository that pretends to be this project still gets the gate: (a) a separate repo whose remote `origin` is set to the guard repository's origin URL (in a different spelling, ssh vs https, with/without `.git`); (b) a repo with a different remote name (`upstream`) carrying that URL; (c) a repo whose `.git` is a gitfile pointing at the guard repository's git dir. In each the fake `pnpm` is called; with a failing fake `pnpm` the commit is refused.
+- [x] A repository merely named like this project (directory `mng-projects`, no remote of this project) is treated as another repository (no gate). This shows the decision doesn't come from a name.
+- [x] `git commit --no-verify` and `-nm` in another repository are still refused; so are two commits in one command, a commit behind `bash -c`, and an unresolvable `cd "$X" && git commit` there.
+- [x] `cd /abs/other && GIT_COMMON_DIR=<guard repo's .git> git commit -m 'docs: x'` is refused (can't tell which repository).
+- [x] When the guard copy sits outside any git repository, a commit in another repository runs the gate (fail closed).
+- [x] All existing cases in `scripts/test-hooks.sh` still pass; `bash scripts/test-hooks.sh` passes in CI's `verify` job.
 
 ## Security notes
 - Touches `.claude/` and `scripts/` (security-sensitive paths in `docs/SECURITY.md`): the **`security-reviewer` runs**. No app data, roles or migrations; no `access-auditor`.
@@ -70,8 +70,12 @@ None blocking. Defaults taken (the orchestrator asked for defaults; the owner ca
 
 ## Progress log
 - 2026-11-14 – Drafted from the owner's request ("make the guard change as a task").
+- 2026-11-14 – `test(scripts):` 30 cases in `scripts/test-hooks.sh` with a fake `pnpm` (it logs its arguments; the case picks its exit code) and a fixture repository holding a committed copy of `guard.sh`, a lane worktree, clones carrying its URL (https without `.git`, `ssh://…/.git/` on `upstream`, a push URL), a `.git` file and a `.git` symlink into its git dir, a symlinked path, and a guard copy outside any repository. Red: 272 passed, 7 failed (the five other-repository cases ran lint; the two `GIT_COMMON_DIR=` cases were allowed).
+- 2026-11-14 – `feat(claude):` `is_this_project` in `guard.sh`: `common_of` (rev-parse `--git-common-dir`, canonicalized with `pwd -P`) of the script's directory and of the commit's root; else any normalized remote URL in common (`remote_urls` + `normalize_url`); unknown common dir fails closed. `GIT_COMMON_DIR=` joins `GIT_DIR=`/`GIT_WORK_TREE=` in the `unresolved` prefix check. Green: 279 passed, 0 failed under bash 3.2 (`/bin/bash`, also with `GUARD_SKIP_CHECKS=1` as in CI) and bash 5.3 (Docker `bash:5`). By hand: the lane's real guard lets a commit in a scratchpad repo without `package.json` through, and gates it once its origin is `https://github.com/dror-rash/mng-projects`.
 
 ## Parking lot
 - Refuse a push by URL to this project's remote from a repository that isn't this project.
 - Gate `git merge` / `rebase` / `cherry-pick` / `am` commits in this project too.
 - A per-repository check hook (run a repository's own linter when it has one).
+- A clone made from a local path (`git clone /path/to/mng-projects`) has that path as its origin, not a GitHub URL, so it counts as another repository (no gate). Treat a remote URL that resolves to a directory with this project's common dir as this project.
+- `.github/workflows/ci.yml` still says `GUARD_SKIP_CHECKS: "1"` is there "so no case can ever run lint/typecheck"; the task 115 cases unset it and use a fake `pnpm`, so the real one still never runs. Reword the comment.
