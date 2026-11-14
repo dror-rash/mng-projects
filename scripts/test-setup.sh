@@ -413,6 +413,59 @@ check "need_value: a missing value fails naming the flag"   sh -c "[ $CODE = 1 ]
 call -- 'need_value --project --force'
 check "need_value: a flag isn't a value"                    sh -c "[ $CODE = 1 ] && grep -qF -- '--project needs a value' '$W/out'"
 
+# --- Shared helpers (sourced): download_checked, ensure_brew, add_apt_repo -----------------------------------------
+no_temp() { [ -z "$(ls -A "$W/tmp" 2>/dev/null)" ]; }
+world; state download 'a pinned release'
+SUM="$( (sha256sum "$W/state/download" 2>/dev/null || shasum -a 256 "$W/state/download") | cut -d' ' -f1)"
+call -- "download_checked https://example.test/tool.zip $SUM '$W/home/tool.zip' && echo next"
+check "download_checked: fetches the url"                   logged '^curl .*https://example\.test/tool\.zip$'
+check "download_checked: a matching sha256 writes dest"     sh -c "[ $CODE = 0 ] && cmp -s '$W/state/download' '$W/home/tool.zip' && grep -qx next '$W/out'"
+check "download_checked: leaves no temp dir"                no_temp
+world; call -- "download_checked https://example.test/tool.zip $SUM '$W/home/tool.zip' || echo refused"
+check "download_checked: a wrong sha256 fails naming it"    sh -c "grep -qx refused '$W/out' && grep -q 'sha256' '$W/out'"
+check "download_checked: a wrong sha256 leaves no dest"     test ! -e "$W/home/tool.zip"
+check "download_checked: a wrong sha256 leaves no temp dir" no_temp
+world; stub curl 'exit 22'; present curl; call -- "download_checked https://example.test/tool.zip $SUM '$W/home/tool.zip' || echo refused"
+check "download_checked: a failed download fails"           sh -c "grep -qx refused '$W/out' && grep -qF \"couldn't download https://example.test/tool.zip\" '$W/out'"
+check "download_checked: a failed download leaves nothing"  sh -c "[ ! -e '$W/home/tool.zip' ] && [ -z \"\$(ls -A '$W/tmp')\" ]"
+world; state download 'a pinned release'; absent sha256sum shasum
+call -- "download_checked https://example.test/tool.zip $SUM '$W/home/tool.zip' || echo refused"
+check "download_checked: no sha256 tool fails closed"       sh -c "grep -qx refused '$W/out' && [ ! -e '$W/home/tool.zip' ]"
+
+world; call -- 'ensure_brew && echo ready'
+check "ensure_brew: Homebrew there: asks and installs nothing" sh -c "grep -qx ready '$W/out' && ! grep -q 'Install Homebrew' '$W/out' && ! grep -q '^curl' '$W/log'"
+world; absent brew; call -- 'ensure_brew; echo after'
+check "ensure_brew: no terminal: exits 1 with the installer"  sh -c "[ $CODE = 1 ] && grep -q 'Homebrew/install/HEAD/install.sh' '$W/out' && ! grep -q after '$W/out' && [ ! -s '$W/log' ]"
+world; absent brew; answer y; call SETUP_INTERACTIVE=1 SETUP_BREW_PREFIXES="$W/newbrew" -- 'ensure_brew && has brew && echo ready'; STDIN=
+check "ensure_brew: yes runs Homebrew's installer"          sh -c "grep -q '^curl .*Homebrew/install/HEAD/install\.sh' '$W/log' && grep -qx ready '$W/out'"
+
+APT="$W/aptroot"
+apt_repo_world() { # a Linux world with gpg, where the keyring and sources.list.d go under $W/aptroot
+  world; state uname Linux; APT="$W/aptroot"; KR="$APT/keyrings/example.gpg"
+  LINE="deb [arch=amd64 signed-by=$KR] https://example.test/apt stable main"
+  stub gpg 'echo dearmored; cat'; present gpg
+}
+add_repo() { call SETUP_APT_SOURCES="$APT/sources.list.d" -- "add_apt_repo https://example.test/key.asc '$KR' '$1' && echo added"; }
+apt_repo_world; add_repo "$LINE"
+check "add_apt_repo: fetches the key"                       logged '^curl .*https://example\.test/key\.asc$'
+check "add_apt_repo: the keyring is the key through gpg --dearmor" sh -c "grep -q '^gpg .*--dearmor' '$W/log' && [ \"\$(head -1 '$KR')\" = dearmored ]"
+check "add_apt_repo: the keyring is mode 644"               sh -c "ls -l '$KR' | grep -q '^-rw-r--r--'"
+check "add_apt_repo: the list holds the line"               test "$(cat "$APT/sources.list.d/example.list" 2>/dev/null)" = "$LINE"
+check "add_apt_repo: writes through sudo"                   logged '^sudo (cp|mkdir|chmod)'
+check "add_apt_repo: then apt-get update"                   in_order '^gpg ' '^apt-get update$'
+check "add_apt_repo: true when added, no temp dir left"     sh -c "grep -qx added '$W/out' && [ -z \"\$(ls -A '$W/tmp')\" ]"
+apt_repo_world; state uid 0; add_repo "$LINE"
+check "add_apt_repo: as root, no sudo"                      sh -c "grep -qx added '$W/out' && ! grep -q '^sudo' '$W/log'"
+apt_repo_world; add_repo "deb https://example.test/apt stable main"
+check "add_apt_repo: a line not signed by the keyring is refused" sh -c "[ $CODE != 0 ] && grep -q 'signed-by' '$W/out' && ! grep -qx added '$W/out'"
+check "add_apt_repo: a refused line fetches and writes nothing" sh -c "[ ! -s '$W/log' ] && [ ! -e '$APT' ]"
+apt_repo_world; stub curl 'exit 22'; present curl; add_repo "$LINE"
+check "add_apt_repo: a failed key download adds nothing"    sh -c "! grep -qx added '$W/out' && [ ! -e '$APT' ] && ! grep -q 'apt-get update' '$W/log'"
+apt_repo_world; stub gpg 'exit 2'; present gpg; add_repo "$LINE"
+check "add_apt_repo: a key gpg can't read adds nothing"     sh -c "! grep -qx added '$W/out' && [ ! -e '$APT' ] && ! grep -q 'apt-get update' '$W/log'"
+apt_repo_world; absent gpg; add_repo "$LINE"
+check "add_apt_repo: without gpg it says so, adds nothing"  sh -c "! grep -qx added '$W/out' && grep -q gpg '$W/out' && [ ! -e '$APT' ]"
+
 # --- Hints ---------------------------------------------------------------------------------------------------------
 world; state uname Linux; absent brew docker; run -- --no-install
 check "hint: Docker's own repository calls it docker-compose-plugin" said "docker-compose-plugin"
