@@ -1,21 +1,23 @@
 import { defineConfig, devices } from "@playwright/test";
 import { defineBddConfig } from "playwright-bdd";
 
+// Locally: dev servers. In CI: the workflow builds first, then we run `start`.
+const mode = process.env.CI ? "start" : "dev";
+
 const testDir = defineBddConfig({
   features: "../docs/features/*.feature",
   featuresRoot: "../docs/features",
   steps: "./steps/*.ts",
   // Specs written ahead of their task carry @wip; the tag comes off when the task starts (WORKFLOW.md).
-  tags: process.env.E2E_TAGS || "not @wip",
+  // @build scenarios need a production build: `next dev` answers a form posted without JavaScript with a 500
+  // (task 114). They run in CI (`start`) and are skipped against dev servers. E2E_TAGS overrides both.
+  tags: process.env.E2E_TAGS || (mode === "dev" ? "not @wip and not @build" : "not @wip"),
 });
 
 // Ports come from the environment so parallel lanes (scripts/lane.sh) don't clash; defaults are the usual ones.
 const shellUrl = `http://localhost:${process.env.SHELL_PORT ?? 3000}`;
 const exampleUrl = `http://localhost:${process.env.EXAMPLE_PORT ?? 3001}`;
 const dashboardUrl = `http://localhost:${process.env.DASHBOARD_PORT ?? 3002}`;
-
-// Locally: dev servers. In CI: the workflow builds first, then we run `start`.
-const mode = process.env.CI ? "start" : "dev";
 
 // BASE_URL: a deployment (the preview run). Uploads and server actions go to Cloud Run and Cloud SQL, and the
 // sign-up pacing (fixtures.ts) can wait about 11.5 s inside one scenario, so both timeouts are longer there.
