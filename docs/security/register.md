@@ -11,7 +11,7 @@ The one list of known security gaps and their status. The process that feeds it 
 | P0 – fix now | 0 | 0 | 0 | 5 | 0 |
 | P1 – before real customer data on `main` | 2 | 0 | 2 | 10 | 0 |
 | P2 – hardening | 19 | 0 | 1 | 0 | 1 |
-| P3 – info / decide | 11 | 0 | 0 | 0 | 0 |
+| P3 – info / decide | 12 | 0 | 0 | 0 | 0 |
 
 Counted from the rows below (2026-11-14). "Fixed" includes SEC-14 and SEC-17, merged but not live until the owner applies their Terraform, and rows whose code part is fixed with an owner setting left in the row (SEC-11, SEC-15).
 
@@ -94,6 +94,7 @@ No Critical findings. One High (SEC-01). Nothing in the review showed one worksp
 | SEC-49 | Info | `next-intl`'s build plugin loads native `@swc/core` and `@parcel/watcher` (for its message extractor, unused) at build time; pnpm doesn't run their install scripts | Supply chain | open (optional: list them in `neverBuiltDependencies`) | task 094 review |
 | SEC-50 | Info | The `use-intl` and `icu-minify` overrides in `package.json` pin next-intl's family at 4.14.9; a Dependabot bump of `next-intl` alone leaves them pinned to the old release | Supply chain | open (move the overrides with every `next-intl` bump, or drop them) | task 094 review |
 | SEC-51 | Info | The `locale` cookie has no `Secure` flag, so a network attacker could plant it over http; worst case the page's language changes (the value is parsed, never interpolated) | Web | open (optional: add `; secure` on https) | task 094 review |
+| SEC-52 | Info | fake-gcs-server 1.52.2 writes uploads to `<root>/<bucket>/<name>` without escaping the object name (path traversal), and its CORS is `*`. The no-Docker fallback (task 113) runs it with `-backend memory` on 127.0.0.1. The Docker path (`pnpm db:up`) is contained by the container but still publishes 4443 on all interfaces | Tooling | open (fallback: memory backend; Docker: consider publishing on 127.0.0.1) | task 113 review (WEB-1) |
 
 ## Change log
 - 2026-11-08 – Register created from the first full review (41 gaps: 1 High, 12 Medium, rest Low/Info).
@@ -118,3 +119,4 @@ No Critical findings. One High (SEC-01). Nothing in the review showed one worksp
 - 2026-11-12 – P1 wrap-up: every P1 PR is merged (owner lifted the pre-demo hold on 2026-11-11). SEC-16 fixed (PR #77); SEC-15 fixed (WIF: PR #79, applied, hand check PR #91; fork approval stays an owner setting); SEC-14 (PR #78) and SEC-17 (PR #82) fixed, live once the owner applies; SEC-07's cleanup is PR #92 (replaced #87), its real-Cloud-Storage hand check waits for the preview database rebuild (task 110); SEC-06: `main` runs as `app_runtime`, closes with task 109; SEC-18's PR #90 replaced #81. Counts recomputed from the rows, with a "Partly fixed" column (SEC-06, SEC-07); the previous table still showed 2026-11-08's numbers.
 - 2026-11-13 – SEC-49, SEC-50 and SEC-51 added (P3) from task 094's security review: next-intl's native build dependencies, its version overrides, and the `locale` cookie's missing `Secure` flag. Counts recomputed from the rows.
 - 2026-11-14 – Task 111 (workspace setup script): SEC-31 partly fixed (`.env.*` ignored except `.env.example`); SEC-39 notes that a local `.env` now gets a random `BETTER_AUTH_SECRET`. Counts recomputed from the rows.
+- 2026-11-14 – SEC-52 added (P3) from task 113's security review: fake-gcs-server's path traversal; the no-Docker fallback uses its memory backend. Counts recomputed from the rows.
