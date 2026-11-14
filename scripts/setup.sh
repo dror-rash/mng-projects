@@ -11,14 +11,15 @@
 #
 # Bash 3.2 compatible (macOS's bash): it runs before Node or pnpm exist. It never prints a secret, never changes
 # an existing .env, never runs pnpm db:generate, gcloud, gh or terraform, and uses sudo only for apt-get (its own,
-# and Playwright's --with-deps once approved). Rerunning on a set-up workspace installs nothing and changes no file.
+# and Playwright's --with-deps once approved) and an apt repository's key and list (add_apt_repo). Rerunning on a
+# set-up workspace installs nothing and changes no file.
 # Tests: bash scripts/test-setup.sh, under /bin/bash; CI (Ubuntu) runs it with bash 5, so bash 3.2 is checked by
 # running it on macOS.
 #
 # Test hooks (scripts/test-setup.sh): sourced (. scripts/setup.sh), it only defines its helpers, so the tests call
-# them directly. SETUP_INTERACTIVE=1 treats stdin as a terminal; SETUP_PROC_VERSION,
-# SETUP_BREW_PREFIXES, SETUP_PORTS and SETUP_DB_TIMEOUT replace /proc/version, Homebrew's install prefixes, the
-# ports checked and the database wait (60 s).
+# them directly. SETUP_INTERACTIVE=1 treats stdin as a terminal; SETUP_PROC_VERSION, SETUP_BREW_PREFIXES,
+# SETUP_APT_SOURCES, SETUP_PORTS and SETUP_DB_TIMEOUT replace /proc/version, Homebrew's install prefixes,
+# /etc/apt/sources.list.d, the ports checked and the database wait (60 s).
 set -u
 
 # fnm for Linux and WSL when there is neither nvm nor fnm. To upgrade: change the version and both hashes together.
@@ -59,6 +60,82 @@ ask() { # question: true on yes; a non-interactive run never says yes
 INSTALLED=""; SKIPPED=""; STATUS=0
 installed() { INSTALLED="${INSTALLED}  - $1"$'\n'; }
 skipped()   { SKIPPED="${SKIPPED}  - $1"$'\n'; }
+SUDO="sudo "; [ "$(id -u 2>/dev/null)" = 0 ] && SUDO=""
+can_root() { [ -z "$SUDO" ] || has sudo; }
+as_root() { # runs a command as root; false (with a warning) when there is no way to
+  if [ -z "$SUDO" ]; then "$@"
+  elif has sudo; then sudo "$@"
+  else warn "needs root and there is no sudo: $*"; return 1; fi
+}
+
+find_brew() {
+  has brew && return 0
+  local prefix
+  for prefix in ${SETUP_BREW_PREFIXES:-/opt/homebrew /usr/local}; do
+    if [ -x "$prefix/bin/brew" ]; then eval "$("$prefix/bin/brew" shellenv)"; return 0; fi
+  done
+  return 1
+}
+# Homebrew on PATH. When it's missing: its official installer after its own question (even with --yes); exits 1 when
+# declined or without a terminal.
+ensure_brew() {
+  find_brew && return 0
+  say "Homebrew isn't installed. Its official installer is: $HOMEBREW_INSTALL"
+  if ! ask "Install Homebrew now with its official installer?"; then
+    say "Nothing installed. Install Homebrew with: $HOMEBREW_INSTALL"
+    say "then rerun bash scripts/setup.sh."
+    exit 1
+  fi
+  /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" || die "Homebrew's installer failed"
+  find_brew || die "Homebrew installed, but brew isn't found: open a new terminal and rerun"
+  installed "Homebrew"
+}
+
+sha256_of() { # file: its sha256; false without sha256sum or shasum
+  if has sha256sum; then sha256sum "$1" | cut -d' ' -f1
+  elif has shasum; then shasum -a 256 "$1" | cut -d' ' -f1
+  else return 1; fi
+}
+# url sha256 dest: downloads into a new temp dir and checks the pinned sha256 before anything is at dest. Fails
+# closed: false with the reason, nothing at dest, the temp dir removed.
+download_checked() {
+  local url="$1" sha="$2" dest="$3" tmp got ok=1
+  tmp="$(mktemp -d)" || { err "mktemp failed"; return 1; }
+  if ! curl -fsSL -o "$tmp/download" "$url"; then err "couldn't download $url"
+  elif ! got="$(sha256_of "$tmp/download")"; then err "no sha256sum or shasum to check $url with"
+  elif [ "$got" != "$sha" ]; then err "$url doesn't match its pinned sha256; nothing installed"
+  elif ! mv "$tmp/download" "$dest"; then err "couldn't write $dest"
+  else ok=0; fi
+  rm -rf "$tmp"
+  return "$ok"
+}
+
+# key-url keyring list-line: an apt repository signed by its own key, as root, then apt-get update. The line must
+# name the keyring (signed-by=<keyring>). The key goes through gpg --dearmor into keyring (mode 644), the line into
+# <sources.list.d>/<keyring's name>.list. False with the reason; nothing is written before the key is fetched and
+# dearmored. The caller installs gpg first when it's missing.
+add_apt_repo() {
+  local key_url="$1" keyring="$2" line="$3" sources="${SETUP_APT_SOURCES:-/etc/apt/sources.list.d}" name tmp ok=1
+  name="$(basename "$keyring")"; name="${name%.*}"
+  case "$line" in
+    *"signed-by=$keyring]"*|*"signed-by=$keyring "*) ;;
+    *) err "the apt line for $key_url must be signed by its key (signed-by=$keyring)"; return 1 ;;
+  esac
+  has gpg || { err "gpg is needed to add the apt repository for $key_url"; return 1; }
+  tmp="$(mktemp -d)" || { err "mktemp failed"; return 1; }
+  if ! curl -fsSL -o "$tmp/key" "$key_url"; then err "couldn't download $key_url"
+  elif ! gpg --batch --dearmor < "$tmp/key" > "$tmp/keyring"; then err "$key_url isn't a key gpg can read"
+  elif ! printf '%s\n' "$line" > "$tmp/list"; then err "couldn't write the apt line"
+  elif ! as_root mkdir -p "$(dirname "$keyring")" "$sources"; then err "couldn't create $(dirname "$keyring") or $sources"
+  elif ! { as_root cp "$tmp/keyring" "$keyring" && as_root chmod 644 "$keyring"; }; then err "couldn't write $keyring"
+  elif ! { as_root cp "$tmp/list" "$sources/$name.list" && as_root chmod 644 "$sources/$name.list"; }; then
+    err "couldn't write $sources/$name.list"
+  else ok=0; fi
+  rm -rf "$tmp"
+  [ "$ok" = 0 ] || return 1
+  as_root apt-get update || { err "apt-get update failed after adding $sources/$name.list"; return 1; }
+}
+
 need_value() { # flag args-from-the-flag-on: exits 1 unless a value (not another flag) follows the flag
   case "${2:-}" in ""|-*) die "$1 needs a value" ;; esac
 }
@@ -131,14 +208,6 @@ if [ "$ENV" = windows ]; then
 fi
 [ "$ENV" = unknown ] && die "unsupported system '$KERNEL': macOS, Linux and WSL2 are supported"
 
-SUDO="sudo "; [ "$(id -u 2>/dev/null)" = 0 ] && SUDO=""
-can_root() { [ -z "$SUDO" ] || has sudo; }
-as_root() { # runs a command as root; false (with a warning) when there is no way to
-  if [ -z "$SUDO" ]; then "$@"
-  elif has sudo; then sudo "$@"
-  else warn "needs root and there is no sudo: $*"; return 1; fi
-}
-
 NODE_MAJOR="$(tr -d ' \r\n' < .nvmrc)"; NODE_MAJOR="${NODE_MAJOR#v}"; NODE_MAJOR="${NODE_MAJOR%%.*}"
 PNPM_VERSION="$(sed -n 's/.*"packageManager": *"pnpm@\([0-9.]*\).*/\1/p' package.json | head -1)"
 [ -n "$NODE_MAJOR" ] && [ -n "$PNPM_VERSION" ] || die "can't read the Node version (.nvmrc) or pnpm's (package.json)"
@@ -161,14 +230,6 @@ find_fnm() {
   PATH="$FNM_HOME:$PATH"; export PATH
 }
 fnm_activate() { eval "$(fnm env --shell bash 2>/dev/null)"; }
-find_brew() {
-  has brew && return 0
-  local prefix
-  for prefix in ${SETUP_BREW_PREFIXES:-/opt/homebrew /usr/local}; do
-    if [ -x "$prefix/bin/brew" ]; then eval "$("$prefix/bin/brew" shellenv)"; return 0; fi
-  done
-  return 1
-}
 if load_nvm; then NODE_MANAGER=nvm; elif find_fnm; then NODE_MANAGER=fnm; fnm_activate; else NODE_MANAGER=""; fi
 
 # --- 2. Check every tool -------------------------------------------------------------------------------------------
@@ -319,17 +380,7 @@ if [ -n "$PLAN" ]; then
   if [ "$YES" != 1 ] && ! ask "Install these?"; then say "Nothing installed. The commands are listed above."; exit 1; fi
   DEPS_OK="$WANT_DEPS"
 
-  if [ -n "$BREW_FORMULAS$BREW_CASK" ] && ! find_brew; then
-    say "Homebrew isn't installed. Its official installer is: $HOMEBREW_INSTALL"
-    if ! ask "Install Homebrew now with its official installer?"; then
-      say "Nothing installed. Install Homebrew with: $HOMEBREW_INSTALL"
-      say "then rerun bash scripts/setup.sh."
-      exit 1
-    fi
-    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" || die "Homebrew's installer failed"
-    find_brew || die "Homebrew installed, but brew isn't found: open a new terminal and rerun"
-    installed "Homebrew"
-  fi
+  if [ -n "$BREW_FORMULAS$BREW_CASK" ]; then ensure_brew; fi
   if [ -n "$BREW_FORMULAS" ]; then
     # shellcheck disable=SC2086 # a list of formulas
     brew install $BREW_FORMULAS || die "brew install $BREW_FORMULAS failed"; installed "brew: $BREW_FORMULAS"
@@ -354,7 +405,7 @@ elif [ "$WANT_DEPS" = 1 ]; then
 fi
 
 download_fnm() {
-  local asset sha url tmp got
+  local asset sha url tmp
   case "$(uname -m)" in
     x86_64|amd64) asset="fnm-linux.zip"; sha="$FNM_SHA256_LINUX_X64" ;;
     aarch64|arm64) asset="fnm-arm64.zip"; sha="$FNM_SHA256_LINUX_ARM64" ;;
@@ -362,11 +413,7 @@ download_fnm() {
   esac
   url="https://github.com/Schniz/fnm/releases/download/v${FNM_VERSION}/${asset}"
   tmp="$(mktemp -d)" || die "mktemp failed"
-  curl -fsSL -o "$tmp/$asset" "$url" || { rm -rf "$tmp"; die "couldn't download $url"; }
-  if has sha256sum; then got="$(sha256sum "$tmp/$asset" | cut -d' ' -f1)"
-  elif has shasum; then got="$(shasum -a 256 "$tmp/$asset" | cut -d' ' -f1)"
-  else rm -rf "$tmp"; die "no sha256sum or shasum to check fnm with"; fi
-  if [ "$got" != "$sha" ]; then rm -rf "$tmp"; die "fnm $FNM_VERSION ($asset) doesn't match its pinned sha256; nothing installed"; fi
+  download_checked "$url" "$sha" "$tmp/$asset" || { rm -rf "$tmp"; die "fnm $FNM_VERSION not installed"; }
   unzip -q -o "$tmp/$asset" fnm -d "$tmp" || { rm -rf "$tmp"; die "couldn't unpack $asset"; }
   mkdir -p "$FNM_HOME" && mv "$tmp/fnm" "$FNM_HOME/fnm" && chmod 755 "$FNM_HOME/fnm" || { rm -rf "$tmp"; die "couldn't install fnm into $FNM_HOME"; }
   rm -rf "$tmp"
