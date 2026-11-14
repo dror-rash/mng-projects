@@ -1,6 +1,6 @@
 # Task 113: Local database and file storage without Docker (setup fallback for sandboxes)
 
-- **Status:** todo
+- **Status:** in-progress
 - **Milestone:** cross-cutting (tooling)
 - **Zone / package:** `scripts/setup.sh` (the sandbox path and a `services` subcommand), `scripts/test-setup.sh`, `README.md` (one line under Quick start). Commits `test:` → `feat(scripts):` → `docs:`.
 - **Feature file:** none (no app behavior; `scripts/test-setup.sh` is the check)
@@ -126,6 +126,7 @@ helper in `test-setup.sh`. No ADR.
 - 2026-11-14 – Split from task 111 (owner took the default): the no-Docker fallback for claude.ai/code and other
   sandboxes.
 - 2026-11-14 – Readiness check against task 111's merged script (planner). Task text corrected:
+- 2026-11-14 – Started in lane 2.
   - the shared refactor is a dependency;
   - `-filesystem-root` outside the repo, and `initdb`/`pg_ctl` from `/usr/lib/postgresql/16/bin` (`SETUP_PG_BIN`);
   - Postgres gets its own `ask` unless `--yes`;
