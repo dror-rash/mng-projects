@@ -311,9 +311,23 @@ resolve_dir() { # base, dir as written (quoted, ~, relative, or "$(scripts/lane.
   case "$d" in /*) ;; *) d="$1/$d" ;; esac
   (cd "$d" 2>/dev/null && pwd -P)
 }
+# Before the commit (after the leading cd and lane.sh exec) a command may only run `git add` / `git -C <dir> add`,
+# joined with && or ;, and the commit itself may only start with env and literal VAR=value words (security review
+# SUP-1): an export, source, ln, mv, rm, assignment, $(…), redirection or subshell there could point the commit at
+# another repository than the one the guard resolves. Checked on m (quotes blanked) and on h for $, ` and \.
+only_adds_before() { # text before the commit in m, the same in h, 1 after lane.sh exec (no git add then)
+  local a='[^[:space:];&|<>(){}`$\\]+' nl=$'\n' adds re
+  adds="([[:space:]]*git([[:space:]]+-C[[:space:]]+$a)?[[:space:]]+add([[:space:]]+$a)*[[:space:]]*(&&|;|$nl))*"
+  [ "$3" = 1 ] && adds=""
+  re="^$adds[[:space:]]*(env[[:space:]]+)?([A-Za-z_][A-Za-z0-9_]*=($a)?[[:space:]]+)*\$"
+  if ! [[ "$1" =~ $re ]] || grep -q '[$`\\]' <<<"$2" ||
+    tr -d "\"'\\\\" <<<"$2" | grep -Eq '(^|[^[:alnum:]_])GIT_(DIR|WORK_TREE|COMMON_DIR)='; then
+    deny "only a leading literal cd and git add may run before a git commit in the same command (no export, source, ln, mv, rm, assignments, \$(…), redirections or subshells). Run the commit on its own: cd /abs/path && git add … && git commit …"
+  fi
+}
 commit_repo() { # sets root, or refuses
   # rest walks h; mrest walks m in step (same length), and finds the real commit and what precedes it.
-  local dir="$cwd" rest="$h" mrest="$m" seg mseg prefix k
+  local dir="$cwd" rest="$h" mrest="$m" seg mseg prefix k lane=0
   local cd_re="^[[:space:]]*cd[[:space:]]+$WORD[[:space:]]*(&&|;)"
   while [[ "$rest" =~ $cd_re ]]; do
     dir="$(resolve_dir "$dir" "${BASH_REMATCH[1]}")" || unresolved "cd ${BASH_REMATCH[1]}"
@@ -325,7 +339,7 @@ commit_repo() { # sets root, or refuses
     k=${#BASH_REMATCH[0]}
     { dir="$(resolve_dir "$dir" "${BASH_REMATCH[3]:-.}")" && dir="$(lane_dir "$dir" "$n")" && [ -d "$dir" ]; } \
       || unresolved "lane $n has no worktree"
-    rest="${rest:k}"; mrest="${mrest:k}"
+    rest="${rest:k}"; mrest="${mrest:k}"; lane=1
   fi
   mseg="$(grep -Eo "$(git_sub commit)" <<<"$mrest" | head -1)"
   prefix="${mrest%%"$mseg"*}"
@@ -333,6 +347,7 @@ commit_repo() { # sets root, or refuses
   if grep -Eq '(^|[[:space:];&|(`{])(cd|pushd|popd)([[:space:];&|)]|$)|(^|[^[:alnum:]_])GIT_(DIR|WORK_TREE|COMMON_DIR)=|lane\.sh[[:space:]]+exec' <<<"$prefix"; then
     unresolved "a cd, pushd, GIT_DIR, GIT_WORK_TREE, GIT_COMMON_DIR or lane.sh exec that isn't at the start of the command"
   fi
+  only_adds_before "$prefix${mseg%%git*}" "${rest:0:${#prefix}}${mseg%%git*}" "$lane"
   grep -Eq -- '--(git-dir|work-tree)' <<<"$seg" && unresolved "--git-dir/--work-tree"
   local c_re="(^|[[:space:]])-C[[:space:]]+$WORD(.*)$"
   while [[ "$seg" =~ $c_re ]]; do
