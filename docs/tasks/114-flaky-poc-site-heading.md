@@ -1,6 +1,6 @@
 # Task 114: Flaky `@poc` flow on the preview: the new site's heading doesn't show
 
-- **Status:** todo
+- **Status:** in-progress
 - **Milestone:** unscheduled (test health; found on PR #103's preview)
 - **Zone / package:** `e2e` (steps), possibly `apps/dashboard` (`features/sites`) if a redirect is really lost
 - **Feature file:** `docs/features/poc-flow.feature` (behavior unchanged)
@@ -74,6 +74,7 @@ Start with the job log and the Cloud Run logs for 11:51 UTC: a 5xx, a slow reque
 ## Progress log
 - 2026-11-14 – Drafted from PR #103's preview run 43591431997 (attempt 1 failed at the "Dizengoff store" heading, attempt 2 passed 4/4).
 - 2026-11-14 – Owner answered questions 2–4 (diagnostics in the CI log: yes; the owner reads the Cloud Run logs; workstation runs against a preview: yes); question 1 takes the default, 5. READY.
+- 2026-11-14 – Started in lane 1 (`fix/flaky-poc-site-heading`).
 
 ## Open questions
 1. How many consecutive green preview runs of the `@poc` scenario count as fixed? This draft proposes 5, the count task 066 used. **Answer:** 5 (the default; the owner didn't object, 2026-11-14).
