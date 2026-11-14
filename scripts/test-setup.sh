@@ -48,7 +48,10 @@ world() {
 
   local S='"$STUB_STATE"' A='"$STUB_AVAIL"' B='"$STUB_BIN"'
   stub git; stub curl; stub jq; stub perl; stub unzip; stub gcloud; stub gh; stub terraform
-  stub curl "out=; while [ \$# -gt 0 ]; do [ \"\$1\" = -o ] && out=\"\$2\"; shift; done; [ -n \"\$out\" ] && echo 'not the fnm release' > \"\$out\"; exit 0"
+  stub curl "case \"\$*\" in *Homebrew/install*)
+  echo 'p=\${SETUP_BREW_PREFIXES%% *}; mkdir -p \"\$p/bin\" && cp \"\$STUB_AVAIL/brew\" \"\$p/bin/brew\"'; exit 0;; esac
+out=; while [ \$# -gt 0 ]; do [ \"\$1\" = -o ] && out=\"\$2\"; shift; done
+if [ -f $S/download ]; then cp $S/download \"\$out\"; else echo 'not the fnm release' > \"\$out\"; fi"
   stub node "[ \"\$1\" = -v ] && echo \"v\$(cat $S/node)\"; exit 0"
   stub pnpm "case \"\$1\" in -v|--version) [ -f $S/pnpm ] && cat $S/pnpm || exit 1;; esac; exit 0"
   stub corepack "[ \"\$1\" = install ] && { echo 10.18.0 > $S/pnpm; cp -P $A/pnpm $B/pnpm; }; exit 0"
@@ -61,7 +64,8 @@ case \"\$1\" in
     *) echo 'Cannot connect to the Docker daemon' >&2;; esac; exit 1;;
   inspect) cat $S/health;;
 esac; exit 0"
-  stub brew "[ \"\$1\" = install ] || exit 0; shift
+  stub brew "[ \"\$1\" = shellenv ] && echo \"export PATH=\\\"\$(dirname \"\$0\"):\\\$PATH\\\"\"
+[ \"\$1\" = install ] || exit 0; shift
 for p in \"\$@\"; do case \"\$p\" in
   --cask) ;; docker-desktop) rm -f $B/docker; cp -P $A/docker $B/docker; echo down > $S/docker;;
   *) rm -f $B/\$p; cp -P $A/\$p $B/\$p;; esac; done"
@@ -104,9 +108,19 @@ before()     { # regex-a regex-b: the first a is logged before the first b
   [ -n "$a" ] && [ -n "$b" ] && [ "$a" -lt "$b" ]; }
 in_order()   { while [ $# -gt 1 ]; do before "$1" "$2" || return 1; shift; done; }
 same_but_secret() { cmp -s <(grep -v '^BETTER_AUTH_SECRET=' "$1") <(grep -v '^BETTER_AUTH_SECRET=' "$2"); }
+said_before() { # text-a text-b: a is printed on an earlier line than b
+  local a b; a="$(grep -nF -- "$1" "$W/out" | head -1 | cut -d: -f1)"; b="$(grep -nF -- "$2" "$W/out" | head -1 | cut -d: -f1)"
+  [ -n "$a" ] && [ -n "$b" ] && [ "$a" -lt "$b" ]; }
+no_leftovers() { ! ls -a "$W/repo" | grep -q '^\.env\.setup'; }
+mv_stub() { # body run before the real mv
+  local real; real="$(command -v mv)"; rm -f "$W/bin/mv"
+  printf '#!/bin/bash\n%s\nexec %s "$@"\n' "$1" "$real" > "$W/bin/mv"; chmod +x "$W/bin/mv"; }
+answer() { STDIN="$W/answer"; printf '%s\n' "$@" > "$STDIN"; }
 snapshot()   { (cd "$W" && find repo home -type f | sort | while read -r f; do cksum "$f"; done; ls -l repo/.env 2>/dev/null); }
 INSTALLS='^(brew install|apt-get|sudo|nvm (install|use)|fnm (install|use)|corepack|curl)'
 CHROMIUM='^pnpm --filter @repo/e2e exec playwright install'
+FNM_PROFILE='eval "$(fnm env --use-on-cd)"'
+WITH_DEPS='pnpm --filter @repo/e2e exec playwright install --with-deps chromium'
 
 # --- macOS ---------------------------------------------------------------------------------------------------------
 world; absent jq docker; run -- --yes
@@ -119,12 +133,24 @@ check "macOS: then installs chromium without --with-deps"   logged "$CHROMIUM ch
 check "macOS: asks to start Docker Desktop once and rerun"  said "start Docker Desktop"
 
 world; absent brew jq; STDIN="$W/no"; echo n > "$STDIN"; run SETUP_INTERACTIVE=1 -- --yes; STDIN=
-check "macOS without Homebrew: asks even with --yes"        said "Install Homebrew"
+check "macOS without Homebrew: asks even with --yes"        said "Install Homebrew now with its official installer? [y/N]"
 check "macOS without Homebrew: declining exits 1"           code_is 1
 check "macOS without Homebrew: declining prints the installer command" \
   said 'https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh'
 check "macOS without Homebrew: declining installs nothing"  not_logged "$INSTALLS|^pnpm install"
 check "macOS without Homebrew: declining creates no .env"   no_env
+
+world; absent brew jq; answer y; run SETUP_INTERACTIVE=1 SETUP_BREW_PREFIXES="$W/newbrew" -- --yes; STDIN=
+check "macOS without Homebrew: yes runs Homebrew's installer" logged '^curl .*Homebrew/install/HEAD/install\.sh'
+check "macOS without Homebrew: then brew install jq"        in_order 'Homebrew/install' '^brew install jq$'
+check "macOS without Homebrew: yes finishes"                code_is 0
+
+world; state node 23.6.0; run -- --yes
+check "macOS, Node 23 without a manager: brew install fnm"  logged '^brew install fnm$'
+check "macOS, Node 23 without a manager: fnm install and use 22" in_order '^fnm install 22$' '^fnm use 22$'
+check "macOS, Node 23 without a manager: prints the fnm profile line" said "$FNM_PROFILE"
+check "macOS, Node 23 without a manager: a new shell before pnpm dev" said_before "Node changed: open a new shell" "  Next: pnpm dev"
+check "macOS, Node 23 without a manager: exits 0"           code_is 0
 
 world; absent brew jq; run -- --yes
 check "macOS without Homebrew, no terminal: --yes doesn't install it" not_logged "$INSTALLS|^pnpm install"
@@ -136,6 +162,7 @@ world; state uname Linux; absent brew jq; run -- --yes
 check "Linux: says the environment"                         sh -c "head -1 '$W/out' | grep -q '^Environment: Linux'"
 check "Linux: installs jq through sudo apt-get"             logged '^sudo apt-get install -y jq$'
 check "Linux: never uses brew"                              not_logged '^brew'
+check "Linux: the plan lists chromium's system libraries"   said "chromium system libraries (sudo apt-get, via Playwright)"
 check "Linux: then the packages, the database and chromium with --with-deps" \
   sh -c "grep -q '^pnpm install --frozen-lockfile$' '$W/log' && grep -q '^pnpm db:migrate$' '$W/log' && grep -q '$CHROMIUM --with-deps chromium$' '$W/log'"
 check "Linux: exits 0"                                      code_is 0
@@ -164,6 +191,11 @@ check "WSL: prints the WSL-integration fix naming the distro" \
 check "WSL: exits 1 without Docker"                         code_is 1
 check "WSL: still installs the packages"                    logged '^pnpm install --frozen-lockfile$'
 
+world; state uname Linux; absent brew docker; run WSL_DISTRO_NAME=Ubuntu -- --yes
+check "WSL without Docker: never installs docker.io"        not_logged 'docker\.io|docker-compose'
+check "WSL without Docker: prints the WSL-integration fix"  said "WSL integration → turn on \`Ubuntu\`"
+check "WSL without Docker: exits 1"                         code_is 1
+
 world; state uname Linux; absent brew docker; echo "Linux version 5.15.153.1-microsoft-standard-WSL2" > "$W/proc_version"
 run -- --yes --no-docker
 check "WSL from /proc/version: detected"                    sh -c "head -1 '$W/out' | grep -q '^Environment: WSL2'"
@@ -190,6 +222,35 @@ check "sandbox: exits 1"                                    code_is 1
 world; state uname Linux; absent brew docker; run -- --yes --no-docker
 check "sandbox with --no-docker: doesn't install Docker"    not_logged 'docker\.io'
 check "sandbox with --no-docker: exits 0"                   code_is 0
+
+world; state uname Linux; absent brew docker sudo; run -- --yes
+check "sandbox without sudo: drops Docker instead of failing" not_logged 'docker\.io'
+check "sandbox without sudo: still writes .env"             test -f "$W/repo/.env"
+check "sandbox without sudo: still installs the packages"   logged '^pnpm install --frozen-lockfile$'
+check "sandbox without sudo: chromium without --with-deps"  logged "$CHROMIUM chromium$"
+check "sandbox without sudo: prints the --with-deps command" said "$WITH_DEPS"
+check "sandbox without sudo: prints the task 113 message"   said "task 113"
+check "sandbox without sudo: exits 1"                       code_is 1
+
+world; state uname Linux; absent brew sudo jq; run -- --yes
+check "Linux without sudo, jq missing: fails naming sudo"   sh -c "[ $CODE = 1 ] && grep -q 'sudo' '$W/out'"
+check "Linux without sudo, jq missing: installs nothing"    not_logged "$INSTALLS|^pnpm install"
+
+world; state uname Linux; absent brew apt-get jq; answer y; run SETUP_INTERACTIVE=1; STDIN=
+check "no apt-get: doesn't ask"                             not_said "Install these?"
+check "no apt-get: says so"                                 said "no apt-get"
+check "no apt-get: exits 1 installing nothing"              sh -c "[ $CODE = 1 ] && ! grep -Eq '^pnpm install' '$W/log'"
+
+# --- Playwright's system libraries (sudo apt-get) only when approved ------------------------------------------------
+world; state uname Linux; absent brew; run
+check "chromium deps, no terminal: no --with-deps"          sh -c "grep -q '$CHROMIUM chromium$' '$W/log' && ! grep -q -- '--with-deps' '$W/log'"
+check "chromium deps, no terminal: prints the command"      said "$WITH_DEPS"
+check "chromium deps, no terminal: exits 0"                 code_is 0
+world; state uname Linux; absent brew; answer n; run SETUP_INTERACTIVE=1; STDIN=
+check "chromium deps, declined: asks"                       said "chromium system libraries"
+check "chromium deps, declined: no --with-deps"             not_logged -- '--with-deps'
+world; state uname Linux; absent brew; answer y; run SETUP_INTERACTIVE=1; STDIN=
+check "chromium deps, accepted: --with-deps"                logged "$CHROMIUM --with-deps chromium$"
 
 # --- --no-install, no terminal -------------------------------------------------------------------------------------
 world; state uname Linux; absent brew jq; state node 20.10.0; run -- --no-install
@@ -228,6 +289,16 @@ check ".env: an existing one stays byte-for-byte"           cmp -s "$W/env.befor
 check ".env: names the key it lacks"                        said "STORAGE_BUCKET"
 check ".env: never prints an existing value"                not_said "hand-made-value-1234567890abcdef"
 
+world; mv_stub 'kill -TERM $PPID; sleep 1'; run -- --yes
+check ".env: an interrupted write leaves no temp file"      no_leftovers
+check ".env: an interrupted write leaves no .env"           no_env
+world; mv_stub 'echo existing > .env'; run -- --yes
+check ".env: one that appears meanwhile is kept"            test "$(cat "$W/repo/.env")" = existing
+check ".env: says created only when it was"                 not_said "created from .env.example"
+check ".env: the race leaves no temp file"                  no_leftovers
+check ".gitignore: ignores .env.* temp files"               git -C "$ROOT" check-ignore -q .env.setup.12345
+check ".gitignore: keeps .env.example"                      sh -c "! git -C '$ROOT' check-ignore -q .env.example"
+
 # --- Order, forbidden commands, database timeout, rerun, fnm sha256 -------------------------------------------------
 world; run -- --yes
 check "steps: install, db:up, migrate, chromium in that order" in_order '^pnpm install' '^pnpm db:up$' '^pnpm db:migrate$' "$CHROMIUM"
@@ -264,6 +335,31 @@ print(s.getsockname()[1], flush=True); time.sleep(30)' > "$TMP/port" &
   check "ports: a taken port doesn't fail the setup"         code_is 0
   kill "$LISTENER" 2>/dev/null; wait "$LISTENER" 2>/dev/null
 fi
+
+if command -v python3 >/dev/null 2>&1 && command -v unzip >/dev/null 2>&1; then
+  world; state uname Linux; state arch x86_64; absent brew node corepack pnpm unzip; ln -s "$(command -v unzip)" "$W/bin/unzip"
+  python3 -I - "$W/avail/fnm" "$W/state/download" <<'EOF'
+import sys, zipfile
+info = zipfile.ZipInfo("fnm"); info.external_attr = 0o755 << 16
+with zipfile.ZipFile(sys.argv[2], "w") as z: z.writestr(info, open(sys.argv[1]).read())
+EOF
+  SUM="$( (sha256sum "$W/state/download" 2>/dev/null || shasum -a 256 "$W/state/download") | cut -d' ' -f1)"
+  sed "s/^FNM_SHA256_LINUX_X64=.*/FNM_SHA256_LINUX_X64=\"$SUM\"/" "$SETUP" > "$W/repo/scripts/setup.sh"
+  run -- --yes
+  check "fnm download: a matching sha256 installs fnm"       test -x "$W/home/.local/share/fnm/fnm"
+  check "fnm download: then fnm install and use 22"          in_order '^fnm install 22$' '^fnm use 22$' '^corepack enable pnpm$' '^pnpm install'
+  check "fnm download: prints the fnm profile line"          said "$FNM_PROFILE"
+  check "fnm download: a new shell before pnpm dev"          said_before "Node changed: open a new shell" "  Next: pnpm dev"
+  check "fnm download: exits 0"                              code_is 0
+fi
+
+# --- Hints ---------------------------------------------------------------------------------------------------------
+world; state uname Linux; absent brew docker; run -- --no-install
+check "hint: Docker's own repository calls it docker-compose-plugin" said "docker-compose-plugin"
+world; state uname Linux; absent brew; state docker denied; run -- --no-install
+check "hint: the docker group is root on the host"          said "root on this host"
+world; run -- --yes
+check "summary: setup.sh infra is coming with task 112"     said "coming with task 112"
 
 echo; echo "$pass passed, $fail failed"
 [ "$fail" = 0 ]
