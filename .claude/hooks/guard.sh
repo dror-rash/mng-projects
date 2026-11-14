@@ -318,8 +318,11 @@ resolve_dir() { # base, dir as written (quoted, ~, relative, or "$(scripts/lane.
 only_adds_before() { # text before the commit in m, the same in h, 1 after lane.sh exec (no git add then)
   local a='[^[:space:];&|<>(){}`$\\]+' nl=$'\n' adds re
   adds="([[:space:]]*git([[:space:]]+-C[[:space:]]+$a)?[[:space:]]+add([[:space:]]+$a)*[[:space:]]*(&&|;|$nl))*"
-  [ "$3" = 1 ] && adds=""
-  re="^$adds[[:space:]]*(env[[:space:]]+)?([A-Za-z_][A-Za-z0-9_]*=($a)?[[:space:]]+)*\$"
+  local lead="[[:space:]]*"
+  [ "$3" = 1 ] && { adds=""; lead="[[:blank:]]*"; } # after lane.sh exec --, the commit is the exec's own command
+  # The commit's own words are joined by blanks only: a newline there ends a command, so env or VAR=x on the line
+  # before would be a command of its own (and after lane.sh exec, the commit would run in the cwd).
+  re="^$adds$lead(env[[:blank:]]+)?([A-Za-z_][A-Za-z0-9_]*=($a)?[[:blank:]]+)*\$"
   if ! [[ "$1" =~ $re ]] || grep -q '[$`\\]' <<<"$2" ||
     tr -d "\"'\\\\" <<<"$2" | grep -Eq '(^|[^[:alnum:]_])GIT_(DIR|WORK_TREE|COMMON_DIR)='; then
     deny "only a leading literal cd and git add may run before a git commit in the same command (no export, source, ln, mv, rm, assignments, \$(…), redirections or subshells). Run the commit on its own: cd /abs/path && git add … && git commit …"
@@ -333,7 +336,7 @@ commit_repo() { # sets root, or refuses
     dir="$(resolve_dir "$dir" "${BASH_REMATCH[1]}")" || unresolved "cd ${BASH_REMATCH[1]}"
     k=${#BASH_REMATCH[0]}; rest="${rest:k}"; mrest="${mrest:k}"
   done
-  local lane_re="^[[:space:]]*((bash|sh)[[:space:]]+)?([^[:space:]]*/)?scripts/lane\.sh[[:space:]]+exec[[:space:]]+([1-9])[[:space:]]+--[[:space:]]"
+  local lane_re="^[[:space:]]*((bash|sh)[[:space:]]+)?([^[:space:]]*/)?scripts/lane\.sh[[:blank:]]+exec[[:blank:]]+([1-9])[[:blank:]]+--[[:blank:]]"
   if [[ "$rest" =~ $lane_re ]]; then
     local n="${BASH_REMATCH[4]}"
     k=${#BASH_REMATCH[0]}
