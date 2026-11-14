@@ -100,7 +100,7 @@ pg_world() { # task 113: Postgres and the storage emulator without Docker
   cat > "$W/pgavail/initdb" <<'EOF'
 #!/bin/bash
 echo "initdb $*" >> "$STUB_LOG"
-env > "$(dirname "$0")/../initdb.env"
+/usr/bin/env > "$(dirname "$0")/../initdb.env"
 d=; while [ $# -gt 0 ]; do case "$1" in -D) d="$2";; --pwfile=*) cp "${1#--pwfile=}" "$STUB_STATE/pwfile";; esac; shift; done
 mkdir -p "$d" && echo 16 > "$d/PG_VERSION" && : > "$d/postgresql.conf"
 EOF
@@ -118,7 +118,7 @@ esac
 exit 0
 EOF
   # The server: a process whose command line names .../bin/postgres, like the real postmaster.
-  printf '#!/bin/bash\nenv > "$(dirname "$0")/../postgres.env"\ntrap '"'"'kill $! 2>/dev/null; exit 0'"'"' TERM\nsleep 60 & wait\n' > "$W/pgavail/postgres"
+  printf '#!/bin/bash\n/usr/bin/env > "$(dirname "$0")/../postgres.env"\ntrap '"'"'kill $! 2>/dev/null; exit 0'"'"' TERM\nsleep 60 & wait\n' > "$W/pgavail/postgres"
   chmod +x "$W/pgavail/initdb" "$W/pgavail/pg_ctl" "$W/pgavail/postgres"
   local S='"$STUB_STATE"'
   stub psql "case \"\$*\" in
@@ -707,8 +707,9 @@ check "storage on amd64: runs"                               sh -c "[ $CODE = 0 
 
 CLEAN_ENV="/usr/bin/env -i PATH=/usr/bin:/bin LANG=C.UTF-8"
 sandbox; state uid 0; gcs_ready; run SETUP_MARKER_TOKEN=leak-me -- --yes; eventually logged '^fake-gcs-server '
+eventually test -s "$W/postgres.env" # the server stub runs in the background
 check "as root: initdb and the server get a cleared environment (INF-4)" \
-  sh -c "[ -s '$W/initdb.env' ] && [ -s '$W/postgres.env' ] && ! grep -q 'SETUP_MARKER_TOKEN\|STUB_LOG' '$W/initdb.env' '$W/postgres.env'"
+  sh -c "[ -s '$W/initdb.env' ] && [ -s '$W/postgres.env' ] && ! grep -Eq 'SETUP_MARKER_TOKEN|STUB_LOG' '$W/initdb.env' '$W/postgres.env'"
 check "as root: no sudo"                                     not_logged '^sudo'
 check "as root: initdb as user postgres (initdb refuses root)" logged '^runuser -u postgres -- .*/initdb '
 check "as root: the database in the postgres user's home"    logged_f "initdb -D $W/pghome/mng-projects/postgres "
