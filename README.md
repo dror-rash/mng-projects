@@ -30,6 +30,9 @@ pnpm storybook          # UI workbench :6006
   installing anything (`--yes` doesn't ask, except before installing Homebrew itself); `--no-install` only checks;
   `--no-docker` and `--skip-browsers` skip those steps. Rerunning it is safe: it never changes an existing `.env`.
 - After a restart: `pnpm db:up` starts the database and file storage again.
+- Without Docker (Linux sandboxes such as claude.ai/code), `setup.sh` runs Postgres 16 and the file storage emulator
+  directly, with their data in `~/.local/share/mng-projects`; after a restart, `bash scripts/setup.sh services` starts
+  them again (`--stop` stops them).
 - **Windows:** install WSL2 (`wsl --install -d Ubuntu`) and Docker Desktop with WSL integration turned on for that
   distro, then clone and run everything inside WSL. PowerShell and cmd aren't supported.
 
