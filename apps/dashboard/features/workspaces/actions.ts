@@ -5,11 +5,11 @@ import { getSession } from "@repo/auth/server";
 import { and, type Db, eq, getDb, isNull, schema, sql, withAccess } from "@repo/db";
 import { revalidatePath } from "next/cache";
 import { cookies, headers } from "next/headers";
-import { redirect } from "next/navigation";
 
 import { isAdmin } from "@/features/access/require-change";
 import { keepsAnAdmin, parseRoleChoice, type RoleChoice, roleChoiceLabel, roleChoiceValue } from "@/features/access/roles";
 import { type FormState, invalid } from "@/features/forms/form-state";
+import { redirectFromAction } from "@/features/navigation/redirect-from-action";
 
 import { WORKSPACE_COOKIE } from "./current-workspace";
 import {
@@ -255,7 +255,7 @@ export async function leaveWorkspaceAction(_prev: FormState, formData: FormData)
     return { error };
   }
   (await cookies()).delete(WORKSPACE_COOKIE);
-  redirect("/");
+  return redirectFromAction("/");
 }
 
 const INVALID_INVITE = "This invite link is invalid or has expired";
@@ -298,7 +298,7 @@ export async function joinWorkspaceAction(_prev: FormState, _formData: FormData)
   }
   clearInviteToken(jar);
   await useWorkspace(invite.workspaceId);
-  redirect("/");
+  return redirectFromAction("/");
 }
 
 /** Makes another of my workspaces the current one. Membership is checked here, not trusted from the form. */
@@ -312,7 +312,7 @@ export async function switchWorkspaceAction(formData: FormData) {
     throw new Error("Not a member of that workspace");
   }
   await useWorkspace(workspaceId);
-  redirect("/");
+  return redirectFromAction("/");
 }
 
 /** Creates a workspace with me as its admin and switches to it. */
@@ -327,5 +327,5 @@ export async function createWorkspaceAction(_prev: FormState, formData: FormData
   }
   const id = await createWorkspace(session.user.id, name.value);
   await useWorkspace(id);
-  redirect("/");
+  return redirectFromAction("/");
 }

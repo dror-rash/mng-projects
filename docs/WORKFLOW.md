@@ -2,7 +2,7 @@
 
 ## The loop
 1. **Plan** – confirm the item exists in `PLAN.md`. Create a task from `templates/task.md` in `docs/tasks/`.
-2. **Specify** – write or update the Gherkin in `docs/features/<feature>.feature`. Get it reviewed before coding. Scenarios written ahead of their task are tagged `@wip` so the suite skips them; remove the tag when the task starts (step 3).
+2. **Specify** – write or update the Gherkin in `docs/features/<feature>.feature`. Get it reviewed before coding. Scenarios written ahead of their task are tagged `@wip` so the suite skips them; remove the tag when the task starts (step 3). A scenario that only a production build can run (a form posted without JavaScript: `next dev` answers it with a 500, task 114) is tagged `@build`: local `pnpm test:e2e` against dev servers skips it, CI's e2e job (`start` servers) runs it. To run one locally, build, start the zones (`pnpm --filter @repo/<zone> start`) and run with `CI=1`, or set `E2E_TAGS`.
 3. **Red (acceptance)** – generate step definitions, run `pnpm test:e2e`, confirm the new scenario fails for the *right reason*.
 4. **Red (unit)** – pick the smallest next behavior, write a failing Vitest/Testing Library test.
 5. **Green** – write the minimum code to pass. Nothing more.

@@ -4,7 +4,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { cache } from "react";
 
-const BASE_PATH = "/dashboard";
+import { withBasePath } from "@/features/navigation/base-path";
 
 /**
  * The session (or null), looked up once per server render. Outside a render (in a server action) React's
@@ -27,7 +27,7 @@ export async function requireSession(path: string) {
     forwardedProto: h.get("x-forwarded-proto"),
     fallbackOrigin: `http://${h.get("host") ?? "localhost"}`,
   });
-  redirect(new URL(loginUrl(`${BASE_PATH}${path === "/" ? "" : path}`), origin).toString());
+  redirect(new URL(loginUrl(withBasePath(path)), origin).toString());
 }
 
 /**

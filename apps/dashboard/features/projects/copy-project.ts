@@ -1,9 +1,9 @@
 "use server";
 
 import { withAccess } from "@repo/db";
-import { redirect } from "next/navigation";
 
 import { type FormState, invalid } from "@/features/forms/form-state";
+import { redirectFromAction } from "@/features/navigation/redirect-from-action";
 import { requireWorkspaceForAction } from "@/features/workspaces/require-workspace";
 
 import { copyProject } from "./copy";
@@ -51,5 +51,5 @@ export async function copyProjectAction(_prev: FormState, formData: FormData): P
     return result;
   }
   revalidateOverviews();
-  redirect(`/projects/${result.id}`);
+  return redirectFromAction(`/projects/${result.id}`);
 }

@@ -1,6 +1,7 @@
-import { type APIRequestContext, type Browser, type BrowserContext, expect, type Page } from "@playwright/test";
+import { type APIRequestContext, type Browser, type BrowserContext, expect, type Page, type TestInfo } from "@playwright/test";
 import { test as base, createBdd } from "playwright-bdd";
 
+import { describePage } from "../support/failure-diagnostics";
 import { createPacer, limitedPath } from "../support/pacing";
 
 export type Account = { email: string; password: string };
@@ -87,12 +88,41 @@ export async function userId(page: Page): Promise<string> {
   return (await response.json()).user.id;
 }
 
+/**
+ * When a scenario fails against a deployment (BASE_URL), where the page was and what it showed, as a text
+ * attachment the reporters print with the failure (task 114). Traces stay off there: the CI log is public.
+ */
+async function attachPageOnFailure(page: Page, testInfo: TestInfo) {
+  if (!process.env.BASE_URL || testInfo.status === testInfo.expectedStatus || page.isClosed()) return;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    const shown = (role: "heading" | "alert") => page.getByRole(role).filter({ visible: true }).allInnerTexts();
+    // A hung page mustn't hold up the teardown: give the reads 2 seconds.
+    const timeout = new Promise<never>((_, reject) => {
+      timer = setTimeout(() => reject(new Error("page diagnostics timed out")), 2_000);
+    });
+    const [headings, errors] = await Promise.race([Promise.all([shown("heading"), shown("alert")]), timeout]);
+    await testInfo.attach("page at failure", { body: describePage({ url: page.url(), headings, errors }), contentType: "text/plain" });
+  } catch {
+    // The page may be gone, navigating or hung; the failure itself is what matters.
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 /** Every scenario gets its own unique account, so runs never collide in a persistent database. */
-export const test = base.extend<{ account: Account; state: ScenarioState; people: People; authTimeline: void }>({
+export const test = base.extend<{ account: Account; state: ScenarioState; people: People; authTimeline: void; pageOnFailure: void }>({
   authTimeline: [
     async ({ context }, use) => {
       watchAuthRequests(context);
       await use();
+    },
+    { auto: true },
+  ],
+  pageOnFailure: [
+    async ({ page }, use, testInfo) => {
+      await use();
+      await attachPageOnFailure(page, testInfo);
     },
     { auto: true },
   ],

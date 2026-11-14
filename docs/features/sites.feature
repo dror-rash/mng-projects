@@ -49,6 +49,15 @@ Feature: Sites
     And I press "Save site"
     Then I see the error "Site name is required"
 
+  @task:114 @build
+  Scenario: A site saved before the page has finished loading still opens
+    Given my connection is so slow that pages haven't finished loading when I use them
+    When I open the new site page for "Acme Ltd"
+    And I fill in "Site name" with "Haifa warehouse"
+    And I press "Save site"
+    Then I see the heading "Haifa warehouse"
+    And I see the "Acme Ltd" link
+
   Scenario: Add, edit and remove the people to meet on site
     Given "Acme Ltd" has a site "Haifa warehouse"
     When I open the "Haifa warehouse" site page
