@@ -73,12 +73,13 @@ Start with the job log and the Cloud Run logs for 11:51 UTC: a 5xx, a slow reque
 
 ## Progress log
 - 2026-11-14 – Drafted from PR #103's preview run 43591431997 (attempt 1 failed at the "Dizengoff store" heading, attempt 2 passed 4/4).
+- 2026-11-14 – Owner answered questions 2–4 (diagnostics in the CI log: yes; the owner reads the Cloud Run logs; workstation runs against a preview: yes); question 1 takes the default, 5. READY.
 
 ## Open questions
-1. How many consecutive green preview runs of the `@poc` scenario count as fixed? This draft proposes 5, the count task 066 used.
-2. The repository is public and CI keeps traces off. May a failing step print the page's URL and its visible headings and error texts to the CI log? Those can include the throwaway account's email and workspace name, but no passwords or cookies.
-3. Who reads the dashboard preview service's Cloud Run logs and request log for run 43591431997 (around 11:51 UTC, 2026-11-14): the owner, or an agent with read-only `gcloud logging read` access?
-4. May an implementer run the `@poc` scenario repeatedly from a workstation against a PR preview (`BASE_URL`, one worker)? Each run signs up 3 new accounts on `app_preview` under production rate limits. Or should reproduction against a deployment happen only through re-runs of the **Deploy** workflow?
+1. How many consecutive green preview runs of the `@poc` scenario count as fixed? This draft proposes 5, the count task 066 used. **Answer:** 5 (the default; the owner didn't object, 2026-11-14).
+2. The repository is public and CI keeps traces off. May a failing step print the page's URL and its visible headings and error texts to the CI log? Those can include the throwaway account's email and workspace name, but no passwords or cookies. **Answer (owner, 2026-11-14):** yes.
+3. Who reads the dashboard preview service's Cloud Run logs and request log for run 43591431997 (around 11:51 UTC, 2026-11-14): the owner, or an agent with read-only `gcloud logging read` access? **Answer (owner, 2026-11-14):** the owner reads them for now.
+4. May an implementer run the `@poc` scenario repeatedly from a workstation against a PR preview (`BASE_URL`, one worker)? Each run signs up 3 new accounts on `app_preview` under production rate limits. Or should reproduction against a deployment happen only through re-runs of the **Deploy** workflow? **Answer (owner, 2026-11-14):** yes, from a workstation, one worker.
 
 ## Parking lot
 - `min_instances = 1` for the preview dashboard service, to remove cold starts from preview runs (cost; `infra/`).
