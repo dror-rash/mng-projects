@@ -244,28 +244,25 @@ if [ "$scan" = 1 ]; then
   # setup.sh infra / infra-push fetch the owner config and workstation secrets: a person runs them, never an agent
   # (task 112, ADR-0013; setup.sh also refuses CLAUDECODE=1, which a command can unset). Refused: setup.sh followed
   # by infra, infra-push or a word with a variable in any simple command (whatever runs it: a shell by any path,
-  # env, sudo, timeout, source, xargs, { ! ` then do else), except one that only reads files (grep, cat, …, and git
-  # builtins without -c or GIT_CONFIG_*: aliases run commands); and the words anywhere behind a shell wrapper or a
-  # command substitution (outside heredoc bodies). A quoted message is one word, so a commit, echo or grep
-  # mentioning them passes.
+  # env, sudo, timeout, source, xargs, { ! ` then do else), and setup.sh with an infra or infra-push word anywhere
+  # in it (git grep -O<cmd> runs a pager), except one that only reads files (grep, cat, ls, …; never git or less:
+  # aliases, pagers and LESSOPEN run commands); a setting whose value runs it (PAGER=…, core.pager=…); and the words
+  # anywhere behind a shell wrapper or a command substitution (outside heredoc bodies). A quoted message is one
+  # word, so a commit, echo or grep mentioning them passes.
   if { { grep -Eq "$RUNS_SHELL" <<<"$m" || grep -Eq "$RUNS_SHELL" <<<"$h"; } &&
        grep -Eq 'setup\.sh[[:space:]]+(infra(-push)?([^[:alnum:]_-]|$)|\$)' <<<"$dq"; } ||
      { grep -Eq '`|\$\(' <<<"$h" &&
        tr -d "\"'\\\\" <<<"$h" | grep -Eq 'setup\.sh[[:space:]]+(infra(-push)?([^[:alnum:]_-]|$)|\$)'; }; then
     deny "$INFRA_REFUSED"
   fi
+  grep -Eq '(^| )[^ ]*=[^ ]*setup\.sh_+(infra|infra-push)(_|$| )' <<<"$words" && deny "$INFRA_REFUSED"
   while IFS= read -r seg; do
     case " $seg " in *" setup.sh "*|*"/setup.sh "*) ;; *) continue ;; esac
     first="$(sed -E 's/^([A-Za-z_][A-Za-z0-9_]*=[^ ]* +)*//' <<<"$seg")"
     case "${first%% *}" in
       grep|egrep|fgrep|rg|cat|head|tail|wc|ls|diff|stat|file|shellcheck) continue ;;
-      git)
-        sub="${first#git }"; sub="${sub%% *}"
-        case "$seg" in *GIT_CONFIG*) ;; *)
-          case "$sub" in add|diff|log|show|status|grep|rm|mv|restore|checkout|switch|blame|ls-files|stash|reset|commit) continue ;; esac ;;
-        esac ;;
     esac
-    if grep -Eq '(^| )([^ ]*/)?setup\.sh +(infra|infra-push|[^ ]*[$`][^ ]*)( |$)' <<<"$seg" ||
+    if grep -Eq '(^| )([^ ]*/)?setup\.sh +[^ ]*[$`]' <<<"$seg" || grep -Eq '(^| )(infra|infra-push)( |$)' <<<"$seg" ||
       grep -Eq '(^| )xargs( |$)' <<<"$seg"; then
       deny "$INFRA_REFUSED"
     fi
