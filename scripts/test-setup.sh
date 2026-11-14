@@ -100,6 +100,7 @@ pg_world() { # task 113: Postgres and the storage emulator without Docker
   cat > "$W/pgavail/initdb" <<'EOF'
 #!/bin/bash
 echo "initdb $*" >> "$STUB_LOG"
+env > "$(dirname "$0")/../initdb.env"
 d=; while [ $# -gt 0 ]; do case "$1" in -D) d="$2";; --pwfile=*) cp "${1#--pwfile=}" "$STUB_STATE/pwfile";; esac; shift; done
 mkdir -p "$d" && echo 16 > "$d/PG_VERSION" && : > "$d/postgresql.conf"
 EOF
@@ -117,7 +118,7 @@ esac
 exit 0
 EOF
   # The server: a process whose command line names .../bin/postgres, like the real postmaster.
-  printf '#!/bin/bash\ntrap '"'"'kill $! 2>/dev/null; exit 0'"'"' TERM\nsleep 60 & wait\n' > "$W/pgavail/postgres"
+  printf '#!/bin/bash\nenv > "$(dirname "$0")/../postgres.env"\ntrap '"'"'kill $! 2>/dev/null; exit 0'"'"' TERM\nsleep 60 & wait\n' > "$W/pgavail/postgres"
   chmod +x "$W/pgavail/initdb" "$W/pgavail/pg_ctl" "$W/pgavail/postgres"
   local S='"$STUB_STATE"'
   stub psql "case \"\$*\" in
@@ -704,12 +705,15 @@ sandbox; state arch x86_64; gcs_ready; run -- --yes
 check "storage on amd64: the amd64 release"                  logged '^curl .*fake-gcs-server_1\.52\.2_Linux_amd64\.tar\.gz$'
 check "storage on amd64: runs"                               sh -c "[ $CODE = 0 ] && kill -0 \"\$(cat '$W/$DATA/fake-gcs-server.pid')\""
 
-sandbox; state uid 0; gcs_ready; run -- --yes; eventually logged '^fake-gcs-server '
+CLEAN_ENV="/usr/bin/env -i PATH=/usr/bin:/bin LANG=C.UTF-8"
+sandbox; state uid 0; gcs_ready; run SETUP_MARKER_TOKEN=leak-me -- --yes; eventually logged '^fake-gcs-server '
+check "as root: initdb and the server get a cleared environment (INF-4)" \
+  sh -c "[ -s '$W/initdb.env' ] && [ -s '$W/postgres.env' ] && ! grep -q 'SETUP_MARKER_TOKEN\|STUB_LOG' '$W/initdb.env' '$W/postgres.env'"
 check "as root: no sudo"                                     not_logged '^sudo'
 check "as root: initdb as user postgres (initdb refuses root)" logged '^runuser -u postgres -- .*/initdb '
 check "as root: the database in the postgres user's home"    logged_f "initdb -D $W/pghome/mng-projects/postgres "
-check "as root: that directory is created by the postgres user" logged_f "runuser -u postgres -- mkdir -p -m 700 $W/pghome/mng-projects"
-check "as root: postgresql.conf is written by the postgres user" logged_f "runuser -u postgres -- tee -a $W/pghome/mng-projects/postgres/postgresql.conf"
+check "as root: that directory is created by the postgres user" logged_f "runuser -u postgres -- $CLEAN_ENV mkdir -p -m 700 $W/pghome/mng-projects"
+check "as root: postgresql.conf is written by the postgres user" logged_f "runuser -u postgres -- $CLEAN_ENV tee -a $W/pghome/mng-projects/postgres/postgresql.conf"
 check "as root: the summary shows the data in postgres's home" said "data in $W/pghome/mng-projects/postgres"
 check "as root: pg_ctl as user postgres"                     logged '^runuser -u postgres -- .*/pg_ctl .* start$'
 check "as root: exits 0"                                     code_is 0
@@ -772,6 +776,18 @@ printf '%s\n' "$UNRELATED" > "$W/$DATA/fake-gcs-server.pid"; run -- services --s
 check "services --stop: leaves another process in a pid file running" kill -0 "$UNRELATED"
 check "services --stop: drops that stale pid file"           test ! -e "$W/$DATA/fake-gcs-server.pid"
 kill "$UNRELATED" 2>/dev/null; wait "$UNRELATED" 2>/dev/null
+# Programs with the same names elsewhere aren't ours either (INF-5): pid files are matched on the exact paths.
+mkdir -p "$W/other/bin"; cp "$W/avail/fake-gcs-server" "$W/other/fake-gcs-server"; cp "$W/pgavail/postgres" "$W/other/bin/postgres"
+"$W/other/fake-gcs-server" -scheme http </dev/null >/dev/null 2>&1 & OTHER_GCS=$!
+"$W/other/bin/postgres" -D "$W/other" </dev/null >/dev/null 2>&1 & OTHER_PG=$!
+sleep 0.3
+printf '%s\n' "$OTHER_GCS" > "$W/$DATA/fake-gcs-server.pid"; printf '%s\n' "$OTHER_PG" > "$W/$DATA/postgres/postmaster.pid"
+run -- services; eventually logged '^fake-gcs-server '
+check "services, pid files naming another fake-gcs-server: starts ours" sh -c "[ '$(gcs_pid)' != '$OTHER_GCS' ] && grep -q '^fake-gcs-server ' '$W/log'"
+check "services, pid files naming another .../bin/postgres: starts ours" logged '^pg_ctl .* start$'
+printf '%s\n' "$OTHER_GCS" > "$W/$DATA/fake-gcs-server.pid"; run -- services --stop
+check "services --stop: leaves the other fake-gcs-server and postgres running" sh -c "kill -0 '$OTHER_GCS' && kill -0 '$OTHER_PG'"
+kill "$OTHER_GCS" "$OTHER_PG" 2>/dev/null; wait "$OTHER_GCS" "$OTHER_PG" 2>/dev/null
 rm -f "$W"/pgbin/*; run -- services
 check "services, Postgres uninstalled (data kept): says to rerun setup.sh" sh -c "[ $CODE = 1 ] && grep -qF 'rerun bash scripts/setup.sh' '$W/out' && grep -qF 'kept' '$W/out'"
 world; state uname Linux; run -- services
@@ -779,7 +795,8 @@ check "services where Docker runs: says pnpm db:up"          sh -c "[ $CODE = 1 
 world; state uname Linux; run -- services --yes
 check "services takes only --stop"                           sh -c "[ $CODE = 1 ] && grep -qF \"unknown option '--yes'\" '$W/out'"
 
-for f in "$TMP"/w.*/state/pids "$TMP"/w.*/home/.local/share/mng-projects/fake-gcs-server.pid; do
+for f in "$TMP"/w.*/state/pids "$TMP"/w.*/home/.local/share/mng-projects/fake-gcs-server.pid \
+  "$TMP"/w.*/home/.local/share/mng-projects/postgres/postmaster.pid "$TMP"/w.*/pghome/mng-projects/postgres/postmaster.pid; do
   [ -f "$f" ] && while read -r p; do kill "$p" 2>/dev/null; done < "$f"
 done
 
