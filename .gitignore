@@ -8,7 +8,9 @@ playwright-report
 test-results
 .bddgen
 .env
-.env.local
+# .env.local and setup.sh's temp file (.env.setup.<pid>, task 111); the template stays tracked
+.env.*
+!.env.example
 .DS_Store
 .terraform
 *.tfstate

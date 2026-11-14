@@ -64,6 +64,8 @@ jobs:
       - run: bash infra/scripts/test-workflows.sh
       # The alerts and the budget (task 092): channel, policies, tfvars-only variables.
       - run: bash infra/scripts/test-monitoring.sh
+      # The workspace setup script (task 111): every environment path, with stubbed tools; installs nothing.
+      - run: bash scripts/test-setup.sh
       # The agents' guard hook (tasks 067, 084): refusals, look-alikes, commits in a second worktree.
       - run: bash scripts/test-hooks.sh
         # The script sets it per case too; kept here so no case can ever run lint/typecheck.

@@ -20,18 +20,28 @@ Full-stack web app template: Next.js multi-zone, shadcn/ui, Storybook, Playwrigh
 
 ## Quick start
 ```bash
-nvm use            # Node 22
-pnpm install       # generates pnpm-lock.yaml (commit it; CI uses --frozen-lockfile)
-cp .env.example .env   # then set BETTER_AUTH_SECRET (openssl rand -base64 32)
-pnpm db:up         # local Postgres in Docker
-pnpm db:generate   # FIRST TIME ONLY: creates the initial SQL migration; commit packages/db/migrations
-pnpm db:migrate
-pnpm dev           # shell :3000, example zone :3001, dashboard :3002
-pnpm test          # unit/component
-pnpm exec playwright install chromium --with-deps   # once
-pnpm test:e2e      # acceptance (Gherkin)
-pnpm storybook     # UI workbench :6006
+bash scripts/setup.sh   # checks and installs the tools, writes .env, pnpm install, database, migrations, chromium
+pnpm dev                # shell :3000, example zone :3001, dashboard :3002
+pnpm test               # unit/component
+pnpm test:e2e           # acceptance (Gherkin)
+pnpm storybook          # UI workbench :6006
 ```
+- `scripts/setup.sh` works on macOS, Linux (Codespaces, Cloud Shell) and Windows through WSL2. It asks once before
+  installing anything (`--yes` doesn't ask, except before installing Homebrew itself); `--no-install` only checks;
+  `--no-docker` and `--skip-browsers` skip those steps. Rerunning it is safe: it never changes an existing `.env`.
+- After a restart: `pnpm db:up` starts the database and file storage again.
+- **Windows:** install WSL2 (`wsl --install -d Ubuntu`) and Docker Desktop with WSL integration turned on for that
+  distro, then clone and run everything inside WSL. PowerShell and cmd aren't supported.
+
+## Onboarding a new person
+- **Developer:** the owner adds them as a GitHub collaborator; they clone the repo and run `bash scripts/setup.sh`.
+  Nothing secret is shared (the script generates a local `BETTER_AUTH_SECRET`, ADR-0013) and they need no GCP access:
+  previews and deploys run in CI. Claude Code picks up the committed `.claude/` settings and guard; personal
+  `~/.claude/` settings and memory stay theirs to set up.
+- **GCP admin:** not until the Terraform state bucket's IAM is managed in Terraform (ADR-0013). Then the developer
+  steps plus `bash scripts/setup.sh infra` (task 112; details in `infra/README.md`).
+- **Leaving:** remove their GitHub access. A former GCP admin: remove them in Terraform and rotate the generated
+  secrets (`-replace` on them in a Terraform plan; ADR-0013).
 
 ## Layout
 `apps/shell` (root zone) · `apps/example-zone` · `apps/dashboard` · `packages/ui` (shadcn + Storybook) · `packages/config` · `packages/testing` · `packages/db` (Drizzle + Postgres) · `packages/auth` (Better Auth) · `scripts/` · `e2e` (Playwright-BDD) · `docs/` (plan, workflow, features, ADRs)
