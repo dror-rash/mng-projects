@@ -1,6 +1,6 @@
 # Task 112: The owner's infra config (and any workstation secret) on any machine
 
-- **Status:** todo
+- **Status:** in-review
 - **Milestone:** cross-cutting (infra tooling)
 - **Zone / package:** `scripts/setup.sh` (subcommands `infra` and `infra-push`), `scripts/test-setup.sh`, `infra/workstation-secrets.list` (new, committed, no entries), `.claude/hooks/guard.sh` + `scripts/test-hooks.sh` (refuse both subcommands in agent sessions), `.gitignore` (`infra/.config-generation`), `infra/README.md` ("Working from another machine", "Onboarding a GCP admin", rotation), `README.md` (the leaver step in "Onboarding a new person" points at `infra/README.md` instead of ADR-0013). No Terraform change. Commits `test:` → `feat(scripts):` → `docs:`.
 - **Feature file:** none (tooling; `scripts/test-setup.sh` and `scripts/test-hooks.sh` are the checks)
@@ -108,27 +108,27 @@ Checked by `scripts/test-setup.sh` with stub `gcloud`, `gh`, `terraform`, `brew`
 calls, plus `scripts/test-hooks.sh`. For `git check-ignore`, the infra test world is a real `git init` repo with the
 repo's `.gitignore` and `infra/workstation-secrets.list` copied in. Task 111's world copies neither and stubs `git` to
 always succeed, so a refusal could never fail there.
-- [ ] `infra` writes both files with mode 600, records the generations, and runs
+- [x] `infra` writes both files with mode 600, records the generations, and runs
       `terraform -chdir=infra init -backend-config=backend.hcl` and never `plan` or `apply`.
-- [ ] A differing local `terraform.tfvars` without `--force`: exits 1, keeps the local file, prints neither content.
+- [x] A differing local `terraform.tfvars` without `--force`: exits 1, keeps the local file, prints neither content.
       With `--force`: the local file is replaced by the stored copy.
-- [ ] A missing stored object (`config/terraform.tfvars` or `config/backend.hcl`): exits 1 and prints the
+- [x] A missing stored object (`config/terraform.tfvars` or `config/backend.hcl`): exits 1 and prints the
       first-upload one-liner.
-- [ ] The project comes from `--project`, else `gcloud config get project`; with neither, exits 1 asking for
+- [x] The project comes from `--project`, else `gcloud config get project`; with neither, exits 1 asking for
       `--project`.
-- [ ] No active gcloud account: exits 1 and prints the three login commands. `gh auth status` failing: prints
+- [x] No active gcloud account: exits 1 and prints the three login commands. `gh auth status` failing: prints
       `gh auth login` and continues.
-- [ ] Terraform missing on macOS with `--yes`: runs the HashiCorp tap install; on Linux a wrong zip sha256 fails
+- [x] Terraform missing on macOS with `--yes`: runs the HashiCorp tap install; on Linux a wrong zip sha256 fails
       before anything is installed.
-- [ ] An empty `workstation-secrets.list` makes no `gcloud secrets` call and prints "No workstation secrets listed".
+- [x] An empty `workstation-secrets.list` makes no `gcloud secrets` call and prints "No workstation secrets listed".
       A test manifest with one entry writes its git-ignored path with mode 600. A path that isn't git-ignored, a
       path with `..` and an absolute path are each refused. The value never appears in the output.
-- [ ] A successful run ends with "Ready: `cd infra && terraform plan`". The summary of a plain `setup.sh` run says
+- [x] A successful run ends with "Ready: `cd infra && terraform plan`". The summary of a plain `setup.sh` run says
       "GCP admins: bash scripts/setup.sh infra" with no "coming with task 112".
-- [ ] `infra-push` passes the recorded generation and uploads only the two files; a stale generation is refused.
-- [ ] Inside an agent session (`CLAUDECODE=1`) both subcommands exit 1. The guard refuses them in a Bash call and
+- [x] `infra-push` passes the recorded generation and uploads only the two files; a stale generation is refused.
+- [x] Inside an agent session (`CLAUDECODE=1`) both subcommands exit 1. The guard refuses them in a Bash call and
       allows a `git commit -m` whose message mentions `setup.sh infra` (`test-hooks.sh`).
-- [ ] No output line ever contains a value from the test's tfvars or secret.
+- [x] No output line ever contains a value from the test's tfvars or secret.
 
 ## Security notes
 Touches `scripts/`, `.claude/`, `.gitignore` and `infra/` docs, so the `security-reviewer` runs. The config holds an
@@ -165,8 +165,62 @@ No new ADR (ADR-0013).
   - criteria for a missing object, `--force`, project resolution, `..` and absolute paths, and the final line;
   - gh login warns and continues (orchestrator's default; the owner can override);
   - the Rotation section takes over task 111's parking-lot runbook item, and README.md's leaver step points here.
+- 2026-11-14 – Started in lane 1.
+- 2026-11-14 – Implemented in lane 1 (`test(scripts):` red 249 passed / 78 failed, then `feat(scripts):`; guard red
+  157 / 12, then `feat(claude):`; `docs:`).
+  - Pinned values, looked up and checked on 2026-11-14:
+    - Terraform 1.17.2 (HashiCorp's checkpoint API, current release): `linux_amd64` `e6f16b2f…605b`,
+      `linux_arm64` `858e08c1…368c` from `terraform_1.17.2_SHA256SUMS`, whose signature verifies with HashiCorp's key
+      `C874 011F 0AB4 0511 0D02 1055 3436 5D94 72D7 468F`; both zips downloaded and matched. (darwin, unused since
+      macOS uses the tap: `amd64` `66b472dc…f3e1`, `arm64` `da0c7ef2…992e`.)
+    - Google Cloud apt key `35BAA0B33E9EB396F59CA838C0BA5CE6DC6315A3` ("Artifact Registry Repository Signer", the
+      only key in `apt-key.gpg`). Google's install page gives no fingerprint; the same key is on keyserver.ubuntu.com.
+    - GitHub CLI: `githubcli-archive-keyring.asc` holds two keys, `2C6106201985B60E6C7AC87323F3D4EA75716059`
+      (expired 2026-09-05) and `7F38BBB59D064DBCB3D84D725612B36462313325`. Both are listed in `cli/cli`'s
+      `docs/install_linux.md`, and the files match the checksums listed there.
+  - The task assumed one key per repository. Because of GitHub's two-key file, `add_apt_repo` now takes several
+    comma-separated fingerprints and needs exactly that set of keys. A single pin works as before.
+  - `--no-install` checks the tools only, as in the developer setup. `infra-push` takes the project from
+    `infra/.config-generation` (recorded by the pull), so it only ever writes to the bucket it pulled from.
+  - Linux Terraform goes into `~/.local/bin` (no root); the script says to add it to PATH when it isn't there.
+- 2026-11-14 – Review fixes (reviewer and security review, no Critical/High/Medium). Red runs: setup 333 passed /
+  32 failed, guard 175 / 33.
+  - The pull/push loop: `.config-generation` records each file's sha256 with its generation.
+    - A local file still matching it follows the stored copy.
+    - A local edit is refused with what to do: push it if the stored copy is unchanged; otherwise keep a copy,
+      `--force`, re-apply, push.
+    - `infra-push` uploads only the files that changed and reads the new generation from
+      `--print-created-message`.
+  - Workstation secret paths have one shape, `.env.<name>`. `.env`, `.env.example` and the owner config are refused
+    explicitly (SUP-3).
+  - The state bucket must belong to the project (project number), and `backend.hcl` must name it (SUP-4).
+  - Logins come before the project. The Terraform installed by the script comes first on PATH. The cask is
+    `gcloud-cli` (formulae.brew.sh: `google-cloud-sdk` is its old token).
+  - The guard now refuses `setup.sh infra` / `infra-push` in any simple command of the de-quoted command (SUP-1),
+    except read-only commands (git, grep, cat, ls, …). The Secret Manager rule also runs on the de-quoted words.
+    `<<<` and a quoted `<<EOF` no longer start a heredoc (SUP-2, a gap on `main` too). Commands that mention
+    neither setup nor gcloud and aren't commits skip the parsing.
+  - SEC-13 notes that agents can still read the pulled files.
+- 2026-11-14 – Guard re-review (re-review and QA; QA passed). Red run: 216 passed / 28 failed.
+  - Regression fixed: a `<<` in a `#` comment, `$((…))`, `((…))` or `${…}` no longer queues a heredoc.
+    - The scanner follows the context (quotes, `$(…)`, arithmetic, `${…}`) across lines and into `"$(…)"`.
+    - The delimiter is the next word with its quotes and backslashes removed (`E\OF`, `'E'OF`, `"E"OF`, `E-F`).
+  - Fail-closed rule: a heredoc body line that is a `--no-verify` commit or a `setup.sh infra` run on its own is
+    refused. A `-m "$(cat <<'EOF' … EOF)"` message that only mentions them passes (the QA false positive).
+  - Read-only exemptions: `less` is gone. `git` counts only as a builtin without `-c` or `GIT_CONFIG_*`, which keeps
+    `git add scripts/setup.sh infra` allowed. A git alias set on the command line, in a command with a commit, push
+    or `setup.sh`, is refused.
+  - The terraform, Cloud Run, Secret Manager and force-push rules also run on the de-quoted words. gcloud flags may
+    sit between a group and its verb.
 
 ## Parking lot
 - A task to manage the state bucket's IAM and a second admin's roles in Terraform, when a second admin is named.
 - Data Access logs for Cloud Storage and Secret Manager (SEC-32) when a second admin joins.
 - A check in `infra-push` that the tfvars holds no credential-like value (gitleaks on the file).
+- `add_apt_repo` pins GitHub's expired key too (the file still holds it). When GitHub drops it, the gh install fails
+  closed until the pin is updated. Pinning the keyring file's sha256 (GitHub publishes it) would be stricter still.
+- The guard can't see a script path or subcommand built at run time (`s=setup; bash scripts/$s.sh infra`, a glob,
+  an alias); the script's `CLAUDECODE=1` check is the backstop. A Read deny for the pulled files is the owner's
+  decision (SEC-13).
+- A Linux run-mode test of the gcloud/gh apt installs: `SETUP_APT_ROOT` is honored only when sourced, so the tests
+  check the pins through `add_apt_repo` (sourced) and the Linux plan through `--no-install`.

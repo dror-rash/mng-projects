@@ -46,9 +46,9 @@ pnpm storybook          # UI workbench :6006
   previews and deploys run in CI. Claude Code picks up the committed `.claude/` settings and guard; personal
   `~/.claude/` settings and memory stay theirs to set up.
 - **GCP admin:** not until the Terraform state bucket's IAM is managed in Terraform (ADR-0013). Then the developer
-  steps plus `bash scripts/setup.sh infra` (task 112; details in `infra/README.md`).
-- **Leaving:** remove their GitHub access. A former GCP admin: remove them in Terraform and rotate the generated
-  secrets (`-replace` on them in a Terraform plan; ADR-0013).
+  steps plus `bash scripts/setup.sh infra` ("Onboarding a GCP admin" in `infra/README.md`).
+- **Leaving:** remove their GitHub access. A former GCP admin: remove them in Terraform, then follow "Rotation" in
+  `infra/README.md`.
 
 ## Layout
 `apps/shell` (root zone) · `apps/example-zone` · `apps/dashboard` · `packages/ui` (shadcn + Storybook) · `packages/config` · `packages/testing` · `packages/db` (Drizzle + Postgres) · `packages/auth` (Better Auth) · `scripts/` · `e2e` (Playwright-BDD) · `docs/` (plan, workflow, features, ADRs)

@@ -66,6 +66,72 @@ expect 0 "allows gcloud run services describe"          Bash "$(bash_ "gcloud ru
 expect 0 "allows gcloud beta run services list"         Bash "$(bash_ "gcloud beta run services list")"
 expect 0 "allows gcloud run revisions list"             Bash "$(bash_ "gcloud run revisions list --service shell")"
 
+# setup.sh infra / infra-push fetch the owner config and workstation secrets: a person runs them (task 112)
+expect 2 "refuses bash scripts/setup.sh infra"          Bash "$(bash_ "bash scripts/setup.sh infra")"
+expect 2 "refuses setup.sh infra with flags"            Bash "$(bash_ "bash scripts/setup.sh infra --project p-1 --force --yes")"
+expect 2 "refuses ./scripts/setup.sh infra-push"        Bash "$(bash_ "./scripts/setup.sh infra-push")"
+expect 2 "refuses sh setup.sh infra in scripts/"        Bash "$(bash_ "cd scripts && sh setup.sh infra")"
+expect 2 "refuses setup.sh infra after another command" Bash "$(bash_ "pnpm lint; bash scripts/setup.sh infra-push")"
+expect 2 "refuses setup.sh infra with CLAUDECODE unset" Bash "$(bash_ "CLAUDECODE= env -u CLAUDECODE bash scripts/setup.sh infra")"
+expect 2 "refuses setup.sh infra under sudo"            Bash "$(bash_ "sudo bash scripts/setup.sh infra")"
+expect 2 "refuses setup.sh infra through lane.sh exec"  Bash "$(bash_ "scripts/lane.sh exec 1 -- bash scripts/setup.sh infra")"
+expect 2 "refuses setup.sh infra behind bash -c"        Bash "$(bash_ "bash -c 'bash scripts/setup.sh infra'")"
+expect 2 "refuses setup.sh infra in a heredoc fed to bash" Bash "$(bash_ "bash <<'EOF'
+bash scripts/setup.sh infra-push
+EOF")"
+expect 2 "refuses setup.sh infra split over lines"      Bash "$(bash_ $'bash scripts/setup.sh \\\n  infra')"
+expect 0 "allows the developer setup"                   Bash "$(bash_ "bash scripts/setup.sh --yes")"
+expect 0 "allows setup.sh services"                     Bash "$(bash_ "bash scripts/setup.sh services")"
+expect 0 "allows setup.sh infra's tests"                Bash "$(bash_ "bash scripts/test-setup.sh")"
+expect 0 "allows grep for setup.sh infra, quoted"       Bash "$(bash_ "grep -n 'setup.sh infra' scripts/setup.sh README.md")"
+expect 0 "allows grep for setup.sh infra, unquoted"     Bash "$(bash_ "grep -rn setup.sh infra")"
+expect 0 "allows a commit message about setup.sh infra" Bash "$(bash_ "git commit -m 'docs: setup.sh infra and setup.sh infra-push'")"
+expect 0 "allows echo of setup.sh infra"                Bash "$(bash_ "echo \"run bash scripts/setup.sh infra\"")"
+# ... in every common spelling (security review SUP-1)
+for c in "/bin/bash scripts/setup.sh infra" "/usr/bin/env bash scripts/setup.sh infra" "bash -- scripts/setup.sh infra" \
+  "bash scripts/setup.sh>/dev/null infra" "bash scripts/setup.sh 2>&1 infra-push" "bash scripts/setup.sh </dev/null infra" \
+  "bash scripts/setup.sh 'infra'" "bash scripts/setup.sh \"infra-push\"" "bash scripts/setup.sh \\infra" \
+  "bash scripts/setup.sh in''fra" "bash \"scripts/setup.sh\" infra" "bash scripts/set'up'.sh infra" \
+  "{ bash scripts/setup.sh infra; }" "! bash scripts/setup.sh infra" "echo \`bash scripts/setup.sh infra\`" \
+  "x=\$(bash scripts/setup.sh infra)" "if true; then bash scripts/setup.sh infra; fi" \
+  "for i in 1; do bash scripts/setup.sh infra; done" "if false; then :; else bash scripts/setup.sh infra; fi" \
+  "timeout 600 bash scripts/setup.sh infra" "xargs bash scripts/setup.sh infra </dev/null" \
+  "echo infra | xargs bash scripts/setup.sh" "source scripts/setup.sh infra" ". scripts/setup.sh infra" \
+  "bash scripts/setup.sh \"\$SUB\"" "S=infra; bash scripts/setup.sh \$S" "bash scripts/setup.sh \${S}"; do
+  expect 2 "refuses: $c"                                Bash "$(bash_ "$c")"
+done
+expect 2 "refuses git add of setup.sh and infra/ together (stage them separately)" Bash "$(bash_ "git add scripts/setup.sh infra")"
+expect 2 "refuses git grep -O with a pager command"     Bash "$(bash_ "git grep -Obash infra scripts/setup.sh")"
+expect 2 "refuses PAGER running setup.sh infra"         Bash "$(bash_ "PAGER='bash scripts/setup.sh infra' git log")"
+expect 2 "refuses GIT_PAGER running setup.sh infra-push" Bash "$(bash_ "GIT_PAGER=\"bash scripts/setup.sh infra-push\" git log")"
+expect 2 "refuses core.pager running setup.sh infra"    Bash "$(bash_ "git -c core.pager='bash scripts/setup.sh infra' log")"
+expect 0 "allows git add of setup.sh alone"             Bash "$(bash_ "git add scripts/setup.sh")"
+expect 0 "allows ls of setup.sh and infra/"             Bash "$(bash_ "ls -l scripts/setup.sh infra")"
+expect 0 "allows grep for infra in setup.sh"            Bash "$(bash_ "grep -n infra scripts/setup.sh")"
+expect 0 "allows setup.sh services --yes"               Bash "$(bash_ "bash scripts/setup.sh services --yes")"
+expect 0 "allows sed on setup.sh and infra/README.md"   Bash "$(bash_ "sed -n 1,5p scripts/setup.sh infra/README.md")"
+# Reading a Secret Manager value with the words quoted or escaped
+for c in "gcloud secrets versions \"access\" latest --secret=x" "gcloud 'secrets' versions access latest --secret=x" \
+  "gcloud secrets versions acc\\ess latest --secret=x" "g''cloud secrets versions access latest --secret=x" \
+  "gcloud secrets --project=p versions access latest --secret=x" "gcloud secrets --project p versions access latest" \
+  "gcloud run --region r deploy shell --image x" "gcloud run services --region=r update shell" \
+  "gcloud run \"deploy\" shell --image x" "gcloud run services 'update' shell" "terraform \"apply\"" \
+  "terraform 'destroy' -auto-approve" "t''erraform apply" "git push \"--force\" origin feat/x" "git push -\"f\" origin feat/x" \
+  "git push origin --for\\ce"; do
+  expect 2 "refuses: $c"                                Bash "$(bash_ "$c")"
+done
+expect 0 "allows gcloud secrets versions list after a flag" Bash "$(bash_ "gcloud secrets --project=p versions list x")"
+expect 0 "allows gcloud run services describe after a flag" Bash "$(bash_ "gcloud run services --region=r describe shell")"
+# Read-only exemptions: never less (LESSOPEN), git only as a builtin without -c (aliases run commands)
+expect 2 "refuses less on setup.sh with infra"          Bash "$(bash_ "less scripts/setup.sh infra")"
+expect 2 "refuses git -c with setup.sh infra"           Bash "$(bash_ "git -c x=y add scripts/setup.sh infra")"
+expect 2 "refuses an alias from git -c running setup.sh" Bash "$(bash_ "git -c alias.x='!bash scripts/setup.sh infra' x")"
+expect 2 "refuses an alias from git -c with a commit"   Bash "$(bash_ "git -c alias.ci='!git commit --no-verify' ci -m x")"
+expect 2 "refuses an alias from git -c with a push"     Bash "$(bash_ "git -c 'alias.p=push --force' p")"
+expect 2 "refuses an alias from --config-env with a commit" Bash "$(bash_ "A='!git commit -n' git --config-env=alias.ci=A ci")"
+expect 2 "refuses an alias from GIT_CONFIG_* with a commit" Bash "$(bash_ "GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=alias.ci GIT_CONFIG_VALUE_0='!git commit -n' git ci")"
+expect 0 "allows git -c alias without a commit or push" Bash "$(bash_ "git -c alias.st=status st")"
+
 # Force pushes in every spelling
 expect 2 "refuses a +refspec push"                      Bash "$(bash_ "git push origin +main")"
 expect 2 "refuses a quoted +refspec push"               Bash "$(bash_ "git push origin '+HEAD:main'")"
@@ -131,6 +197,45 @@ expect 2 "refuses -n in combined short flags"           Bash "$(bash_ "git commi
 expect 2 "refuses -n in combined short flags -anm"      Bash "$(bash_ "git commit -anm 'docs: x'")"
 expect 0 "allows -n after a ; inside a message"         Bash "$(bash_ "git commit -m 'docs: a; b -n c'")"
 expect 2 "refuses a --no-verify prefix"                 Bash "$(bash_ "git commit --no-ve -m 'docs: x'")"
+# A here-string or a quoted "<<EOF" isn't a heredoc: the lines after it still count (security review SUP-2)
+expect 2 "refuses --no-verify after a here-string <<<EOF" Bash "$(bash_ "cat <<<EOF
+git commit --no-verify -m 'docs: x'")"
+expect 2 "refuses --no-verify after a quoted \"<<EOF\""  Bash "$(bash_ "echo \"<<EOF\"
+git commit --no-verify -m 'docs: x'")"
+expect 2 "refuses --no-verify after a quoted '<<EOF'"    Bash "$(bash_ "echo '<<EOF'
+git commit --no-verify -m 'docs: x'")"
+# Not heredocs either: a << in a comment, in $((…)) or ${…}; and a delimiter with quotes, a backslash or a dash
+# (re-review); a heredoc body line that would be refused on its own is refused (fail closed)
+NV="git commit --no-verify -m 'docs: x'"
+for c in "cat <<A # <<B
+A
+$NV
+B" "cat <<A; echo \$((1<<B))
+A
+$NV
+B" "true # <<X
+$NV" "echo \$((1<<X))
+$NV" "x=\${y/<<Z/}
+$NV" "cat <<E\\OF
+$NV" "cat <<E\\OF
+E
+$NV
+EOF" "cat <<'E'OF
+E
+$NV
+EOF" "cat <<\"E\"OF
+E
+$NV
+EOF" "cat <<E-F
+E
+$NV
+E-F" "cat <<EOF
+$NV
+EOF" "cat <<EOF
+bash scripts/setup.sh infra
+EOF"; do
+  expect 2 "refuses: $(printf '%s' "$c" | tr '\n' '/')"  Bash "$(bash_ "$c")"
+done
 expect 0 "allows -main in a message"                    Bash "$(bash_ "git commit -m \"docs: the -main flag\"")"
 expect 0 "allows -only and -config in a message"        Bash "$(bash_ "git commit -m 'docs: -only and -config'")"
 
@@ -236,6 +341,31 @@ docs: x
 cd somewhere; pushd there; GIT_DIR=x --git-dir y
 EOF" "$REPO"
 stage "$WT" "$FEATURE";   guard_cmd 0 "allows cd and pushd in the message"  "git -C '$WT' commit -m 'docs: cd and pushd, GIT_DIR=x'" "$REPO"
+stage "$WT" "$FEATURE";   guard_cmd 0 "allows a commit whose message mentions setup.sh infra" "cd '$WT' && git commit -m 'docs: bash scripts/setup.sh infra, then setup.sh infra-push'" "$REPO"
+stage "$WT" "$FEATURE";   guard_cmd 0 "allows a heredoc message that mentions setup.sh infra" "git -C '$WT' commit -q -F - <<'EOF'
+docs: x
+
+Run bash scripts/setup.sh infra; then ./scripts/setup.sh infra-push.
+EOF" "$REPO"
+stage "$WT" "$FEATURE";   guard_cmd 2 "refuses setup.sh infra after a commit"  "cd '$WT' && git commit -m 'docs: x' && bash scripts/setup.sh infra" "$REPO"
+# A heredoc as the commit message (-m "$(cat <<'EOF' … EOF)") is a message, not a run (QA); a line in it that is
+# a refused command on its own still counts
+MSG="docs: setup.sh infra and infra-push (task 112)
+
+Fill the setup.sh infra and infra-push arms; bash -c and eval aren't used.
+- \`bash scripts/setup.sh infra\` pulls the config; \`setup.sh infra-push\` stores it.
+Run bash scripts/setup.sh infra on a second machine, then git commit as usual.
+
+Co-Authored-By: x <x@example.com>"
+stage "$WT" "$FEATURE";   guard_cmd 0 "allows a \$(cat <<'EOF') commit message that mentions setup.sh infra" "cd '$WT' && git commit -m \"\$(cat <<'EOF'
+$MSG
+EOF
+)\"" "$REPO"
+stage "$WT" "$FEATURE";   guard_cmd 2 "refuses a \$(cat <<'EOF') commit message with a --no-verify commit line" "cd '$WT' && git commit -m \"\$(cat <<'EOF'
+$MSG
+git commit --no-verify -m 'docs: y'
+EOF
+)\"" "$REPO"
 
 echo; echo "$pass passed, $fail failed"
 [ "$fail" = 0 ]
