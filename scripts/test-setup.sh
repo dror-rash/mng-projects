@@ -74,6 +74,13 @@ for p in \"\$@\"; do case \"\$p\" in
   -*) ;; docker.io|docker-compose-v2) [ -f $S/apt_docker_fails ] && exit 100; cp -P $A/docker $B/docker; echo ok > $S/docker;;
   *) rm -f $B/\$p; cp -P $A/\$p $B/\$p;; esac; done"
   present git curl jq perl openssl node pnpm corepack docker brew apt-get gcloud gh terraform sudo unzip
+  infra_world; pg_world
+}
+
+# Each task's own stubs and state, added to every world: task 112 fills infra_world, task 113 fills pg_world (stub,
+# present, state), so their lanes never edit world() or its shared present line.
+infra_world() { # task 112: terraform, gcloud and gh for setup.sh infra / infra-push
+  :
 }
 
 nvm_in_home() { # a nvm the way Cloud Shell has it: a function in ~/.nvm/nvm.sh
@@ -84,6 +91,10 @@ nvm() {
   case "$1" in install|use) echo "${2#v}.0.0" > "$STUB_STATE/node"; cp -P "$STUB_AVAIL/node" "$STUB_AVAIL/corepack" "$STUB_BIN/";; esac
 }
 EOF
+}
+
+pg_world() { # task 113: Postgres and the storage emulator without Docker
+  :
 }
 
 run() { # [VAR=value ...] [-- args...]: runs setup.sh in the world's repo; sets CODE, output in $W/out
