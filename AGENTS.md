@@ -22,6 +22,7 @@ Next.js (App Router, multi-zone) · Better Auth · Postgres + Drizzle · TypeScr
 - `pnpm test` – unit/component tests (Vitest)
 - `pnpm test:e2e` – acceptance tests (Gherkin via Playwright; generates specs with `bddgen`, then runs)
 - `pnpm --filter @repo/e2e screenshots` – screenshots of every page and form (error states included) into `e2e/screenshots/`, against running dev servers; for validation reports
+- `pnpm --filter @repo/e2e flow-guide` – screenshots of the customer project flow (Target flow steps that exist) into `e2e/flow-guide/` with `manifest.json`, against running dev servers; for the usage guide (task 117)
 - `pnpm storybook` – UI workbench on :6006
 - `pnpm lint && pnpm typecheck` – must pass before any commit
 - `pnpm build` – build everything (Turborepo caches; CI can add `--filter=...[origin/main]`)
