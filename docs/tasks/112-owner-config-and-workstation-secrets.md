@@ -183,6 +183,24 @@ No new ADR (ADR-0013).
   - `--no-install` checks the tools only, as in the developer setup. `infra-push` takes the project from
     `infra/.config-generation` (recorded by the pull), so it only ever writes to the bucket it pulled from.
   - Linux Terraform goes into `~/.local/bin` (no root); the script says to add it to PATH when it isn't there.
+- 2026-11-14 – Review fixes (reviewer and security review, no Critical/High/Medium). Red runs: setup 333 passed /
+  32 failed, guard 175 / 33.
+  - The pull/push loop: `.config-generation` records each file's sha256 with its generation.
+    - A local file still matching it follows the stored copy.
+    - A local edit is refused with what to do: push it if the stored copy is unchanged; otherwise keep a copy,
+      `--force`, re-apply, push.
+    - `infra-push` uploads only the files that changed and reads the new generation from
+      `--print-created-message`.
+  - Workstation secret paths have one shape, `.env.<name>`. `.env`, `.env.example` and the owner config are refused
+    explicitly (SUP-3).
+  - The state bucket must belong to the project (project number), and `backend.hcl` must name it (SUP-4).
+  - Logins come before the project. The Terraform installed by the script comes first on PATH. The cask is
+    `gcloud-cli` (formulae.brew.sh: `google-cloud-sdk` is its old token).
+  - The guard now refuses `setup.sh infra` / `infra-push` in any simple command of the de-quoted command (SUP-1),
+    except read-only commands (git, grep, cat, ls, …). The Secret Manager rule also runs on the de-quoted words.
+    `<<<` and a quoted `<<EOF` no longer start a heredoc (SUP-2, a gap on `main` too). Commands that mention
+    neither setup nor gcloud and aren't commits skip the parsing.
+  - SEC-13 notes that agents can still read the pulled files.
 
 ## Parking lot
 - A task to manage the state bucket's IAM and a second admin's roles in Terraform, when a second admin is named.
@@ -190,5 +208,8 @@ No new ADR (ADR-0013).
 - A check in `infra-push` that the tfvars holds no credential-like value (gitleaks on the file).
 - `add_apt_repo` pins GitHub's expired key too (the file still holds it). When GitHub drops it, the gh install fails
   closed until the pin is updated. Pinning the keyring file's sha256 (GitHub publishes it) would be stricter still.
+- The guard can't see a script path or subcommand built at run time (`s=setup; bash scripts/$s.sh infra`, a glob,
+  an alias); the script's `CLAUDECODE=1` check is the backstop. A Read deny for the pulled files is the owner's
+  decision (SEC-13).
 - A Linux run-mode test of the gcloud/gh apt installs: `SETUP_APT_ROOT` is honored only when sourced, so the tests
   check the pins through `add_apt_repo` (sourced) and the Linux plan through `--no-install`.

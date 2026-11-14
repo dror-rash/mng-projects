@@ -61,16 +61,22 @@ cd infra && terraform plan
 - needs `gcloud auth login` and `gcloud auth application-default login`; it prints both (and `set-quota-project`)
   when either is missing. A logged-out `gh` is only a warning. The project is `--project`, else
   `gcloud config get project`;
-- downloads both files into `infra/` with mode 600 and records their generations in `infra/.config-generation`
-  (git-ignored). A local file that differs from the stored copy is refused, its content never printed: push it with
-  `infra-push`, or replace it with `--force`;
+- checks that `gs://<PROJECT_ID>-tfstate` belongs to that project (its project number), since a bucket name is
+  global and anyone could have taken it;
+- downloads both files into `infra/` with mode 600, after checking that `backend.hcl` names that bucket, and records
+  each file's generation and sha256 in `infra/.config-generation` (git-ignored). A local file still as this machine
+  last pulled or pushed it follows the stored copy. One with a local edit is refused, its content never printed:
+  - stored copy unchanged since your pull: push the edit with `infra-push`, or drop it with `--force`;
+  - stored copy changed too: keep a copy of yours (`cp infra/terraform.tfvars ~/terraform.tfvars.mine`), run
+    `setup.sh infra --force`, re-apply your edit, then `infra-push`;
 - fetches the secrets listed in `infra/workstation-secrets.list` (none today: "No workstation secrets listed");
 - runs `terraform -chdir=infra init -backend-config=backend.hcl`. It never plans or applies.
 
-**After editing `terraform.tfvars` or `backend.hcl`:** `bash scripts/setup.sh infra-push`. It uploads both files, each
-only over the generation this machine pulled (`--if-generation-match`), and prints the new generations. When another
-machine stored a change since your pull, it refuses: pull first (`setup.sh infra`, then `--force` if your local edit
-should go, or merge it by hand and push again). It never uploads anything else.
+**After editing `terraform.tfvars` or `backend.hcl`:** `bash scripts/setup.sh infra-push`. It uploads each file you
+changed since this machine's pull or push, only over the generation recorded for it (`--if-generation-match`), and
+prints the new generations; an unchanged file isn't uploaded. When another machine stored a change since your pull,
+it refuses: keep a copy of your file, `setup.sh infra --force`, re-apply your edit, and push again. It never uploads
+anything else.
 
 Agent sessions can't run either subcommand: the script refuses `CLAUDECODE=1` and `.claude/hooks/guard.sh` refuses
 the command, because both fetch the owner's config and secrets.
@@ -120,9 +126,10 @@ For a tool on a workstation that needs a real secret (ADR-0013 class 3):
 1. In Terraform: the Secret Manager secret (its container; the value is added outside Terraform unless Terraform
    generates it) and `roles/secretmanager.secretAccessor` on it for each person who needs it. Plan, and the owner
    applies.
-2. One line in `infra/workstation-secrets.list`: `<secret name> <path in the repo>`, with a git-ignored path (add it to
-   `.gitignore` if needed). `setup.sh infra` refuses a path git doesn't ignore, an absolute path and `..`, writes the
-   value with mode 600 and never prints it; `infra-push` never uploads it.
+2. One line in `infra/workstation-secrets.list`: `<secret name> .env.<name>`. That is the only path shape (lower-case
+   letters, digits and `-`, at the repo's top, git-ignored by `.env.*`); `setup.sh infra` refuses anything else,
+   including `.env`, `.env.example` and the owner config, writes the value with mode 600 and never prints it;
+   `infra-push` never uploads it.
 
 A value Terraform itself needs is read by Terraform from Secret Manager (a data source), not listed here.
 
