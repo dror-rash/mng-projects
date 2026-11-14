@@ -1,6 +1,6 @@
 # Task 115: The guard's lint/typecheck gate applies only to this project's commits
 
-- **Status:** in-review
+- **Status:** done
 - **Milestone:** unscheduled (agent tooling; owner request 2026-11-14)
 - **Zone / package:** `.claude/hooks/guard.sh`, `scripts/test-hooks.sh`, `docs/AGENT-TEAM.md`
 - **Feature file:** none (tooling; the acceptance tests are cases in `scripts/test-hooks.sh`)
@@ -80,6 +80,8 @@ None blocking. Defaults taken (the orchestrator asked for defaults; the owner ca
 
 - 2026-11-14 – Lane exec gap closed: `&&`/`;` chains after `scripts/lane.sh exec <n> --` were already refused by the SUP-1 rule; a newline (after `--`, a blank then a newline, after `env` or `VAR=x`) still let a commit through that the shell runs in the cwd while the guard checked the lane. `test(scripts):` red 321/4 and 325/1; `fix(claude):` the lane pattern and the commit's own words take blanks only, and after the exec nothing but blanks, `env` and assignments may precede the commit. 326/0 on bash 3.2 and 5.3. Harmless chains such as `pnpm lint && git commit` are refused too (noted in `docs/AGENT-TEAM.md`).
 - 2026-11-14 – SUP-3 (re-review): `test(scripts):` 14 refusals in or next to a commit, 8 allowed message and chain forms, two lanes that aren't worktrees, `ssh.github.com` and `github.com.`; red 334/18. `fix(claude):` `commit_words`, `is_worktree_root`, `normalize_url`; green 352/0 on bash 3.2 and 5.3.
+- 2026-11-14 – Merged (PR #108).
+
 ## Parking lot
 - Refuse a push by URL to this project's remote from a repository that isn't this project.
 - Gate `git merge` / `rebase` / `cherry-pick` / `am` commits in this project too.
