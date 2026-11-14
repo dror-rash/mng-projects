@@ -2,12 +2,8 @@
 # One command from a fresh clone to "pnpm dev works and the tests run" (task 111). Local development shares no
 # secret (ADR-0013 class 4): the only secret, BETTER_AUTH_SECRET, is generated here per machine.
 #
-#   bash scripts/setup.sh [--no-install] [--yes] [--no-docker] [--skip-browsers]
-#
-#   --no-install     check only: change nothing, print the command for each missing tool (exit 1 if any)
-#   --yes            install what is missing without asking (Homebrew itself is still asked for)
-#   --no-docker      skip Docker and the database and file storage (pnpm db:up, pnpm db:migrate)
-#   --skip-browsers  skip Playwright's chromium
+# Usage: bash scripts/setup.sh --help (usage() below). A subcommand comes first (setup.sh infra ...) and takes only
+# its own flags (parse_args); subcommands branch off right after environment detection.
 #
 # Environments: macOS (Homebrew), Linux incl. Codespaces and Cloud Shell (apt-get), Windows through WSL2 (apt-get;
 # Docker comes from Docker Desktop for Windows). Windows outside WSL: it says to use WSL2 and changes nothing.
@@ -15,13 +11,15 @@
 #
 # Bash 3.2 compatible (macOS's bash): it runs before Node or pnpm exist. It never prints a secret, never changes
 # an existing .env, never runs pnpm db:generate, gcloud, gh or terraform, and uses sudo only for apt-get (its own,
-# and Playwright's --with-deps once approved). Rerunning on a set-up workspace installs nothing and changes no file.
+# and Playwright's --with-deps once approved) and an apt repository's key and list (add_apt_repo). Rerunning on a
+# set-up workspace installs nothing and changes no file.
 # Tests: bash scripts/test-setup.sh, under /bin/bash; CI (Ubuntu) runs it with bash 5, so bash 3.2 is checked by
 # running it on macOS.
 #
-# Test hooks (scripts/test-setup.sh): SETUP_INTERACTIVE=1 treats stdin as a terminal; SETUP_PROC_VERSION,
-# SETUP_BREW_PREFIXES, SETUP_PORTS and SETUP_DB_TIMEOUT replace /proc/version, Homebrew's install prefixes, the
-# ports checked and the database wait (60 s).
+# Test hooks (scripts/test-setup.sh): sourced (. scripts/setup.sh), it only defines its helpers, so the tests call
+# them directly, and then SETUP_APT_ROOT puts add_apt_repo's files under a directory. SETUP_INTERACTIVE=1 treats
+# stdin as a terminal; SETUP_PROC_VERSION, SETUP_BREW_PREFIXES, SETUP_PORTS and SETUP_DB_TIMEOUT replace
+# /proc/version, Homebrew's install prefixes, the ports checked and the database wait (60 s).
 set -u
 
 # fnm for Linux and WSL when there is neither nvm nor fnm. To upgrade: change the version and both hashes together.
@@ -33,27 +31,22 @@ FNM_SHA256_LINUX_ARM64="4eaff58b2c5bf30d0934027572dd0b5bbb60d2a1af309230b53662d4
 # shellcheck disable=SC2016 # printed, not run
 HOMEBREW_INSTALL='/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"'
 
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-cd "$ROOT" || exit 1
-export COREPACK_ENABLE_DOWNLOAD_PROMPT=0
+usage() {
+  cat <<'EOF'
+  bash scripts/setup.sh [--no-install] [--yes] [--no-docker] [--skip-browsers]
 
-NO_INSTALL=0; YES=0; NO_DOCKER=0; SKIP_BROWSERS=0
-usage() { sed -n '4,10p' "$0" | sed 's/^# \{0,1\}//'; }
-for arg in "$@"; do
-  case "$arg" in
-    --no-install) NO_INSTALL=1 ;;
-    --yes|-y) YES=1 ;;
-    --no-docker) NO_DOCKER=1 ;;
-    --skip-browsers) SKIP_BROWSERS=1 ;;
-    -h|--help) usage; exit 0 ;;
-    infra|infra-push) echo "setup.sh $arg comes with task 112 (owner and GCP admin setup)." >&2; exit 1 ;;
-    *) echo "setup: unknown option '$arg'" >&2; usage >&2; exit 1 ;;
-  esac
-done
+  --no-install     check only: change nothing, print the command for each missing tool (exit 1 if any)
+  --yes            install what is missing without asking (Homebrew itself is still asked for)
+  --no-docker      skip Docker and the database and file storage (pnpm db:up, pnpm db:migrate)
+  --skip-browsers  skip Playwright's chromium
+EOF
+}
 
+# --- Helpers -------------------------------------------------------------------------------------------------------
 say()  { printf '%s\n' "$*"; }
 warn() { printf 'warning: %s\n' "$*" >&2; }
-die()  { printf 'setup: %s\n' "$*" >&2; exit 1; }
+err()  { printf 'setup: %s\n' "$*" >&2; }
+die()  { err "$*"; exit 1; }
 has()  { command -v "$1" >/dev/null 2>&1; }
 interactive() { [ -t 0 ] || [ "${SETUP_INTERACTIVE:-}" = 1 ]; }
 ask() { # question: true on yes; a non-interactive run never says yes
@@ -67,6 +60,140 @@ ask() { # question: true on yes; a non-interactive run never says yes
 INSTALLED=""; SKIPPED=""; STATUS=0
 installed() { INSTALLED="${INSTALLED}  - $1"$'\n'; }
 skipped()   { SKIPPED="${SKIPPED}  - $1"$'\n'; }
+SUDO="sudo "; [ "$(id -u 2>/dev/null)" = 0 ] && SUDO=""
+can_root() { [ -z "$SUDO" ] || has sudo; }
+as_root() { # runs a command as root; false (with a warning) when there is no way to
+  if [ -z "$SUDO" ]; then "$@"
+  elif has sudo; then sudo "$@"
+  else warn "needs root and there is no sudo: $*"; return 1; fi
+}
+
+find_brew() {
+  has brew && return 0
+  local prefix
+  for prefix in ${SETUP_BREW_PREFIXES:-/opt/homebrew /usr/local}; do
+    if [ -x "$prefix/bin/brew" ]; then eval "$("$prefix/bin/brew" shellenv)"; return 0; fi
+  done
+  return 1
+}
+# Homebrew on PATH. When it's missing: its official installer after its own question (even with --yes); exits 1 when
+# declined or without a terminal.
+ensure_brew() {
+  find_brew && return 0
+  say "Homebrew isn't installed. Its official installer is: $HOMEBREW_INSTALL"
+  if ! ask "Install Homebrew now with its official installer?"; then
+    say "Nothing installed. Install Homebrew with: $HOMEBREW_INSTALL"
+    say "then rerun bash scripts/setup.sh."
+    exit 1
+  fi
+  /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" || die "Homebrew's installer failed"
+  find_brew || die "Homebrew installed, but brew isn't found: open a new terminal and rerun"
+  installed "Homebrew"
+}
+
+sha256_of() { # file: its sha256; false without sha256sum or shasum
+  if has sha256sum; then sha256sum "$1" | cut -d' ' -f1
+  elif has shasum; then shasum -a 256 "$1" | cut -d' ' -f1
+  else return 1; fi
+}
+fetch() { # url file: https only, redirects too
+  curl --proto '=https' --proto-redir '=https' -fsSL -o "$2" "$1"
+}
+# url sha256 dest: downloads (https only) into a new temp dir and checks the pinned sha256 (64 lower-case hex digits)
+# before anything is at dest. Fails closed: false with the reason, nothing at dest, the temp dir removed.
+download_checked() {
+  local url="$1" sha="$2" dest="$3" tmp got ok=1
+  case "$sha" in
+    *[!0-9a-f]*|"") err "the pinned sha256 for $url isn't 64 lower-case hex digits"; return 1 ;;
+  esac
+  [ "${#sha}" = 64 ] || { err "the pinned sha256 for $url isn't 64 lower-case hex digits"; return 1; }
+  tmp="$(mktemp -d)" || { err "mktemp failed"; return 1; }
+  if ! fetch "$url" "$tmp/download"; then err "couldn't download $url"
+  elif ! got="$(sha256_of "$tmp/download")" || [ -z "$got" ]; then err "no sha256sum or shasum to check $url with"
+  elif [ "$got" != "$sha" ]; then err "$url doesn't match its pinned sha256; nothing installed"
+  elif ! mv "$tmp/download" "$dest"; then err "couldn't write $dest"
+  else ok=0; fi
+  rm -rf "$tmp"
+  return "$ok"
+}
+
+# key-url keyring list-line fingerprint: an apt repository signed by its own key, as root, then apt-get update.
+# - keyring: /usr/share/keyrings/<name> or /etc/apt/keyrings/<name>, name of [A-Za-z0-9._-] not starting with a dot;
+# - list-line: one line, signed-by=<keyring>, no trusted=; it goes into sources.list.d/<name without extension>.list;
+# - fingerprint: the key's pinned primary fingerprint (40 or 64 hex digits; spaces and case don't matter). The key is
+#   fetched (https only) and must hold exactly one key with that fingerprint (gpg --show-keys) before it goes
+#   through gpg --dearmor into keyring (mode 644).
+# False with the reason; nothing is written before every check passes. The caller installs gpg first when missing.
+add_apt_repo() {
+  local key_url="$1" keyring="$2" line="$3" want sources="$APT_ROOT/etc/apt/sources.list.d" name dir tmp keys ok=1
+  local nl=$'\n' cr=$'\r'
+  want="$(printf '%s' "${4:-}" | tr -d ' ' | tr 'a-f' 'A-F')"
+  case "$want" in *[!0-9A-F]*|"") want="" ;; esac
+  case "${#want}" in 40|64) ;; *) err "the pinned key fingerprint for $key_url isn't 40 or 64 hex digits"; return 1 ;; esac
+  name="${keyring##*/}"; dir="${keyring%/*}"
+  case "$dir" in /usr/share/keyrings|/etc/apt/keyrings) ;; *) name="" ;; esac
+  case "$name" in ""|.*|*[!A-Za-z0-9._-]*)
+    err "the keyring must be /usr/share/keyrings/<name> or /etc/apt/keyrings/<name> ([A-Za-z0-9._-]): $keyring"
+    return 1 ;;
+  esac
+  case "$line" in
+    *"$nl"*|*"$cr"*) err "the apt line for $key_url must be one line"; return 1 ;;
+    *trusted=*) err "the apt line for $key_url must not say trusted="; return 1 ;;
+    *"signed-by=$keyring]"*|*"signed-by=$keyring "*) ;;
+    *) err "the apt line for $key_url must be signed by its key (signed-by=$keyring)"; return 1 ;;
+  esac
+  name="${name%.*}"
+  has gpg || { err "gpg is needed to add the apt repository for $key_url"; return 1; }
+  tmp="$(mktemp -d)" || { err "mktemp failed"; return 1; }
+  if ! fetch "$key_url" "$tmp/key"; then err "couldn't download $key_url"
+  elif ! keys="$(gpg --batch --show-keys --with-colons "$tmp/key" 2>/dev/null)"; then err "$key_url isn't a key gpg can read"
+  elif ! keys="$(printf '%s\n' "$keys" | awk -F: '$1 == "pub" { p = 1; next } $1 == "fpr" && p { print $10; p = 0 }')" ||
+    [ -z "$keys" ]; then err "$key_url isn't a key gpg can read"
+  elif [ "$(printf '%s\n' "$keys" | wc -l | tr -d ' ')" != 1 ]; then err "$key_url holds more than one key"
+  elif [ "$keys" != "$want" ]; then err "$key_url's fingerprint $keys isn't the pinned $want; nothing added"
+  elif ! gpg --batch --dearmor < "$tmp/key" > "$tmp/keyring"; then err "$key_url isn't a key gpg can read"
+  elif ! printf '%s\n' "$line" > "$tmp/list"; then err "couldn't write the apt line"
+  elif ! as_root mkdir -p "$APT_ROOT$dir" "$sources"; then err "couldn't create $APT_ROOT$dir or $sources"
+  elif ! { as_root cp "$tmp/keyring" "$APT_ROOT$keyring" && as_root chmod 644 "$APT_ROOT$keyring"; }; then
+    err "couldn't write $APT_ROOT$keyring"
+  elif ! { as_root cp "$tmp/list" "$sources/$name.list" && as_root chmod 644 "$sources/$name.list"; }; then
+    err "couldn't write $sources/$name.list"
+  else ok=0; fi
+  rm -rf "$tmp"
+  [ "$ok" = 0 ] || return 1
+  as_root apt-get update || { err "apt-get update failed after adding $sources/$name.list"; return 1; }
+}
+
+need_value() { # flag args-from-the-flag-on: exits 1 unless a value (not another flag) follows the flag
+  case "${2:-}" in ""|-*) die "$1 needs a value" ;; esac
+}
+
+# Sourced: the helpers only. SETUP_APT_ROOT (a test hook) puts apt's files under a directory, and only when sourced.
+APT_ROOT=""
+if [ "${BASH_SOURCE[0]}" != "$0" ]; then APT_ROOT="${SETUP_APT_ROOT:-}"; return 0; fi
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT" || exit 1
+export COREPACK_ENABLE_DOWNLOAD_PROMPT=0
+
+# --- Subcommand and its flags --------------------------------------------------------------------------------------
+SUBCOMMAND="${1:-}" # "" is the developer setup
+case "$SUBCOMMAND" in infra|infra-push|services) shift ;; *) SUBCOMMAND="" ;; esac
+NO_INSTALL=0; YES=0; NO_DOCKER=0; SKIP_BROWSERS=0
+parse_args() { # the flags $SUBCOMMAND takes. One with a value: `sub:--flag) need_value "$@"; VAR="$2"; shift ;;`
+  while [ $# -gt 0 ]; do
+    case "$SUBCOMMAND:$1" in
+      *:-h|*:--help) usage; exit 0 ;;
+      :--no-install) NO_INSTALL=1 ;;
+      :--yes|:-y) YES=1 ;;
+      :--no-docker) NO_DOCKER=1 ;;
+      :--skip-browsers) SKIP_BROWSERS=1 ;;
+      *) err "unknown option '$1'"; usage >&2; exit 1 ;;
+    esac
+    shift
+  done
+}
+parse_args "$@"
 
 # --- 1. Environment ------------------------------------------------------------------------------------------------
 KERNEL="$(uname -s 2>/dev/null || echo unknown)"
@@ -82,6 +209,25 @@ case "$KERNEL" in
     fi ;;
   *) ENV=unknown; ENV_LABEL="$KERNEL" ;;
 esac
+
+# --- Subcommands branch off here -----------------------------------------------------------------------------------
+run_infra() { # setup.sh infra and infra-push (task 112)
+  echo "setup.sh $SUBCOMMAND comes with task 112 (owner and GCP admin setup)." >&2
+  exit 1
+}
+
+# Task 112 fills run_infra above and task 113 run_services below, each in its own lane.
+
+run_services() { # setup.sh services (task 113)
+  echo "setup.sh services comes with task 113 (local database and file storage without Docker)." >&2
+  exit 1
+}
+
+case "$SUBCOMMAND" in
+  infra|infra-push) run_infra ;;
+  services) run_services ;;
+esac
+
 say "Environment: $ENV_LABEL"
 
 if [ "$ENV" = windows ]; then
@@ -90,14 +236,6 @@ if [ "$ENV" = windows ]; then
   exit 1
 fi
 [ "$ENV" = unknown ] && die "unsupported system '$KERNEL': macOS, Linux and WSL2 are supported"
-
-SUDO="sudo "; [ "$(id -u 2>/dev/null)" = 0 ] && SUDO=""
-can_root() { [ -z "$SUDO" ] || has sudo; }
-as_root() { # runs a command as root; false (with a warning) when there is no way to
-  if [ -z "$SUDO" ]; then "$@"
-  elif has sudo; then sudo "$@"
-  else warn "needs root and there is no sudo: $*"; return 1; fi
-}
 
 NODE_MAJOR="$(tr -d ' \r\n' < .nvmrc)"; NODE_MAJOR="${NODE_MAJOR#v}"; NODE_MAJOR="${NODE_MAJOR%%.*}"
 PNPM_VERSION="$(sed -n 's/.*"packageManager": *"pnpm@\([0-9.]*\).*/\1/p' package.json | head -1)"
@@ -121,14 +259,6 @@ find_fnm() {
   PATH="$FNM_HOME:$PATH"; export PATH
 }
 fnm_activate() { eval "$(fnm env --shell bash 2>/dev/null)"; }
-find_brew() {
-  has brew && return 0
-  local prefix
-  for prefix in ${SETUP_BREW_PREFIXES:-/opt/homebrew /usr/local}; do
-    if [ -x "$prefix/bin/brew" ]; then eval "$("$prefix/bin/brew" shellenv)"; return 0; fi
-  done
-  return 1
-}
 if load_nvm; then NODE_MANAGER=nvm; elif find_fnm; then NODE_MANAGER=fnm; fnm_activate; else NODE_MANAGER=""; fi
 
 # --- 2. Check every tool -------------------------------------------------------------------------------------------
@@ -279,17 +409,7 @@ if [ -n "$PLAN" ]; then
   if [ "$YES" != 1 ] && ! ask "Install these?"; then say "Nothing installed. The commands are listed above."; exit 1; fi
   DEPS_OK="$WANT_DEPS"
 
-  if [ -n "$BREW_FORMULAS$BREW_CASK" ] && ! find_brew; then
-    say "Homebrew isn't installed. Its official installer is: $HOMEBREW_INSTALL"
-    if ! ask "Install Homebrew now with its official installer?"; then
-      say "Nothing installed. Install Homebrew with: $HOMEBREW_INSTALL"
-      say "then rerun bash scripts/setup.sh."
-      exit 1
-    fi
-    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)" || die "Homebrew's installer failed"
-    find_brew || die "Homebrew installed, but brew isn't found: open a new terminal and rerun"
-    installed "Homebrew"
-  fi
+  if [ -n "$BREW_FORMULAS$BREW_CASK" ]; then ensure_brew; fi
   if [ -n "$BREW_FORMULAS" ]; then
     # shellcheck disable=SC2086 # a list of formulas
     brew install $BREW_FORMULAS || die "brew install $BREW_FORMULAS failed"; installed "brew: $BREW_FORMULAS"
@@ -314,7 +434,7 @@ elif [ "$WANT_DEPS" = 1 ]; then
 fi
 
 download_fnm() {
-  local asset sha url tmp got
+  local asset sha url tmp
   case "$(uname -m)" in
     x86_64|amd64) asset="fnm-linux.zip"; sha="$FNM_SHA256_LINUX_X64" ;;
     aarch64|arm64) asset="fnm-arm64.zip"; sha="$FNM_SHA256_LINUX_ARM64" ;;
@@ -322,11 +442,7 @@ download_fnm() {
   esac
   url="https://github.com/Schniz/fnm/releases/download/v${FNM_VERSION}/${asset}"
   tmp="$(mktemp -d)" || die "mktemp failed"
-  curl -fsSL -o "$tmp/$asset" "$url" || { rm -rf "$tmp"; die "couldn't download $url"; }
-  if has sha256sum; then got="$(sha256sum "$tmp/$asset" | cut -d' ' -f1)"
-  elif has shasum; then got="$(shasum -a 256 "$tmp/$asset" | cut -d' ' -f1)"
-  else rm -rf "$tmp"; die "no sha256sum or shasum to check fnm with"; fi
-  if [ "$got" != "$sha" ]; then rm -rf "$tmp"; die "fnm $FNM_VERSION ($asset) doesn't match its pinned sha256; nothing installed"; fi
+  download_checked "$url" "$sha" "$tmp/$asset" || { rm -rf "$tmp"; die "fnm $FNM_VERSION not installed"; }
   unzip -q -o "$tmp/$asset" fnm -d "$tmp" || { rm -rf "$tmp"; die "couldn't unpack $asset"; }
   mkdir -p "$FNM_HOME" && mv "$tmp/fnm" "$FNM_HOME/fnm" && chmod 755 "$FNM_HOME/fnm" || { rm -rf "$tmp"; die "couldn't install fnm into $FNM_HOME"; }
   rm -rf "$tmp"

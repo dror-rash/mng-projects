@@ -1,6 +1,6 @@
 # Task 111: One command to set up a new workspace for local development
 
-- **Status:** in-review
+- **Status:** done (PR #99)
 - **Milestone:** cross-cutting (tooling)
 - **Zone / package:** `scripts/setup.sh` (new), `scripts/test-setup.sh` (new), `.github/workflows/ci.yml` (the `verify` job runs the test), `README.md` (Quick start, Windows line, "Onboarding a new person"), `CLAUDE.md` Commands line (drafted for the owner, who edits it). Commits `test:` → `feat(scripts):` → `docs:`.
 - **Feature file:** none (no app behavior; `scripts/test-setup.sh` is the check, as `scripts/test-lane.sh` is for lanes)
@@ -171,6 +171,30 @@ browsers, summary), tested with stubs like `test-lane.sh`. No new ADR (ADR-0013 
     (SUP-1; SEC-31 partly fixed); "created" only when `.env` was;
   - `packageManager` pinned with `+sha512` (npm registry `dist.integrity` for pnpm 10.18.0, checked against the
     tarball; corepack accepts it and refuses a wrong hash); hints and summary wording; register updated.
+- 2026-11-14 – Done: merged (PR #99, `aaaed85`). A shared `refactor(scripts):` commit follows on
+  `refactor/setup-seams` before tasks 112 and 113 start: subcommand dispatch with a parser per subcommand and usage as a
+  heredoc, `download_checked` (fnm moved onto it), `ensure_brew`, `add_apt_repo`, empty `infra` / `infra-push` /
+  `services` arms that keep today's messages, and test helpers per task in `test-setup.sh`.
+- 2026-11-14 – Shared refactor on `refactor/setup-seams` (lane 1), behavior-preserving for the developer flow:
+  - `SUBCOMMAND` is the first argument; `parse_args` takes only that subcommand's flags (`need_value` for one with a
+    value) and rejects the rest; usage is a heredoc. `run_infra` keeps the task 112 message, `run_services` names
+    task 113; both exit 1 right after environment detection. A subcommand after a flag is an unknown option, and
+    `infra --no-docker` is refused (it took the infra message before).
+  - `download_checked` (fnm moved onto it; its mismatch message now names the URL), `ensure_brew`, `add_apt_repo`
+    (signed-by its keyring, gpg --dearmor, `SETUP_APT_SOURCES` test hook; unused until 112/113).
+  - Sourced, `setup.sh` only defines its helpers: `test-setup.sh`'s `call` checks them directly. `infra_world` and
+    `pg_world` are the per-task stub hooks in `world()`.
+  - `test-setup.sh`: 179 passed (the 132 unchanged plus 47), under /bin/bash 3.2 and bash 5.2 (Ubuntu 24.04).
+- 2026-11-14 – Security review of the refactor (no Medium or higher); hardened test-first:
+  - SUP-1: `add_apt_repo` takes a fourth argument, the key's pinned fingerprint, checked with
+    `gpg --show-keys --with-colons` (exactly one key) before anything is written; curl is https only
+    (`--proto '=https' --proto-redir '=https'`) in `add_apt_repo` and `download_checked`;
+  - SUP-2: list lines with a newline or `trusted=` are refused; keyrings only `/usr/share/keyrings/<name>` or
+    `/etc/apt/keyrings/<name>` (`[A-Za-z0-9._-]`, no leading dot);
+  - SUP-3: `download_checked` refuses a pin that isn't 64 lower-case hex digits and an empty computed hash;
+  - SUP-4: the test hook is now `SETUP_APT_ROOT`, honored only when `setup.sh` is sourced;
+  - tasks 112 and 113 note the fingerprints they pin (Google Cloud, GitHub CLI; PostgreSQL);
+  - `test-setup.sh`: 206 passed.
 
 ## Parking lot
 - `.devcontainer/devcontainer.json` (Node 22, docker-in-docker, forwarded ports) for Codespaces.
@@ -182,4 +206,5 @@ browsers, summary), tested with stubs like `test-lane.sh`. No new ADR (ADR-0013 
 - `package.json` `engines` → `22.x`, to match the strict `.nvmrc` check (coordinator, 2026-11-14).
 - An interactive rerun on Linux asks about chromium's system libraries each time (it can't tell they're there).
 - Port warnings that recognize another checkout's compose containers (`docker ps --filter publish=<port>`).
-- A runbook in `infra/README.md` for removing a GCP admin (remove in Terraform, rotate the generated secrets).
+- A runbook in `infra/README.md` for removing a GCP admin (remove in Terraform, rotate the generated secrets):
+  moved to task 112 (its Rotation section).
