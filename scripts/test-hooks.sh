@@ -437,7 +437,8 @@ gate 2 1 "runs lint with the project's URL as a push URL"              "$D" "$CL
 # ... in every spelling of the URL: a port, a / after the scp colon, doubled slashes, www. (security review SUP-2)
 i=0
 for u in "https://github.com:443/example/proj.git" "ssh://git@github.com:22/example/proj" "git@github.com:/example/proj.git" \
-  "https://www.github.com/example/proj" "https://github.com//example//proj/" "git@www.github.com:example/proj"; do
+  "https://www.github.com/example/proj" "https://github.com//example//proj/" "git@www.github.com:example/proj" \
+  "ssh://git@ssh.github.com:443/example/proj.git" "git@github.com.:example/proj"; do
   i=$((i+1)); r="$GB/url-$i"; newrepo "$r"; git -C "$r" remote add origin "$u"
   gate 2 1 "runs lint in a clone whose origin is $u"                   "$D" "$r" 1
 done
@@ -497,6 +498,49 @@ gate 0 0 "allows git add a b;git commit"                               "git add 
 gate 0 0 "allows env with a variable before git commit"                "env FOO=1 $D" "$OTHER"
 gate 0 1 "runs lint for cd <project> && git add && a heredoc message"  "cd '$GP' && git add -A && $MSGH" "$OTHER"
 
+# Inside or alongside the commit (security re-review SUP-3): no | or single & next to it, no $(…), backticks, <(…)
+# or >(…) in its words except the -m "$(cat <<'EOF' … EOF )" message form, no heredoc with an unquoted delimiter
+Q="'"
+HM="\"\$(cat <<'EOF'
+docs: x
+
+Body with \$(not run) and \`not run\`.
+EOF
+)\""
+for c in "git commit -m \"\$(rm -rf .git; ln -s $GP/.git .git; echo x)\"" \
+  "git commit -m $HM --author=\"\$(id -un) <a@example.com>\"" \
+  "git commit -F - <<EOF
+docs: \$(id)
+EOF" "git commit -F - <<-EOF
+docs: x
+EOF" "git commit -m \"\$(cat <<EOF
+docs: x
+EOF
+)\"" "git commit -m \"\$(cat <<'EOF'
+docs: x
+EOF
+); rm x\"" "git commit -m x | { cat; }" "git commit -m x |& cat" "git commit -m x & rm -rf y; wait" \
+  "git commit -F <(echo docs: x)" "git commit -m x -F >(cat)" "git commit -m \`id\`" "git commit -m \"docs: \$(id)\"" \
+  "git commit -m docs:x \$(id)"; do
+  gate 2 0 "refuses in or next to a commit: $(printf '%s' "$c" | tr '\n' '/')" "$c" "$OTHER"
+done
+gate 0 0 "allows -q and a \$(cat <<'EOF') message"                     "git commit -q -m $HM" "$OTHER"
+gate 0 0 "allows two \$(cat <<'EOF') messages"                         "git commit -m $HM -q -m $HM" "$OTHER"
+gate 0 0 "allows a \$(cat <<\"EOF\") message"                          "git commit -m \"\$(cat <<\"EOF\"
+docs: x
+EOF
+)\"" "$OTHER"
+gate 0 0 "allows -F - <<'EOF' with \$(…) in the body"                  "git commit -F - <<'EOF'
+docs: \$(id) and \`id\`
+EOF" "$OTHER"
+gate 0 0 "allows \$(…), backticks and << in a single-quoted message"   "git commit -m 'docs: \$(a), \`b\` and a << b'" "$OTHER"
+gate 0 0 "allows a variable in the message"                            "git commit -m \"docs: \$USER\"" "$OTHER"
+gate 0 0 "allows && | after the commit"                                "$D && git log -1 | cat" "$OTHER"
+gate 0 0 "allows || after the commit"                                  "$D || true" "$OTHER"
+# A lane directory that isn't a git worktree is refused, not skipped
+mkdir -p "$GB/proj-lanes/lane-4"
+gate 2 0 "refuses lane.sh exec into a lane that isn't a worktree"      "scripts/lane.sh exec 4 -- $D" "$GP"
+gate 2 0 "refuses git -C \$(lane.sh path n) that isn't a worktree"     "git -C \"\$(scripts/lane.sh path 4)\" commit -m 'docs: x'" "$GP"
 # Fail closed: a guard that can't tell its own repository runs the gate
 gate 2 1 "runs lint when the guard isn't in a repository"              "$D" "$OTHER" 1 "$NOREPO/guard.sh"
 gate 0 1 "allows that commit when lint passes"                         "$D" "$OTHER" 0 "$NOREPO/guard.sh"
