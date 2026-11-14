@@ -66,6 +66,28 @@ expect 0 "allows gcloud run services describe"          Bash "$(bash_ "gcloud ru
 expect 0 "allows gcloud beta run services list"         Bash "$(bash_ "gcloud beta run services list")"
 expect 0 "allows gcloud run revisions list"             Bash "$(bash_ "gcloud run revisions list --service shell")"
 
+# setup.sh infra / infra-push fetch the owner config and workstation secrets: a person runs them (task 112)
+expect 2 "refuses bash scripts/setup.sh infra"          Bash "$(bash_ "bash scripts/setup.sh infra")"
+expect 2 "refuses setup.sh infra with flags"            Bash "$(bash_ "bash scripts/setup.sh infra --project p-1 --force --yes")"
+expect 2 "refuses ./scripts/setup.sh infra-push"        Bash "$(bash_ "./scripts/setup.sh infra-push")"
+expect 2 "refuses sh setup.sh infra in scripts/"        Bash "$(bash_ "cd scripts && sh setup.sh infra")"
+expect 2 "refuses setup.sh infra after another command" Bash "$(bash_ "pnpm lint; bash scripts/setup.sh infra-push")"
+expect 2 "refuses setup.sh infra with CLAUDECODE unset" Bash "$(bash_ "CLAUDECODE= env -u CLAUDECODE bash scripts/setup.sh infra")"
+expect 2 "refuses setup.sh infra under sudo"            Bash "$(bash_ "sudo bash scripts/setup.sh infra")"
+expect 2 "refuses setup.sh infra through lane.sh exec"  Bash "$(bash_ "scripts/lane.sh exec 1 -- bash scripts/setup.sh infra")"
+expect 2 "refuses setup.sh infra behind bash -c"        Bash "$(bash_ "bash -c 'bash scripts/setup.sh infra'")"
+expect 2 "refuses setup.sh infra in a heredoc fed to bash" Bash "$(bash_ "bash <<'EOF'
+bash scripts/setup.sh infra-push
+EOF")"
+expect 2 "refuses setup.sh infra split over lines"      Bash "$(bash_ $'bash scripts/setup.sh \\\n  infra')"
+expect 0 "allows the developer setup"                   Bash "$(bash_ "bash scripts/setup.sh --yes")"
+expect 0 "allows setup.sh services"                     Bash "$(bash_ "bash scripts/setup.sh services")"
+expect 0 "allows setup.sh infra's tests"                Bash "$(bash_ "bash scripts/test-setup.sh")"
+expect 0 "allows grep for setup.sh infra, quoted"       Bash "$(bash_ "grep -n 'setup.sh infra' scripts/setup.sh README.md")"
+expect 0 "allows grep for setup.sh infra, unquoted"     Bash "$(bash_ "grep -rn setup.sh infra")"
+expect 0 "allows a commit message about setup.sh infra" Bash "$(bash_ "git commit -m 'docs: setup.sh infra and setup.sh infra-push'")"
+expect 0 "allows echo of setup.sh infra"                Bash "$(bash_ "echo \"run bash scripts/setup.sh infra\"")"
+
 # Force pushes in every spelling
 expect 2 "refuses a +refspec push"                      Bash "$(bash_ "git push origin +main")"
 expect 2 "refuses a quoted +refspec push"               Bash "$(bash_ "git push origin '+HEAD:main'")"
@@ -236,6 +258,13 @@ docs: x
 cd somewhere; pushd there; GIT_DIR=x --git-dir y
 EOF" "$REPO"
 stage "$WT" "$FEATURE";   guard_cmd 0 "allows cd and pushd in the message"  "git -C '$WT' commit -m 'docs: cd and pushd, GIT_DIR=x'" "$REPO"
+stage "$WT" "$FEATURE";   guard_cmd 0 "allows a commit whose message mentions setup.sh infra" "cd '$WT' && git commit -m 'docs: bash scripts/setup.sh infra, then setup.sh infra-push'" "$REPO"
+stage "$WT" "$FEATURE";   guard_cmd 0 "allows a heredoc message that mentions setup.sh infra" "git -C '$WT' commit -q -F - <<'EOF'
+docs: x
+
+Run bash scripts/setup.sh infra; then ./scripts/setup.sh infra-push.
+EOF" "$REPO"
+stage "$WT" "$FEATURE";   guard_cmd 2 "refuses setup.sh infra after a commit"  "cd '$WT' && git commit -m 'docs: x' && bash scripts/setup.sh infra" "$REPO"
 
 echo; echo "$pass passed, $fail failed"
 [ "$fail" = 0 ]
