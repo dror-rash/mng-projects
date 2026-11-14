@@ -302,7 +302,8 @@ resolve_dir() { # base, dir as written (quoted, ~, relative, or "$(scripts/lane.
   local d="$2" lane_re="^\"?\\$\\(((bash|sh)[[:space:]]+)?([^[:space:])]*/)?scripts/lane\\.sh[[:space:]]+path[[:space:]]+([1-9])[[:space:]]*\\)\"?$"
   if [[ "$d" =~ $lane_re ]]; then
     local n="${BASH_REMATCH[4]}" sd
-    sd="$(resolve_dir "$1" "${BASH_REMATCH[3]:-.}")" && sd="$(lane_dir "$sd" "$n")" && resolve_dir / "$sd"
+    sd="$(resolve_dir "$1" "${BASH_REMATCH[3]:-.}")" && sd="$(lane_dir "$sd" "$n")" && is_worktree_root "$sd" &&
+      resolve_dir / "$sd"
     return
   fi
   case "$d" in \"*\") d="${d:1:${#d}-2}" ;; \'*\') d="${d:1:${#d}-2}" ;; esac
@@ -328,6 +329,36 @@ only_adds_before() { # text before the commit in m, the same in h, 1 after lane.
     deny "only a leading literal cd and git add may run before a git commit in the same command (no export, source, ln, mv, rm, assignments, \$(…), redirections or subshells). Run the commit on its own: cd /abs/path && git add … && git commit …"
   fi
 }
+# The commit's own words (security re-review SUP-3): nothing piped to or run alongside it (| or a single & next to
+# it; && ; || after it are fine), no $(…), backticks, <(…) or >(…) except the -m "$(cat <<'EOF' … EOF )" message and
+# -C "$(scripts/lane.sh path <n>)", and a heredoc only with a quoted delimiter (its body is then never expanded).
+COMMIT_WORDS_REFUSED="a git commit runs nothing in or next to it: no \$(…), backticks, <(…) or >(…) in its words except a -m \"\$(cat <<'EOF' … EOF)\" message, a heredoc only with a quoted delimiter (<<'EOF'), and no | or & next to it. Run the commit on its own."
+commit_words() { # m and h from the commit on (same length)
+  local mt="$1" nl=$'\n' len next
+  mt="${mt//">&"/">_"}"; mt="${mt//"<&"/"<_"}"; mt="${mt//"&>"/"_>"}" # redirections, not separators
+  local re="^[^;&|$nl]*"
+  [[ "$mt" =~ $re ]]; len=${#BASH_REMATCH[0]}
+  next="${mt:len:2}"
+  case "$next" in "||"*|"&&"*) ;; "|"*|"&"*) deny "$COMMIT_WORDS_REFUSED" ;; esac
+  # in m quoted text is blanked, so only a real heredoc's delimiter is seen; here-strings (<<<) are fine
+  local hd="${mt:0:len}"; hd="${hd//"<<<"/___}"
+  grep -Eq "<<-?[[:blank:]]*([^'\"[:blank:]]|\$)" <<<"$hd" && deny "$COMMIT_WORDS_REFUSED"
+  perl -0777 -ne '
+    s/"\$\(cat[ \t]+<<-?[ \t]*([\x27"])[A-Za-z_][A-Za-z0-9_]*\1[ \t]*\n[ \t]*\)"//g;
+    s/(^|[ \t])-C[ \t]+"?\$\(((bash|sh)[ \t]+)?([^\s)]*\/)?scripts\/lane\.sh[ \t]+path[ \t]+[1-9][ \t]*\)"?/$1/g;
+    my $o = "";
+    while (length) {
+      if (s/^\x27[^\x27]*\x27?//) { $o .= " " }
+      elsif (s/^("(?:[^"\\]|\\.)*"?)//s) { $o .= $1 }
+      elsif (s/^\\.//s) { $o .= " " }
+      else { s/^(.)//s; $o .= $1 }
+    }
+    exit($o =~ /\$\(|`|[<>]\(/ ? 0 : 1);' <<<"${2:0:len}" && deny "$COMMIT_WORDS_REFUSED"
+  return 0
+}
+is_worktree_root() { # dir: the top of a git worktree
+  local t; t="$(git -C "$1" rev-parse --show-toplevel 2>/dev/null)" && [ -n "$t" ] && [ "$t" = "$(cd "$1" 2>/dev/null && pwd -P)" ]
+}
 commit_repo() { # sets root, or refuses
   # rest walks h; mrest walks m in step (same length), and finds the real commit and what precedes it.
   local dir="$cwd" rest="$h" mrest="$m" seg mseg prefix k lane=0
@@ -340,7 +371,7 @@ commit_repo() { # sets root, or refuses
   if [[ "$rest" =~ $lane_re ]]; then
     local n="${BASH_REMATCH[4]}"
     k=${#BASH_REMATCH[0]}
-    { dir="$(resolve_dir "$dir" "${BASH_REMATCH[3]:-.}")" && dir="$(lane_dir "$dir" "$n")" && [ -d "$dir" ]; } \
+    { dir="$(resolve_dir "$dir" "${BASH_REMATCH[3]:-.}")" && dir="$(lane_dir "$dir" "$n")" && is_worktree_root "$dir"; } \
       || unresolved "lane $n has no worktree"
     rest="${rest:k}"; mrest="${mrest:k}"; lane=1
   fi
@@ -351,6 +382,7 @@ commit_repo() { # sets root, or refuses
     unresolved "a cd, pushd, GIT_DIR, GIT_WORK_TREE, GIT_COMMON_DIR or lane.sh exec that isn't at the start of the command"
   fi
   only_adds_before "$prefix${mseg%%git*}" "${rest:0:${#prefix}}${mseg%%git*}" "$lane"
+  commit_words "${mrest:${#prefix}}" "${rest:${#prefix}}"
   grep -Eq -- '--(git-dir|work-tree)' <<<"$seg" && unresolved "--git-dir/--work-tree"
   local c_re="(^|[[:space:]])-C[[:space:]]+$WORD(.*)$"
   while [[ "$seg" =~ $c_re ]]; do
@@ -393,14 +425,16 @@ common_of() { # dir: its git common dir, canonical
   local c; c="$(git -C "$1" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" && [ -n "$c" ] &&
     (cd "$c" 2>/dev/null && pwd -P)
 }
-normalize_url() { # lowercase; no scheme, user@ or :port (scheme form), www., repeated or trailing /, .git;
+normalize_url() { # lowercase; no scheme, user@ or :port (scheme form), a host's trailing dot or www., ssh.github.com as
+  # github.com, no repeated or trailing / or .git;
   # the scp form user@host:path as host/path
   tr '[:upper:]' '[:lower:]' | sed -E '
     /^[a-z0-9+.-]+:\/\//{ s#^[a-z0-9+.-]+://([^@/]*@)?([^/:]*)(:[0-9]*)?#\2#; b rest
     }
     s#^[^@/]*@##; s#^([^/:]+):#\1/#
     :rest
-    s#/+#/#g; s#^www\.##; s#/$##; s#\.git$##; s#/$##'
+    s#/+#/#g; s#^([^/]*)\.(/|$)#\1\2#; s#^www\.##; s#^ssh\.github\.com(/|$)#github.com\1#
+    s#/$##; s#\.git$##; s#/$##'
 }
 remote_urls() { # dir: every fetch and push URL of every remote, normalized, one per line
   local r
