@@ -14,8 +14,10 @@
 # Without Docker (claude.ai/code and similar) it stops after the other steps: the fallback is task 113.
 #
 # Bash 3.2 compatible (macOS's bash): it runs before Node or pnpm exist. It never prints a secret, never changes
-# an existing .env, never runs pnpm db:generate, gcloud, gh or terraform, and uses sudo only for apt-get.
-# Rerunning on a set-up workspace installs nothing and changes no file. Tests: bash scripts/test-setup.sh.
+# an existing .env, never runs pnpm db:generate, gcloud, gh or terraform, and uses sudo only for apt-get (its own,
+# and Playwright's --with-deps once approved). Rerunning on a set-up workspace installs nothing and changes no file.
+# Tests: bash scripts/test-setup.sh, under /bin/bash; CI (Ubuntu) runs it with bash 5, so bash 3.2 is checked by
+# running it on macOS.
 #
 # Test hooks (scripts/test-setup.sh): SETUP_INTERACTIVE=1 treats stdin as a terminal; SETUP_PROC_VERSION,
 # SETUP_BREW_PREFIXES, SETUP_PORTS and SETUP_DB_TIMEOUT replace /proc/version, Homebrew's install prefixes, the
@@ -90,7 +92,12 @@ fi
 [ "$ENV" = unknown ] && die "unsupported system '$KERNEL': macOS, Linux and WSL2 are supported"
 
 SUDO="sudo "; [ "$(id -u 2>/dev/null)" = 0 ] && SUDO=""
-as_root() { if [ -z "$SUDO" ]; then "$@"; else has sudo || die "sudo not found: run as root or install sudo"; sudo "$@"; fi; }
+can_root() { [ -z "$SUDO" ] || has sudo; }
+as_root() { # runs a command as root; false (with a warning) when there is no way to
+  if [ -z "$SUDO" ]; then "$@"
+  elif has sudo; then sudo "$@"
+  else warn "needs root and there is no sudo: $*"; return 1; fi
+}
 
 NODE_MAJOR="$(tr -d ' \r\n' < .nvmrc)"; NODE_MAJOR="${NODE_MAJOR#v}"; NODE_MAJOR="${NODE_MAJOR%%.*}"
 PNPM_VERSION="$(sed -n 's/.*"packageManager": *"pnpm@\([0-9.]*\).*/\1/p' package.json | head -1)"
@@ -161,9 +168,9 @@ docker_fix() { # the fix for the current Docker state, in this environment
     wsl:*) echo "Docker isn't reachable from WSL. Install Docker Desktop for Windows, then Settings → Resources → WSL integration → turn on \`${WSL_DISTRO_NAME:-your distro}\`, apply, and rerun in a new WSL shell." ;;
     macos:absent|macos:nocompose) echo "brew install --cask docker-desktop, then start Docker Desktop once and rerun" ;;
     macos:*) echo "start Docker Desktop once (open -a Docker), wait until it runs, then rerun bash scripts/setup.sh" ;;
-    linux:absent) echo "${SUDO}apt-get install -y docker.io docker-compose-v2" ;;
-    linux:nocompose) echo "${SUDO}apt-get install -y docker-compose-v2" ;;
-    linux:denied) echo "sudo usermod -aG docker \$USER, then start a new shell and rerun" ;;
+    linux:absent) echo "${SUDO}apt-get install -y docker.io docker-compose-v2 (with Docker's own apt repository: docker-ce docker-compose-plugin)" ;;
+    linux:nocompose) echo "${SUDO}apt-get install -y docker-compose-v2 (with Docker's own apt repository: docker-compose-plugin)" ;;
+    linux:denied) echo "sudo usermod -aG docker \$USER (the docker group is root on this host), then start a new shell and rerun" ;;
     linux:down) echo "start the Docker daemon (sudo systemctl start docker), or rerun with --no-docker" ;;
   esac
 }
@@ -243,13 +250,34 @@ if [ "$NO_INSTALL" = 1 ]; then
   exit 0
 fi
 
+# What can't be installed here, before asking: no apt-get, or no root.
+if [ "$ENV" != macos ]; then
+  if [ -n "$APT_DOCKER" ] && ! has apt-get; then warn "no apt-get here to install Docker with"; APT_DOCKER=""; fi
+  if [ -n "$APT_DOCKER" ] && ! can_root; then warn "no sudo here to install Docker with"; APT_DOCKER=""; fi
+  if [ -n "$APT_PACKAGES" ] && ! has apt-get; then
+    say "There is no apt-get here: install these yourself, then rerun bash scripts/setup.sh:"; report_missing; exit 1
+  fi
+  if [ -n "$APT_PACKAGES" ] && ! can_root; then
+    say "Installing these needs root, and there is no sudo: run as root or install sudo, then rerun:"; report_missing; exit 1
+  fi
+  PLAN="$(plan_text)"
+fi
+
+# Playwright's --with-deps runs sudo apt-get: only when approved, with the installs or on its own.
+WITH_DEPS="pnpm --filter @repo/e2e exec playwright install --with-deps chromium"
+DEPS_TEXT="chromium system libraries (sudo apt-get, via Playwright)"
+WANT_DEPS=0; DEPS_OK=0
+[ "$ENV" != macos ] && [ "$SKIP_BROWSERS" = 0 ] && can_root && WANT_DEPS=1
+
 if [ -n "$PLAN" ]; then
+  [ "$WANT_DEPS" = 1 ] && PLAN="$PLAN"$'\n'"  - $DEPS_TEXT"
   if [ "$YES" != 1 ] && ! interactive; then
     say "No terminal to ask in: nothing installed. Rerun with --yes to install the above, or --no-install to only check."
     exit 1
   fi
   say "To install:"; say "$PLAN"
   if [ "$YES" != 1 ] && ! ask "Install these?"; then say "Nothing installed. The commands are listed above."; exit 1; fi
+  DEPS_OK="$WANT_DEPS"
 
   if [ -n "$BREW_FORMULAS$BREW_CASK" ] && ! find_brew; then
     say "Homebrew isn't installed. Its official installer is: $HOMEBREW_INSTALL"
@@ -269,10 +297,6 @@ if [ -n "$PLAN" ]; then
   if [ -n "$BREW_CASK" ]; then
     brew install --cask "$BREW_CASK" || die "brew install --cask $BREW_CASK failed"; installed "Docker Desktop (start it once)"
   fi
-  if [ -n "$APT_PACKAGES" ]; then
-    has apt-get || die "no apt-get here: install these yourself, then rerun:$(printf '\n%s' "$PLAN")"
-  fi
-  if [ -n "$APT_DOCKER" ] && ! has apt-get; then warn "no apt-get here to install Docker with"; APT_DOCKER=""; fi
   if [ -n "$APT_PACKAGES$APT_DOCKER" ]; then
     as_root apt-get update || warn "apt-get update failed; trying the install anyway"
   fi
@@ -285,6 +309,8 @@ if [ -n "$PLAN" ]; then
     if as_root apt-get install -y $APT_DOCKER; then installed "apt: $APT_DOCKER"
     else warn "couldn't install Docker ($APT_DOCKER); continuing without it"; fi
   fi
+elif [ "$WANT_DEPS" = 1 ]; then
+  if [ "$YES" = 1 ] || ask "Install $DEPS_TEXT?"; then DEPS_OK=1; fi
 fi
 
 download_fnm() {
@@ -305,23 +331,30 @@ download_fnm() {
   mkdir -p "$FNM_HOME" && mv "$tmp/fnm" "$FNM_HOME/fnm" && chmod 755 "$FNM_HOME/fnm" || { rm -rf "$tmp"; die "couldn't install fnm into $FNM_HOME"; }
   rm -rf "$tmp"
   PATH="$FNM_HOME:$PATH"; export PATH
-  installed "fnm $FNM_VERSION in $FNM_HOME (add eval \"\$(fnm env --use-on-cd)\" to your shell profile)"
+  installed "fnm $FNM_VERSION in $FNM_HOME"
 }
 
+FNM_PROFILE='eval "$(fnm env --use-on-cd)"'
+NODE_HINT=""
 case "$NODE_ACTION" in
   nvm)
     nvm_ install "$NODE_MAJOR" && nvm_ use "$NODE_MAJOR" >/dev/null || die "nvm couldn't install Node $NODE_MAJOR"
-    installed "Node $NODE_MAJOR (nvm; in a new shell: nvm use)" ;;
+    installed "Node $NODE_MAJOR (nvm)"
+    NODE_HINT="in it, run nvm use (or once: nvm alias default $NODE_MAJOR)" ;;
   fnm|fnm-brew|fnm-download)
     [ "$NODE_ACTION" = fnm-download ] && download_fnm
     has fnm || die "fnm isn't on PATH"
     fnm install "$NODE_MAJOR" && fnm_activate && fnm use "$NODE_MAJOR" >/dev/null || die "fnm couldn't install Node $NODE_MAJOR"
-    installed "Node $NODE_MAJOR (fnm; in a new shell: fnm use)" ;;
+    installed "Node $NODE_MAJOR (fnm)"
+    say "fnm: add this line to your shell profile (~/.zshrc or ~/.bashrc) so new shells find Node $NODE_MAJOR:"
+    say "  $FNM_PROFILE"
+    NODE_HINT="with $FNM_PROFILE in your profile" ;;
 esac
 if [ -n "$NODE_ACTION" ] && ! pnpm_ok; then PNPM_ACTION=corepack; fi
 if [ -n "$PNPM_ACTION" ]; then
   has corepack || die "corepack not found (it comes with Node $NODE_MAJOR)"
-  { corepack enable pnpm && corepack install; } || die "corepack couldn't set up pnpm $PNPM_VERSION"
+  { corepack enable pnpm && corepack install; } ||
+    die "corepack couldn't set up pnpm $PNPM_VERSION (an old corepack? npm i -g corepack@latest, then rerun)"
   installed "pnpm $PNPM_VERSION (corepack)"
 fi
 
@@ -331,6 +364,11 @@ check_tools
 [ "$PNPM_BAD" = 0 ] || die "pnpm isn't $PNPM_VERSION"
 
 # --- 5. .env -------------------------------------------------------------------------------------------------------
+ENV_TMP=""
+cleanup() { if [ -n "$ENV_TMP" ]; then rm -f "$ENV_TMP"; fi; }
+trap cleanup EXIT
+trap 'cleanup; exit 130' INT
+trap 'cleanup; exit 143' TERM
 env_keys() { sed -n 's/^\([A-Za-z_][A-Za-z0-9_]*\)=.*/\1/p' "$1"; }
 if [ -f .env ]; then
   lacking=""
@@ -339,14 +377,21 @@ if [ -f .env ]; then
   else say ".env: kept as is"; fi
 else
   secret="$(openssl rand -base64 32)" && [ "${#secret}" -ge 32 ] || die "openssl rand failed"
-  tmp=".env.setup.$$"
+  ENV_TMP=".env.setup.$$" # git-ignored (.env.*); removed on exit or interrupt
   ( umask 077; SETUP_SECRET="$secret" awk \
       '/^BETTER_AUTH_SECRET=/ { print "BETTER_AUTH_SECRET=" ENVIRON["SETUP_SECRET"]; next } { print }' \
-      .env.example > "$tmp" ) || { rm -f "$tmp"; die "couldn't write .env"; }
+      .env.example > "$ENV_TMP" ) || die "couldn't write .env"
   unset secret
-  chmod 600 "$tmp" && mv -n "$tmp" .env; rm -f "$tmp"
-  say ".env: created from .env.example with a new BETTER_AUTH_SECRET (mode 600)"
-  installed ".env"
+  chmod 600 "$ENV_TMP" || die "couldn't write .env"
+  mv -n "$ENV_TMP" .env
+  if [ -e "$ENV_TMP" ]; then
+    rm -f "$ENV_TMP"; warn ".env appeared while setup ran: kept it as is"
+  elif [ -e .env ]; then
+    say ".env: created from .env.example with a new BETTER_AUTH_SECRET (mode 600)"; installed ".env"
+  else
+    die "couldn't write .env"
+  fi
+  ENV_TMP=""
 fi
 
 # --- 6. Packages ---------------------------------------------------------------------------------------------------
@@ -385,8 +430,11 @@ if [ "$SKIP_BROWSERS" = 1 ]; then
   skipped "Playwright chromium (--skip-browsers)"
 elif [ "$ENV" = macos ]; then
   pnpm --filter @repo/e2e exec playwright install chromium || die "playwright install failed"
-else
+elif [ "$DEPS_OK" = 1 ]; then
   pnpm --filter @repo/e2e exec playwright install --with-deps chromium || die "playwright install failed"
+else
+  pnpm --filter @repo/e2e exec playwright install chromium || die "playwright install failed"
+  skipped "$DEPS_TEXT: if chromium doesn't start, run $WITH_DEPS"
 fi
 
 # --- 10. Summary ---------------------------------------------------------------------------------------------------
@@ -396,6 +444,7 @@ say "  Environment: $ENV_LABEL"
 indent() { printf '%s' "$1" | sed 's/^/  /'; }
 if [ -n "$INSTALLED" ]; then say "  Installed:"; indent "$INSTALLED"; else say "  Installed: nothing (already set up)"; fi
 if [ -n "$SKIPPED" ]; then say "  Skipped:"; indent "$SKIPPED"; fi
+[ -n "$NODE_HINT" ] && say "  Node changed: open a new shell before pnpm dev ($NODE_HINT)."
 if [ -n "$DOCKER_PROBLEM" ]; then
   say ""; say "$DOCKER_PROBLEM"
   say "(Or rerun with --no-docker to finish without the database.)"
@@ -404,5 +453,5 @@ fi
 say "  After a restart: pnpm db:up (Docker running) starts the database and file storage."
 say "  Next: pnpm dev (http://localhost:3000), sign up, then"
 say "        pnpm --filter @repo/dashboard seed:demo --email <you>"
-say "  GCP admins: bash scripts/setup.sh infra (task 112)."
+say "  GCP admins: bash scripts/setup.sh infra (coming with task 112)."
 exit "$STATUS"
