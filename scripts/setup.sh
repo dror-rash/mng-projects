@@ -208,7 +208,8 @@ pg_paths() { # sets PG_PARENT, PG_DATA, PG_LOG: in DATA_HOME, or as root in the 
   else PG_PARENT="$DATA_HOME"; fi
   PG_DATA="$PG_PARENT/postgres"; PG_LOG="$PG_PARENT/postgres.log"
 }
-# Pid files are only trusted when the process is the program they're for: a pid may be reused after a restart.
+# Pid files are only trusted when the process runs the program they're for, at its exact path: a pid may be reused
+# after a restart.
 pid_of() { # pid-file: the number on its first line
   local pid; pid="$(head -1 "$1" 2>/dev/null)"
   case "$pid" in ""|*[!0-9]*) return 1 ;; esac
@@ -228,14 +229,17 @@ pid_stale() { # pid-file text: true when its pid doesn't run, or runs a command 
   case " $cmd " in *"$2"*) return 1 ;; esac
   return 0
 }
-gcs_running() { pid_is "$GCS_PID" "fake-gcs-server "; }
-as_pg() { # a database server command as the database's owner: the current user, or as root the postgres user
-  if [ -z "$SUDO" ]; then runuser -u postgres -- "$@"; else "$@"; fi
+gcs_running() { pid_is "$GCS_PID" "$GCS_BIN "; } # the exact path (INF-5)
+# A database server command as the database's owner: the current user, or as root the postgres user with a cleared
+# environment, so root's variables (tokens) never reach the server, where the public password and COPY ... TO
+# PROGRAM 'env' could read them (INF-4).
+as_pg() {
+  if [ -z "$SUDO" ]; then runuser -u postgres -- /usr/bin/env -i PATH=/usr/bin:/bin LANG=C.UTF-8 "$@"; else "$@"; fi
 }
 pg_psql() { if [ -x "$PG_BIN/psql" ]; then "$PG_BIN/psql" "$@"; else psql "$@"; fi; }
 pg_installed() { [ -x "$PG_BIN/initdb" ] && [ -x "$PG_BIN/pg_ctl" ]; }
 pg_running() { # pg_ctl status alone would trust a postmaster.pid naming a reused pid
-  [ -f "$PG_DATA/PG_VERSION" ] && pid_is "$PG_DATA/postmaster.pid" "bin/postgres " &&
+  [ -f "$PG_DATA/PG_VERSION" ] && pid_is "$PG_DATA/postmaster.pid" "$PG_BIN/postgres " &&
     as_pg "$PG_BIN/pg_ctl" -D "$PG_DATA" status >/dev/null 2>&1
 }
 os_codename() { # this distribution's codename (VERSION_CODENAME), only [a-z0-9]; false otherwise
@@ -294,7 +298,7 @@ pg_up() {
       as_pg tee -a "$PG_DATA/postgresql.conf" > /dev/null || { err "couldn't write $PG_DATA/postgresql.conf"; return 1; }
   fi
   pg_running && return 0
-  if [ -f "$PG_DATA/postmaster.pid" ] && pid_stale "$PG_DATA/postmaster.pid" "bin/postgres "; then
+  if [ -f "$PG_DATA/postmaster.pid" ] && pid_stale "$PG_DATA/postmaster.pid" "$PG_BIN/postgres "; then
     as_pg rm -f "$PG_DATA/postmaster.pid" || { err "couldn't remove the stale $PG_DATA/postmaster.pid"; return 1; }
   fi
   as_pg "$PG_BIN/pg_ctl" -D "$PG_DATA" -l "$PG_LOG" -w -t 60 -o "-p 5433 -h localhost" start >/dev/null ||
