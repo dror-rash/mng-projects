@@ -2,12 +2,8 @@
 # One command from a fresh clone to "pnpm dev works and the tests run" (task 111). Local development shares no
 # secret (ADR-0013 class 4): the only secret, BETTER_AUTH_SECRET, is generated here per machine.
 #
-#   bash scripts/setup.sh [--no-install] [--yes] [--no-docker] [--skip-browsers]
-#
-#   --no-install     check only: change nothing, print the command for each missing tool (exit 1 if any)
-#   --yes            install what is missing without asking (Homebrew itself is still asked for)
-#   --no-docker      skip Docker and the database and file storage (pnpm db:up, pnpm db:migrate)
-#   --skip-browsers  skip Playwright's chromium
+# Usage: bash scripts/setup.sh --help (usage() below). A subcommand comes first (setup.sh infra ...) and takes only
+# its own flags (parse_args); subcommands branch off right after environment detection.
 #
 # Environments: macOS (Homebrew), Linux incl. Codespaces and Cloud Shell (apt-get), Windows through WSL2 (apt-get;
 # Docker comes from Docker Desktop for Windows). Windows outside WSL: it says to use WSL2 and changes nothing.
@@ -19,7 +15,8 @@
 # Tests: bash scripts/test-setup.sh, under /bin/bash; CI (Ubuntu) runs it with bash 5, so bash 3.2 is checked by
 # running it on macOS.
 #
-# Test hooks (scripts/test-setup.sh): SETUP_INTERACTIVE=1 treats stdin as a terminal; SETUP_PROC_VERSION,
+# Test hooks (scripts/test-setup.sh): sourced (. scripts/setup.sh), it only defines its helpers, so the tests call
+# them directly. SETUP_INTERACTIVE=1 treats stdin as a terminal; SETUP_PROC_VERSION,
 # SETUP_BREW_PREFIXES, SETUP_PORTS and SETUP_DB_TIMEOUT replace /proc/version, Homebrew's install prefixes, the
 # ports checked and the database wait (60 s).
 set -u
@@ -33,27 +30,22 @@ FNM_SHA256_LINUX_ARM64="4eaff58b2c5bf30d0934027572dd0b5bbb60d2a1af309230b53662d4
 # shellcheck disable=SC2016 # printed, not run
 HOMEBREW_INSTALL='/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"'
 
-ROOT="$(cd "$(dirname "$0")/.." && pwd)"
-cd "$ROOT" || exit 1
-export COREPACK_ENABLE_DOWNLOAD_PROMPT=0
+usage() {
+  cat <<'EOF'
+  bash scripts/setup.sh [--no-install] [--yes] [--no-docker] [--skip-browsers]
 
-NO_INSTALL=0; YES=0; NO_DOCKER=0; SKIP_BROWSERS=0
-usage() { sed -n '4,10p' "$0" | sed 's/^# \{0,1\}//'; }
-for arg in "$@"; do
-  case "$arg" in
-    --no-install) NO_INSTALL=1 ;;
-    --yes|-y) YES=1 ;;
-    --no-docker) NO_DOCKER=1 ;;
-    --skip-browsers) SKIP_BROWSERS=1 ;;
-    -h|--help) usage; exit 0 ;;
-    infra|infra-push) echo "setup.sh $arg comes with task 112 (owner and GCP admin setup)." >&2; exit 1 ;;
-    *) echo "setup: unknown option '$arg'" >&2; usage >&2; exit 1 ;;
-  esac
-done
+  --no-install     check only: change nothing, print the command for each missing tool (exit 1 if any)
+  --yes            install what is missing without asking (Homebrew itself is still asked for)
+  --no-docker      skip Docker and the database and file storage (pnpm db:up, pnpm db:migrate)
+  --skip-browsers  skip Playwright's chromium
+EOF
+}
 
+# --- Helpers -------------------------------------------------------------------------------------------------------
 say()  { printf '%s\n' "$*"; }
 warn() { printf 'warning: %s\n' "$*" >&2; }
-die()  { printf 'setup: %s\n' "$*" >&2; exit 1; }
+err()  { printf 'setup: %s\n' "$*" >&2; }
+die()  { err "$*"; exit 1; }
 has()  { command -v "$1" >/dev/null 2>&1; }
 interactive() { [ -t 0 ] || [ "${SETUP_INTERACTIVE:-}" = 1 ]; }
 ask() { # question: true on yes; a non-interactive run never says yes
@@ -67,6 +59,35 @@ ask() { # question: true on yes; a non-interactive run never says yes
 INSTALLED=""; SKIPPED=""; STATUS=0
 installed() { INSTALLED="${INSTALLED}  - $1"$'\n'; }
 skipped()   { SKIPPED="${SKIPPED}  - $1"$'\n'; }
+need_value() { # flag args-from-the-flag-on: exits 1 unless a value (not another flag) follows the flag
+  case "${2:-}" in ""|-*) die "$1 needs a value" ;; esac
+}
+
+# Sourced: the helpers only.
+if [ "${BASH_SOURCE[0]}" != "$0" ]; then return 0; fi
+
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+cd "$ROOT" || exit 1
+export COREPACK_ENABLE_DOWNLOAD_PROMPT=0
+
+# --- Subcommand and its flags --------------------------------------------------------------------------------------
+SUBCOMMAND="${1:-}" # "" is the developer setup
+case "$SUBCOMMAND" in infra|infra-push|services) shift ;; *) SUBCOMMAND="" ;; esac
+NO_INSTALL=0; YES=0; NO_DOCKER=0; SKIP_BROWSERS=0
+parse_args() { # the flags $SUBCOMMAND takes. One with a value: `sub:--flag) need_value "$@"; VAR="$2"; shift ;;`
+  while [ $# -gt 0 ]; do
+    case "$SUBCOMMAND:$1" in
+      *:-h|*:--help) usage; exit 0 ;;
+      :--no-install) NO_INSTALL=1 ;;
+      :--yes|:-y) YES=1 ;;
+      :--no-docker) NO_DOCKER=1 ;;
+      :--skip-browsers) SKIP_BROWSERS=1 ;;
+      *) err "unknown option '$1'"; usage >&2; exit 1 ;;
+    esac
+    shift
+  done
+}
+parse_args "$@"
 
 # --- 1. Environment ------------------------------------------------------------------------------------------------
 KERNEL="$(uname -s 2>/dev/null || echo unknown)"
@@ -82,6 +103,25 @@ case "$KERNEL" in
     fi ;;
   *) ENV=unknown; ENV_LABEL="$KERNEL" ;;
 esac
+
+# --- Subcommands branch off here -----------------------------------------------------------------------------------
+run_infra() { # setup.sh infra and infra-push (task 112)
+  echo "setup.sh $SUBCOMMAND comes with task 112 (owner and GCP admin setup)." >&2
+  exit 1
+}
+
+# Task 112 fills run_infra above and task 113 run_services below, each in its own lane.
+
+run_services() { # setup.sh services (task 113)
+  echo "setup.sh services comes with task 113 (local database and file storage without Docker)." >&2
+  exit 1
+}
+
+case "$SUBCOMMAND" in
+  infra|infra-push) run_infra ;;
+  services) run_services ;;
+esac
+
 say "Environment: $ENV_LABEL"
 
 if [ "$ENV" = windows ]; then
