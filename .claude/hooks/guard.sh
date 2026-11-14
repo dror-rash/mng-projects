@@ -390,8 +390,14 @@ common_of() { # dir: its git common dir, canonical
   local c; c="$(git -C "$1" rev-parse --path-format=absolute --git-common-dir 2>/dev/null)" && [ -n "$c" ] &&
     (cd "$c" 2>/dev/null && pwd -P)
 }
-normalize_url() { # lowercase; no scheme, user@, trailing / or .git; host:path as host/path
-  tr '[:upper:]' '[:lower:]' | sed -E 's#^[a-z0-9+.-]+://##; s#^[^@/]*@##; s#^([^/:]+):#\1/#; s#/+$##; s#\.git$##; s#/+$##'
+normalize_url() { # lowercase; no scheme, user@ or :port (scheme form), www., repeated or trailing /, .git;
+  # the scp form user@host:path as host/path
+  tr '[:upper:]' '[:lower:]' | sed -E '
+    /^[a-z0-9+.-]+:\/\//{ s#^[a-z0-9+.-]+://([^@/]*@)?([^/:]*)(:[0-9]*)?#\2#; b rest
+    }
+    s#^[^@/]*@##; s#^([^/:]+):#\1/#
+    :rest
+    s#/+#/#g; s#^www\.##; s#/$##; s#\.git$##; s#/$##'
 }
 remote_urls() { # dir: every fetch and push URL of every remote, normalized, one per line
   local r
