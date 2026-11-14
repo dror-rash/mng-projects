@@ -6,3 +6,4 @@ github_repository = "my-org/my-repo"
 alert_email     = "owner@example.com"
 billing_account = "000000-000000-000000"
 monthly_budget  = 25
+budget_currency = "USD" # the billing account's currency

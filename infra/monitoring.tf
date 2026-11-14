@@ -360,7 +360,7 @@ resource "google_billing_budget" "monthly" {
 
   amount {
     specified_amount {
-      currency_code = "USD" # must be the billing account's currency
+      currency_code = var.budget_currency # must be the billing account's currency
       units         = tostring(var.monthly_budget)
     }
   }

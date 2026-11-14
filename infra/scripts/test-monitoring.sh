@@ -42,7 +42,7 @@ SQL="$(resource google_monitoring_alert_policy sql_connections)"
 BUDGET="$(resource google_billing_budget monthly)"
 
 # --- Variables: set in terraform.tfvars only ---
-for v in alert_email billing_account monthly_budget; do
+for v in alert_email billing_account monthly_budget budget_currency; do
   check "variable $v exists" test -n "$(variable "$v")"
   check "variable $v has no default (set in terraform.tfvars)" not_in_block "$(variable "$v")" '^  default'
   check "variable $v is validated" in_block "$(variable "$v")" '^  validation \{'
@@ -186,7 +186,7 @@ check "sql: for 5 minutes" in_block "$SQL" 'duration += "300s"'
 check "the budget exists" test -n "$BUDGET"
 check "budget: on var.billing_account" in_block "$BUDGET" 'billing_account += var\.billing_account'
 check "budget: of var.monthly_budget" in_block "$BUDGET" 'units += tostring\(var\.monthly_budget\)'
-check "budget: in USD" in_block "$BUDGET" 'currency_code += "USD"'
+check "budget: in var.budget_currency (the billing account's currency)" in_block "$BUDGET" 'currency_code += var\.budget_currency'
 check "budget: this project only" in_block "$BUDGET" 'projects += \["projects/\$\{data\.google_project\.this\.number\}"\]'
 check "budget: at 50%, 90% and 100%" grep -qE '^  budget_thresholds += \[0\.5, 0\.9, 1(\.0)?\]$' "$MON"
 check "budget: one rule per threshold" in_block "$BUDGET" 'for_each += local\.budget_thresholds'
