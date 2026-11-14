@@ -107,9 +107,25 @@ expect 0 "allows setup.sh services --yes"               Bash "$(bash_ "bash scri
 expect 0 "allows sed on setup.sh and infra/README.md"   Bash "$(bash_ "sed -n 1,5p scripts/setup.sh infra/README.md")"
 # Reading a Secret Manager value with the words quoted or escaped
 for c in "gcloud secrets versions \"access\" latest --secret=x" "gcloud 'secrets' versions access latest --secret=x" \
-  "gcloud secrets versions acc\\ess latest --secret=x" "g''cloud secrets versions access latest --secret=x"; do
+  "gcloud secrets versions acc\\ess latest --secret=x" "g''cloud secrets versions access latest --secret=x" \
+  "gcloud secrets --project=p versions access latest --secret=x" "gcloud secrets --project p versions access latest" \
+  "gcloud run --region r deploy shell --image x" "gcloud run services --region=r update shell" \
+  "gcloud run \"deploy\" shell --image x" "gcloud run services 'update' shell" "terraform \"apply\"" \
+  "terraform 'destroy' -auto-approve" "t''erraform apply" "git push \"--force\" origin feat/x" "git push -\"f\" origin feat/x" \
+  "git push origin --for\\ce"; do
   expect 2 "refuses: $c"                                Bash "$(bash_ "$c")"
 done
+expect 0 "allows gcloud secrets versions list after a flag" Bash "$(bash_ "gcloud secrets --project=p versions list x")"
+expect 0 "allows gcloud run services describe after a flag" Bash "$(bash_ "gcloud run services --region=r describe shell")"
+# Read-only exemptions: never less (LESSOPEN), git only as a builtin without -c (aliases run commands)
+expect 2 "refuses less on setup.sh with infra"          Bash "$(bash_ "less scripts/setup.sh infra")"
+expect 2 "refuses git -c with setup.sh infra"           Bash "$(bash_ "git -c x=y add scripts/setup.sh infra")"
+expect 2 "refuses an alias from git -c running setup.sh" Bash "$(bash_ "git -c alias.x='!bash scripts/setup.sh infra' x")"
+expect 2 "refuses an alias from git -c with a commit"   Bash "$(bash_ "git -c alias.ci='!git commit --no-verify' ci -m x")"
+expect 2 "refuses an alias from git -c with a push"     Bash "$(bash_ "git -c 'alias.p=push --force' p")"
+expect 2 "refuses an alias from --config-env with a commit" Bash "$(bash_ "A='!git commit -n' git --config-env=alias.ci=A ci")"
+expect 2 "refuses an alias from GIT_CONFIG_* with a commit" Bash "$(bash_ "GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=alias.ci GIT_CONFIG_VALUE_0='!git commit -n' git ci")"
+expect 0 "allows git -c alias without a commit or push" Bash "$(bash_ "git -c alias.st=status st")"
 
 # Force pushes in every spelling
 expect 2 "refuses a +refspec push"                      Bash "$(bash_ "git push origin +main")"
@@ -183,6 +199,38 @@ expect 2 "refuses --no-verify after a quoted \"<<EOF\""  Bash "$(bash_ "echo \"<
 git commit --no-verify -m 'docs: x'")"
 expect 2 "refuses --no-verify after a quoted '<<EOF'"    Bash "$(bash_ "echo '<<EOF'
 git commit --no-verify -m 'docs: x'")"
+# Not heredocs either: a << in a comment, in $((…)) or ${…}; and a delimiter with quotes, a backslash or a dash
+# (re-review); a heredoc body line that would be refused on its own is refused (fail closed)
+NV="git commit --no-verify -m 'docs: x'"
+for c in "cat <<A # <<B
+A
+$NV
+B" "cat <<A; echo \$((1<<B))
+A
+$NV
+B" "true # <<X
+$NV" "echo \$((1<<X))
+$NV" "x=\${y/<<Z/}
+$NV" "cat <<E\\OF
+$NV" "cat <<E\\OF
+E
+$NV
+EOF" "cat <<'E'OF
+E
+$NV
+EOF" "cat <<\"E\"OF
+E
+$NV
+EOF" "cat <<E-F
+E
+$NV
+E-F" "cat <<EOF
+$NV
+EOF" "cat <<EOF
+bash scripts/setup.sh infra
+EOF"; do
+  expect 2 "refuses: $(printf '%s' "$c" | tr '\n' '/')"  Bash "$(bash_ "$c")"
+done
 expect 0 "allows -main in a message"                    Bash "$(bash_ "git commit -m \"docs: the -main flag\"")"
 expect 0 "allows -only and -config in a message"        Bash "$(bash_ "git commit -m 'docs: -only and -config'")"
 
@@ -295,6 +343,24 @@ docs: x
 Run bash scripts/setup.sh infra; then ./scripts/setup.sh infra-push.
 EOF" "$REPO"
 stage "$WT" "$FEATURE";   guard_cmd 2 "refuses setup.sh infra after a commit"  "cd '$WT' && git commit -m 'docs: x' && bash scripts/setup.sh infra" "$REPO"
+# A heredoc as the commit message (-m "$(cat <<'EOF' … EOF)") is a message, not a run (QA); a line in it that is
+# a refused command on its own still counts
+MSG="docs: setup.sh infra and infra-push (task 112)
+
+Fill the setup.sh infra and infra-push arms; bash -c and eval aren't used.
+- \`bash scripts/setup.sh infra\` pulls the config; \`setup.sh infra-push\` stores it.
+Run bash scripts/setup.sh infra on a second machine, then git commit as usual.
+
+Co-Authored-By: x <x@example.com>"
+stage "$WT" "$FEATURE";   guard_cmd 0 "allows a \$(cat <<'EOF') commit message that mentions setup.sh infra" "cd '$WT' && git commit -m \"\$(cat <<'EOF'
+$MSG
+EOF
+)\"" "$REPO"
+stage "$WT" "$FEATURE";   guard_cmd 2 "refuses a \$(cat <<'EOF') commit message with a --no-verify commit line" "cd '$WT' && git commit -m \"\$(cat <<'EOF'
+$MSG
+git commit --no-verify -m 'docs: y'
+EOF
+)\"" "$REPO"
 
 echo; echo "$pass passed, $fail failed"
 [ "$fail" = 0 ]
