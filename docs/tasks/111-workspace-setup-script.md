@@ -159,13 +159,27 @@ browsers, summary), tested with stubs like `test-lane.sh`. No new ADR (ADR-0013 
     `infra/README.md` has no runbook for removing a GCP admin yet.
   - A real `--no-install` run on the owner's Mac (lane 1): Node 23.6.0 fails the `.nvmrc` major (22) check, as
     specified; the main checkout's containers hold 5433 and 4443, so a lane (another compose project) warns.
+- 2026-11-14 – Reviews: the Node check stays strict (== `.nvmrc`, coordinator). Fixed, each with a red check first
+  (113 passed, 19 failed; the Homebrew-prompt and WSL checks are test-only, shown to fail on a mutated script):
+  - tests: the exact Homebrew prompt and its yes path; WSL without Docker; the owner's Mac (Node 23, no manager)
+    and the fnm download's success path (the test's copy of `setup.sh` pins the hash of a local zip);
+  - no sudo: Docker is dropped with a warning, so a sandbox still reaches `.env`, install and the task 113 message;
+    tools that must install stop before asking, as does a distro without `apt-get`;
+  - Playwright's `--with-deps` (sudo apt-get) only when approved, in the plan or asked on its own (SUP-2);
+  - after a Node change: the fnm profile line or `nvm use`, and "open a new shell before pnpm dev";
+  - the `.env` temp file is removed on exit, INT and TERM; `.gitignore` ignores `.env.*` except `.env.example`
+    (SUP-1; SEC-31 partly fixed); "created" only when `.env` was;
+  - `packageManager` pinned with `+sha512` (npm registry `dist.integrity` for pnpm 10.18.0, checked against the
+    tarball; corepack accepts it and refuses a wrong hash); hints and summary wording; register updated.
 
 ## Parking lot
 - `.devcontainer/devcontainer.json` (Node 22, docker-in-docker, forwarded ports) for Codespaces.
 - A `--check` flag that runs lint, typecheck and unit tests at the end.
 - Copying personal Claude Code settings or memory between machines.
 - A `setup.ps1` that installs WSL2 from native Windows.
-- Shell profile lines for a freshly installed fnm (`eval "$(fnm env --use-on-cd)"`): the script prints the hint
-  instead of editing `~/.bashrc` / `~/.zshrc`.
+- Writing the fnm profile line (`eval "$(fnm env --use-on-cd)"`) into `~/.bashrc` / `~/.zshrc`: the script prints
+  it instead.
+- `package.json` `engines` → `22.x`, to match the strict `.nvmrc` check (coordinator, 2026-11-14).
+- An interactive rerun on Linux asks about chromium's system libraries each time (it can't tell they're there).
 - Port warnings that recognize another checkout's compose containers (`docker ps --filter publish=<port>`).
 - A runbook in `infra/README.md` for removing a GCP admin (remove in Terraform, rotate the generated secrets).

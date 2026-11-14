@@ -10,10 +10,10 @@ The one list of known security gaps and their status. The process that feeds it 
 |---|---|---|---|---|---|
 | P0 – fix now | 0 | 0 | 0 | 5 | 0 |
 | P1 – before real customer data on `main` | 2 | 0 | 2 | 10 | 0 |
-| P2 – hardening | 20 | 0 | 0 | 0 | 1 |
+| P2 – hardening | 19 | 0 | 1 | 0 | 1 |
 | P3 – info / decide | 11 | 0 | 0 | 0 | 0 |
 
-Counted from the rows below (2026-11-13). "Fixed" includes SEC-14 and SEC-17, merged but not live until the owner applies their Terraform, and rows whose code part is fixed with an owner setting left in the row (SEC-11, SEC-15).
+Counted from the rows below (2026-11-14). "Fixed" includes SEC-14 and SEC-17, merged but not live until the owner applies their Terraform, and rows whose code part is fixed with an owner setting left in the row (SEC-11, SEC-15).
 
 No Critical findings. One High (SEC-01). Nothing in the review showed one workspace's data reaching another through the app: every page, route handler and server action checks access on the server, and row-level security is on for every app table.
 
@@ -69,7 +69,7 @@ No Critical findings. One High (SEC-01). Nothing in the review showed one worksp
 | SEC-28 | Low | Users can't change their password, see their sessions or sign out everywhere; sessions last 7 days and slide | Auth | M | open | AUTH-6 |
 | SEC-29 | Low | Invites are multi-use bearer links not bound to an email; a GET can plant another invite in a victim's cookie; the cookie survives sign-out | Auth | M | open | AUTH-7 |
 | SEC-30 | Low | `ci.yml` uploads Playwright reports with traces to a public repo | CI/CD | S | open | SUP-9 |
-| SEC-31 | Low | `.gitignore` covers only exact names (`.env.production`, other `*.tfvars`, key files, `gha-creds-*` aren't ignored) | Supply chain | S | open | SUP-10 |
+| SEC-31 | Low | `.gitignore` covers only exact names (`.env.production`, other `*.tfvars`, key files, `gha-creds-*` aren't ignored) | Supply chain | S | partly fixed (task 111): `.env.*` is ignored except `.env.example`, and `gha-creds-*.json` already was; open: `*.tfvars` outside `infra/terraform.tfvars`, key files | SUP-10 |
 | SEC-32 | Info | Data Access audit logs (Secret Manager, STS) and container scanning are off; the only GCP Owner is one personal account | Infra | S | open (**owner:** check 2-step verification and a hardware key) | INF-13 |
 | SEC-33 | Low | The leak suite misses 9 scenarios: the members page (partner, worker), admin-only forms posted by partners and workers, own partner page, parent id in the page source, sub-company site refusal, files after unassigning, readings after a project delete | Access | M | open (to the planner) | ACC report §2 |
 | SEC-43 | Low | `tinypool` 1.1.1 has two Critical prototype-pollution advisories (GHSA-5gmw-xhrv-c9v3, GHSA-85c8-ppgw-ccpr); it comes in through `better-auth`'s optional `vitest` peer, so `pnpm audit --prod` lists it, but only the test runner loads it | Supply chain | S | accepted (owner, 2026-11-08) until a vitest upgrade brings `tinypool` ≥2.1.2; both ignored in `pnpm.auditConfig.ignoreGhsas` | task 082 audit |
@@ -88,7 +88,7 @@ No Critical findings. One High (SEC-01). Nothing in the review showed one worksp
 | SEC-36 | Info | Some BEFORE triggers raise telling errors about other workspaces before RLS refuses the row (only through raw SQL) | DB | open | ACC-7 |
 | SEC-37 | Info | Any published form version is fillable; matters once versioning lands | DB | open (parked in task 061) | ACC-8 |
 | SEC-38 | Info | Better Auth's tables have no RLS by design; one unjoined `user` lookup would expose emails | DB | open (lint rule) | ACC-10 |
-| SEC-39 | Info | The placeholder secret in `.env.example` would be accepted; `AUTH_DISABLE_RATE_LIMIT` ships in the bundle (only an env var enables it, and deploys replace the env) | Auth | open | AUTH-8, SUP-11 |
+| SEC-39 | Info | The placeholder secret in `.env.example` would be accepted; `AUTH_DISABLE_RATE_LIMIT` ships in the bundle (only an env var enables it, and deploys replace the env) | Auth | open; a local `.env` now gets a random secret from `scripts/setup.sh` (task 111) | AUTH-8, SUP-11 |
 | SEC-40 | Info | Any same-repo PR author can print the preview DB secrets (preview data only); fine with one collaborator | CI/CD | open (proposed: accept while the owner is the only collaborator; revisit before adding one) | INF-14 |
 | SEC-41 | Info | Terraform state holds the generated passwords; the state bucket is owner-only and versioned | Infra | open (proposed: accept, expected for `random_password`) | SUP-12 |
 | SEC-49 | Info | `next-intl`'s build plugin loads native `@swc/core` and `@parcel/watcher` (for its message extractor, unused) at build time; pnpm doesn't run their install scripts | Supply chain | open (optional: list them in `neverBuiltDependencies`) | task 094 review |
@@ -117,3 +117,4 @@ No Critical findings. One High (SEC-01). Nothing in the review showed one worksp
 - 2026-11-10 – SEC-07 partly fixed (PR #84, PR #87). SEC-48 added (P2): no storage quota or bucket-wide sweep.
 - 2026-11-12 – P1 wrap-up: every P1 PR is merged (owner lifted the pre-demo hold on 2026-11-11). SEC-16 fixed (PR #77); SEC-15 fixed (WIF: PR #79, applied, hand check PR #91; fork approval stays an owner setting); SEC-14 (PR #78) and SEC-17 (PR #82) fixed, live once the owner applies; SEC-07's cleanup is PR #92 (replaced #87), its real-Cloud-Storage hand check waits for the preview database rebuild (task 110); SEC-06: `main` runs as `app_runtime`, closes with task 109; SEC-18's PR #90 replaced #81. Counts recomputed from the rows, with a "Partly fixed" column (SEC-06, SEC-07); the previous table still showed 2026-11-08's numbers.
 - 2026-11-13 – SEC-49, SEC-50 and SEC-51 added (P3) from task 094's security review: next-intl's native build dependencies, its version overrides, and the `locale` cookie's missing `Secure` flag. Counts recomputed from the rows.
+- 2026-11-14 – Task 111 (workspace setup script): SEC-31 partly fixed (`.env.*` ignored except `.env.example`); SEC-39 notes that a local `.env` now gets a random `BETTER_AUTH_SECRET`. Counts recomputed from the rows.
