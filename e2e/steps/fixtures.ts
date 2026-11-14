@@ -1,6 +1,7 @@
-import { type APIRequestContext, type Browser, type BrowserContext, expect, type Page } from "@playwright/test";
+import { type APIRequestContext, type Browser, type BrowserContext, expect, type Page, type TestInfo } from "@playwright/test";
 import { test as base, createBdd } from "playwright-bdd";
 
+import { describePage } from "../support/failure-diagnostics";
 import { createPacer, limitedPath } from "../support/pacing";
 
 export type Account = { email: string; password: string };
@@ -88,11 +89,33 @@ export async function userId(page: Page): Promise<string> {
 }
 
 /** Every scenario gets its own unique account, so runs never collide in a persistent database. */
-export const test = base.extend<{ account: Account; state: ScenarioState; people: People; authTimeline: void }>({
+/**
+ * When a scenario fails against a deployment (BASE_URL), where the page was and what it showed, as a text
+ * attachment the reporters print with the failure (task 114). Traces stay off there: the CI log is public.
+ */
+async function attachPageOnFailure(page: Page, testInfo: TestInfo) {
+  if (!process.env.BASE_URL || testInfo.status === testInfo.expectedStatus || page.isClosed()) return;
+  try {
+    const shown = (role: "heading" | "alert") => page.getByRole(role).filter({ visible: true }).allInnerTexts();
+    const [headings, errors] = await Promise.all([shown("heading"), shown("alert")]);
+    await testInfo.attach("page at failure", { body: describePage({ url: page.url(), headings, errors }), contentType: "text/plain" });
+  } catch {
+    // The page may be gone or navigating; the failure itself is what matters.
+  }
+}
+
+export const test = base.extend<{ account: Account; state: ScenarioState; people: People; authTimeline: void; pageOnFailure: void }>({
   authTimeline: [
     async ({ context }, use) => {
       watchAuthRequests(context);
       await use();
+    },
+    { auto: true },
+  ],
+  pageOnFailure: [
+    async ({ page }, use, testInfo) => {
+      await use();
+      await attachPageOnFailure(page, testInfo);
     },
     { auto: true },
   ],
