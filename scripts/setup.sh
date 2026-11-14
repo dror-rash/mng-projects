@@ -12,16 +12,20 @@
 #
 # Bash 3.2 compatible (macOS's bash): it runs before Node or pnpm exist. It never prints a secret, never changes
 # an existing .env, never runs pnpm db:generate, gcloud, gh or terraform, and uses sudo only for apt-get (its own,
-# and Playwright's --with-deps once approved) and an apt repository's key and list (add_apt_repo). Rerunning on a
-# set-up workspace installs nothing and changes no file.
+# and Playwright's --with-deps once approved), an apt repository's key and list (add_apt_repo), and, on Linux without
+# Docker, the createcluster.d drop-in that keeps postgresql-16 from creating a default cluster (task 113; it stays,
+# system-wide). Rerunning on a set-up workspace installs nothing and changes no file.
 # Tests: bash scripts/test-setup.sh, under /bin/bash; CI (Ubuntu) runs it with bash 5, so bash 3.2 is checked by
 # running it on macOS.
 #
 # Test hooks (scripts/test-setup.sh): sourced (. scripts/setup.sh), it only defines its helpers, so the tests call
 # them directly, and then SETUP_APT_ROOT puts add_apt_repo's files under a directory. SETUP_INTERACTIVE=1 treats
 # stdin as a terminal; SETUP_PROC_VERSION, SETUP_BREW_PREFIXES, SETUP_PORTS and SETUP_DB_TIMEOUT replace
-# /proc/version, Homebrew's install prefixes, the ports checked and the database wait (60 s); SETUP_PG_BIN replaces
-# /usr/lib/postgresql/16/bin (initdb, pg_ctl) and SETUP_OS_RELEASE /etc/os-release.
+# /proc/version, Homebrew's install prefixes, the ports checked and the database wait (60 s). SETUP_PG_BIN replaces
+# /usr/lib/postgresql/16/bin (initdb, pg_ctl, postgres) and SETUP_GCS_WAIT the storage emulator's start watch (1 s).
+# Both are read in a normal run too, because the tests run the whole setup with stub servers. SETUP_PG_BIN only names
+# programs run as the database's owner (and psql), which an environment that sets it could already put on PATH.
+# SETUP_OS_RELEASE replaces /etc/os-release, only when sourced.
 set -u
 
 # fnm for Linux and WSL when there is neither nvm nor fnm. To upgrade: change the version and both hashes together.
@@ -192,7 +196,8 @@ DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}/mng-projects"
 PG_BIN="${SETUP_PG_BIN:-/usr/lib/postgresql/16/bin}" # initdb and pg_ctl aren't on PATH on Debian or Ubuntu
 PG_ADMIN_URL="postgres://postgres:postgres@localhost:5433/postgres" # docker-compose.yml's throwaway credentials
 GCS_DIR="$DATA_HOME/fake-gcs-server-$GCS_VERSION"; GCS_BIN="$GCS_DIR/fake-gcs-server"
-GCS_PID="$DATA_HOME/fake-gcs-server.pid"; GCS_LOG="$DATA_HOME/fake-gcs-server.log"; STORAGE_ROOT="$DATA_HOME/storage"
+GCS_PID="$DATA_HOME/fake-gcs-server.pid"; GCS_LOG="$DATA_HOME/fake-gcs-server.log"
+OS_RELEASE="/etc/os-release"
 PG_PARENT=""; PG_DATA=""; PG_LOG=""
 pg_paths() { # sets PG_PARENT, PG_DATA, PG_LOG: in DATA_HOME, or as root in the postgres user's home
   local home=""
@@ -203,19 +208,38 @@ pg_paths() { # sets PG_PARENT, PG_DATA, PG_LOG: in DATA_HOME, or as root in the 
   else PG_PARENT="$DATA_HOME"; fi
   PG_DATA="$PG_PARENT/postgres"; PG_LOG="$PG_PARENT/postgres.log"
 }
-pid_alive() { # pid-file: true when the pid on its first line runs
+# Pid files are only trusted when the process is the program they're for: a pid may be reused after a restart.
+pid_of() { # pid-file: the number on its first line
   local pid; pid="$(head -1 "$1" 2>/dev/null)"
   case "$pid" in ""|*[!0-9]*) return 1 ;; esac
-  kill -0 "$pid" 2>/dev/null
+  echo "$pid"
 }
+pid_cmd() { # pid: its command line
+  if [ -r "/proc/$1/cmdline" ]; then tr '\0' ' ' < "/proc/$1/cmdline"; else ps -ww -o args= -p "$1" 2>/dev/null; fi
+}
+pid_is() { # pid-file text: true when its pid runs, with text in its command line
+  local pid; pid="$(pid_of "$1")" && kill -0 "$pid" 2>/dev/null || return 1
+  case " $(pid_cmd "$pid") " in *"$2"*) return 0 ;; esac
+  return 1
+}
+pid_stale() { # pid-file text: true when its pid doesn't run, or runs a command line (readable) without text
+  local pid cmd; pid="$(pid_of "$1")" && kill -0 "$pid" 2>/dev/null || return 0
+  cmd="$(pid_cmd "$pid")"; [ -n "$cmd" ] || return 1
+  case " $cmd " in *"$2"*) return 1 ;; esac
+  return 0
+}
+gcs_running() { pid_is "$GCS_PID" "fake-gcs-server "; }
 as_pg() { # a database server command as the database's owner: the current user, or as root the postgres user
   if [ -z "$SUDO" ]; then runuser -u postgres -- "$@"; else "$@"; fi
 }
 pg_psql() { if [ -x "$PG_BIN/psql" ]; then "$PG_BIN/psql" "$@"; else psql "$@"; fi; }
 pg_installed() { [ -x "$PG_BIN/initdb" ] && [ -x "$PG_BIN/pg_ctl" ]; }
-pg_running() { [ -f "$PG_DATA/PG_VERSION" ] && as_pg "$PG_BIN/pg_ctl" -D "$PG_DATA" status >/dev/null 2>&1; }
+pg_running() { # pg_ctl status alone would trust a postmaster.pid naming a reused pid
+  [ -f "$PG_DATA/PG_VERSION" ] && pid_is "$PG_DATA/postmaster.pid" "bin/postgres " &&
+    as_pg "$PG_BIN/pg_ctl" -D "$PG_DATA" status >/dev/null 2>&1
+}
 os_codename() { # this distribution's codename (VERSION_CODENAME), only [a-z0-9]; false otherwise
-  local c; c="$(sed -n 's/^VERSION_CODENAME=//p' "${SETUP_OS_RELEASE:-/etc/os-release}" 2>/dev/null | head -1 | tr -d '"')"
+  local c; c="$(sed -n 's/^VERSION_CODENAME=//p' "$OS_RELEASE" 2>/dev/null | head -1 | tr -d '"')"
   case "$c" in ""|*[!a-z0-9]*) return 1 ;; esac
   echo "$c"
 }
@@ -245,26 +269,34 @@ install_pg() {
 }
 
 # The database running on localhost:5433: initdb the first time (user postgres, password postgres; password auth over
-# TCP and trust on its own socket, like the Docker image), then pg_ctl unless it runs. False with the reason.
+# TCP and trust on its own socket, like the Docker image), then pg_ctl unless it runs. The directories are created and
+# written by the database's owner (as root: the postgres user), never through a symlink. False with the reason.
 pg_up() {
   local pw ok=1
+  if [ -L "$PG_PARENT" ] || [ -L "$PG_DATA" ]; then
+    err "$PG_PARENT or $PG_DATA is a symlink: refusing to put the database there"; return 1
+  fi
   if [ ! -f "$PG_DATA/PG_VERSION" ]; then
-    mkdir -p "$PG_PARENT" || { err "couldn't create $PG_PARENT"; return 1; }
-    if [ -z "$SUDO" ] && ! { chown postgres:postgres "$PG_PARENT" && chmod 700 "$PG_PARENT"; }; then
-      err "couldn't hand $PG_PARENT to the postgres user"; return 1
-    fi
+    as_pg mkdir -p -m 700 "$PG_PARENT" || { err "couldn't create $PG_PARENT"; return 1; }
     pw="$(mktemp)" || { err "mktemp failed"; return 1; }
-    # The compose file's throwaway password; readable by the postgres user when run as root.
+    # The compose file's throwaway password; readable by the postgres user when run as root. Collation: ICU en-US,
+    # close to the Docker image's glibc en_US.utf8 (not identical in every edge case) without the locales package;
+    # C.UTF-8, which every Debian and Ubuntu has, for the rest.
     if printf 'postgres\n' > "$pw" && chmod 644 "$pw" &&
       as_pg "$PG_BIN/initdb" -D "$PG_DATA" -U postgres --pwfile="$pw" --auth-local=trust --auth-host=scram-sha-256 \
         -E UTF8 --locale=C.UTF-8 --locale-provider=icu --icu-locale=en-US >/dev/null; then ok=0; fi
     rm -f "$pw"
     [ "$ok" = 0 ] || { err "initdb failed for $PG_DATA"; return 1; }
-    # Its sockets in its own directory: the default /var/run/postgresql belongs to the postgres user.
-    printf "unix_socket_directories = '%s'\n" "$(printf '%s' "$PG_DATA" | sed "s/'/''/g")" >> "$PG_DATA/postgresql.conf" ||
-      { err "couldn't write $PG_DATA/postgresql.conf"; return 1; }
+  fi
+  # Its sockets in its own directory: the default /var/run/postgresql belongs to the postgres user.
+  if ! grep -q '^unix_socket_directories' "$PG_DATA/postgresql.conf" 2>/dev/null; then
+    printf "unix_socket_directories = '%s'\n" "$(printf '%s' "$PG_DATA" | sed "s/'/''/g")" |
+      as_pg tee -a "$PG_DATA/postgresql.conf" > /dev/null || { err "couldn't write $PG_DATA/postgresql.conf"; return 1; }
   fi
   pg_running && return 0
+  if [ -f "$PG_DATA/postmaster.pid" ] && pid_stale "$PG_DATA/postmaster.pid" "bin/postgres "; then
+    as_pg rm -f "$PG_DATA/postmaster.pid" || { err "couldn't remove the stale $PG_DATA/postmaster.pid"; return 1; }
+  fi
   as_pg "$PG_BIN/pg_ctl" -D "$PG_DATA" -l "$PG_LOG" -w -t 60 -o "-p 5433 -h localhost" start >/dev/null ||
     { err "Postgres didn't start on localhost:5433: is the port taken (lsof -i :5433)? See $PG_LOG"; return 1; }
 }
@@ -300,33 +332,41 @@ gcs_fetch() {
   rm -rf "$tmp"
   return 1
 }
-# Starts the emulator in the background with docker-compose.yml's arguments, on 127.0.0.1 only: the seed buckets from
-# packages/storage/dev-bucket (only read), files under STORAGE_ROOT (the image's /storage needs root). False with the
-# reason when it isn't running a second later.
+# Starts the emulator in the background with docker-compose.yml's arguments, on 127.0.0.1 only, with the seed buckets
+# from packages/storage/dev-bucket (only read). Uploads stay in memory (-backend memory): 1.52.2's filesystem backend
+# joins object names to its root unescaped, so an upload named ../../.bashrc writes outside it (SEC-52). They're gone
+# when the emulator stops. Watches it for SETUP_GCS_WAIT seconds (1): false with the reason when it has ended by then,
+# as it does at once when the port is taken. (An answering port can't tell whose server it is.)
 gcs_start() {
-  local nohup=""
-  has nohup && nohup=nohup
-  mkdir -p "$STORAGE_ROOT" || { err "couldn't create $STORAGE_ROOT"; return 1; }
+  local nohup="" n i=0 pid
+  has nohup && nohup="nohup"
+  mkdir -p "$DATA_HOME" || { err "couldn't create $DATA_HOME"; return 1; }
   ${nohup:+"$nohup"} "$GCS_BIN" -scheme http -host 127.0.0.1 -port 4443 -public-host localhost:4443 \
-    -external-url http://localhost:4443 -data "${ROOT:-$PWD}/packages/storage/dev-bucket" -filesystem-root "$STORAGE_ROOT" \
+    -external-url http://localhost:4443 -backend memory -data "${ROOT:-$PWD}/packages/storage/dev-bucket" \
     -cors-headers Content-Type,Content-Disposition,x-goog-if-generation-match,x-goog-content-length-range \
     < /dev/null >> "$GCS_LOG" 2>&1 &
-  echo "$!" > "$GCS_PID"
-  sleep 1
-  pid_alive "$GCS_PID" && return 0
+  pid=$!
+  echo "$pid" > "$GCS_PID"
+  n="$(awk -v w="${SETUP_GCS_WAIT:-1}" 'BEGIN { n = int(w * 10); print (n < 1 ? 1 : n) }')"
+  while [ "$i" -lt "$n" ]; do
+    sleep 0.1; i=$((i + 1))
+    kill -0 "$pid" 2>/dev/null || break
+  done
+  kill -0 "$pid" 2>/dev/null && return 0
   rm -f "$GCS_PID"
   err "fake-gcs-server didn't start on localhost:4443: is the port taken (lsof -i :4443)? See $GCS_LOG"
   return 1
 }
-gcs_up() { pid_alive "$GCS_PID" || { gcs_fetch && gcs_start; }; }
+gcs_up() { gcs_running && return 0; rm -f "$GCS_PID"; gcs_fetch && gcs_start; }
 
 need_value() { # flag args-from-the-flag-on: exits 1 unless a value (not another flag) follows the flag
   case "${2:-}" in ""|-*) die "$1 needs a value" ;; esac
 }
 
-# Sourced: the helpers only. SETUP_APT_ROOT (a test hook) puts apt's files under a directory, and only when sourced.
+# Sourced: the helpers only. The test hooks SETUP_APT_ROOT (apt's files under a directory) and SETUP_OS_RELEASE are
+# read only when sourced.
 APT_ROOT=""
-if [ "${BASH_SOURCE[0]}" != "$0" ]; then APT_ROOT="${SETUP_APT_ROOT:-}"; return 0; fi
+if [ "${BASH_SOURCE[0]}" != "$0" ]; then APT_ROOT="${SETUP_APT_ROOT:-}"; OS_RELEASE="${SETUP_OS_RELEASE:-$OS_RELEASE}"; return 0; fi
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT" || exit 1
@@ -386,22 +426,27 @@ run_services() { # setup.sh services [--stop] (task 113): the database and file 
     if pg_installed && pg_running; then
       as_pg "$PG_BIN/pg_ctl" -D "$PG_DATA" -m fast -w stop >/dev/null || { err "pg_ctl couldn't stop Postgres"; code=1; }
     fi
-    if pid_alive "$GCS_PID"; then
-      pid="$(head -1 "$GCS_PID")"; kill "$pid" 2>/dev/null
+    if gcs_running; then
+      pid="$(pid_of "$GCS_PID")"; kill "$pid" 2>/dev/null
       for _ in 1 2 3 4 5 6 7 8 9 10; do kill -0 "$pid" 2>/dev/null || break; sleep 0.5; done
       if kill -0 "$pid" 2>/dev/null; then err "fake-gcs-server (pid $pid) is still running"; code=1; fi
     fi
-    pid_alive "$GCS_PID" || rm -f "$GCS_PID"
+    gcs_running || rm -f "$GCS_PID"
     [ "$code" = 0 ] && say "Stopped: Postgres (localhost:5433) and fake-gcs-server (localhost:4443)."
     exit "$code"
   fi
-  if ! pg_installed || [ ! -f "$PG_DATA/PG_VERSION" ]; then
-    err "no database here yet: run bash scripts/setup.sh first"; code=1
+  if [ ! -f "$PG_DATA/PG_VERSION" ] && has docker && docker info >/dev/null 2>&1; then
+    say "Uses Docker here: pnpm db:up starts the database and file storage."; exit 1
+  fi
+  if [ ! -f "$PG_DATA/PG_VERSION" ]; then err "no database here yet: run bash scripts/setup.sh first"; code=1
+  elif ! pg_installed; then
+    err "Postgres 16 isn't installed any more (a restarted sandbox can drop packages); its data in $PG_DATA is kept: rerun bash scripts/setup.sh"
+    code=1
   elif pg_up; then say "Postgres 16: running on localhost:5433 ($PG_DATA)"
   else code=1; fi
-  if pid_alive "$GCS_PID"; then say "fake-gcs-server: running on localhost:4443"
-  elif [ ! -x "$GCS_BIN" ]; then err "no fake-gcs-server here yet: run bash scripts/setup.sh first"; code=1
-  elif gcs_start; then say "fake-gcs-server: running on localhost:4443"
+  if gcs_running; then say "fake-gcs-server: running on localhost:4443 (uploaded files are kept in memory)"
+  elif [ ! -x "$GCS_BIN" ]; then rm -f "$GCS_PID"; err "no fake-gcs-server here yet: run bash scripts/setup.sh first"; code=1
+  elif rm -f "$GCS_PID" && gcs_start; then say "fake-gcs-server: running on localhost:4443 (uploaded files are kept in memory)"
   else code=1; fi
   exit "$code"
 }
@@ -507,11 +552,13 @@ if anything_missing; then say "Missing or wrong:"; report_missing; else say "Too
 
 # --- 9. Ports (a warning only) -------------------------------------------------------------------------------------
 port_taken() { (exec 3<>"/dev/tcp/127.0.0.1/$1") 2>/dev/null; }
-ours_running() { # db|storage: the compose service, or the no-Docker setup's own server (task 113, by its pid file)
-  case "$1" in
-    db) pid_alive "$PG_DATA/postmaster.pid" && return 0 ;;
-    storage) pid_alive "$GCS_PID" && return 0 ;;
-  esac
+ours_running() { # db|storage: the compose service, or (when the no-Docker setup runs) its own server (task 113)
+  if [ "$ENV" = linux ] && [ "$NO_DOCKER" = 0 ] && [ "$DOCKER" != ok ]; then
+    case "$1" in
+      db) pg_running && return 0 ;;
+      storage) gcs_running && return 0 ;;
+    esac
+  fi
   [ "$DOCKER" = ok ] && [ -n "$(docker compose ps -q --status running "$1" 2>/dev/null)" ]
 }
 pg_paths
@@ -784,6 +831,9 @@ if [ -n "$DOCKER_PROBLEM" ]; then
 fi
 [ -n "$DOCKER_HINT" ] && say "  $DOCKER_HINT"
 if [ "$FALLBACK" = 1 ]; then
+  [ -z "$PG_PROBLEM" ] && say "  Database: Postgres 16 on localhost:5433, data in $PG_DATA."
+  [ -z "$STORAGE_PROBLEM" ] &&
+    say "  File storage: fake-gcs-server on localhost:4443; uploaded files are kept in memory, gone when it stops."
   say "  After a restart: bash scripts/setup.sh services starts the database and file storage (--stop stops them)."
   [ -n "$PG_PROBLEM" ] && say "  PostgreSQL 16 $PG_PROBLEM. Unit tests (\`pnpm test\`) work without it."
   [ -n "$STORAGE_PROBLEM" ] && say "  File storage: $STORAGE_PROBLEM."
