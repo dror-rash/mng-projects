@@ -30,6 +30,13 @@ pnpm storybook          # UI workbench :6006
   installing anything (`--yes` doesn't ask, except before installing Homebrew itself); `--no-install` only checks;
   `--no-docker` and `--skip-browsers` skip those steps. Rerunning it is safe: it never changes an existing `.env`.
 - After a restart: `pnpm db:up` starts the database and file storage again.
+- Without Docker (Linux sandboxes such as claude.ai/code), `setup.sh` runs Postgres 16 and the file storage emulator
+  directly; after a restart, `bash scripts/setup.sh services` starts them again (`--stop` stops them).
+  - The database's data is in `~/.local/share/mng-projects/postgres`. As root it's in the postgres user's home
+    (`/var/lib/postgresql/mng-projects/postgres`) and runs as that user. The summary prints the path.
+  - Uploaded files stay in the emulator's memory: they're gone when it stops.
+  - Installing Postgres adds `/etc/postgresql-common/createcluster.d/mng-projects.conf` (`create_main_cluster =
+    false`). It stays after setup and applies system-wide: later `postgresql-*` packages create no default cluster.
 - **Windows:** install WSL2 (`wsl --install -d Ubuntu`) and Docker Desktop with WSL integration turned on for that
   distro, then clone and run everything inside WSL. PowerShell and cmd aren't supported.
 
