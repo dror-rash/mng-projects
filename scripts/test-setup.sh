@@ -108,6 +108,18 @@ run() { # [VAR=value ...] [-- args...]: runs setup.sh in the world's repo; sets 
   CODE=$?
 }
 
+call() { # [VAR=value ...] -- code: sources setup.sh (its helpers only) in the world's repo, then runs code with them
+  local envs=()
+  while [ $# -gt 0 ] && [ "$1" != -- ]; do envs+=("$1"); shift; done
+  [ $# -gt 0 ] && shift
+  : > "$W/log"; mkdir -p "$W/tmp"
+  ( cd "$W/repo" && /usr/bin/env -i HOME="$W/home" PATH="$W/bin" STUB_LOG="$W/log" STUB_STATE="$W/state" \
+      STUB_AVAIL="$W/avail" STUB_BIN="$W/bin" SETUP_PROC_VERSION="$W/proc_version" SETUP_BREW_PREFIXES="$W/nobrew" \
+      TMPDIR="$W/tmp" ${envs[@]+"${envs[@]}"} /bin/bash -c '. scripts/setup.sh || exit 99; eval "$1"' setup-test "$1" ) \
+      < "${STDIN:-/dev/null}" > "$W/out" 2>&1
+  CODE=$?
+}
+
 logged()     { grep -Eq -- "$1" "$W/log"; }
 not_logged() { ! grep -Eq -- "$1" "$W/log"; }
 said()       { grep -Fq -- "$1" "$W/out"; }
@@ -363,6 +375,43 @@ EOF
   check "fnm download: a new shell before pnpm dev"          said_before "Node changed: open a new shell" "  Next: pnpm dev"
   check "fnm download: exits 0"                              code_is 0
 fi
+
+# --- Subcommands, flags and usage -----------------------------------------------------------------------------------
+world; run -- --help
+check "--help: prints the usage line"                       said "bash scripts/setup.sh [--no-install] [--yes] [--no-docker] [--skip-browsers]"
+check "--help: explains every flag" \
+  sh -c "for f in --no-install --yes --no-docker --skip-browsers; do grep -Eq -- \"^  \$f \" '$W/out' || exit 1; done"
+check "--help: exits 0 running nothing"                     sh -c "[ $CODE = 0 ] && [ ! -s '$W/log' ] && ! grep -q Environment '$W/out'"
+world; run -- --yes --bogus
+check "an unknown flag: names it"                           said "setup: unknown option '--bogus'"
+check "an unknown flag: prints the usage"                   said "bash scripts/setup.sh [--no-install]"
+check "an unknown flag: exits 1 running nothing"            sh -c "[ $CODE = 1 ] && [ ! -s '$W/log' ] && [ ! -e '$W/repo/.env' ]"
+world; run -- frobnicate
+check "an unknown word: refused like a flag"                sh -c "[ $CODE = 1 ] && grep -qF \"unknown option 'frobnicate'\" '$W/out'"
+world; run -- --yes infra
+check "a subcommand comes first: after a flag it's unknown" sh -c "[ $CODE = 1 ] && grep -qF \"unknown option 'infra'\" '$W/out'"
+for sub in infra infra-push; do
+  world; run -- "$sub"
+  check "$sub: comes with task 112"                         said "setup.sh $sub comes with task 112 (owner and GCP admin setup)."
+  check "$sub: exits 1 running nothing"                     sh -c "[ $CODE = 1 ] && [ ! -s '$W/log' ] && [ ! -e '$W/repo/.env' ]"
+  check "$sub: not the developer flow"                      not_said "Environment:"
+done
+world; run -- services
+check "services: comes with task 113"                       said "setup.sh services comes with task 113 (local database and file storage without Docker)."
+check "services: exits 1 running nothing"                   sh -c "[ $CODE = 1 ] && [ ! -s '$W/log' ] && [ ! -e '$W/repo/.env' ]"
+world; run -- infra --no-docker
+check "a subcommand takes only its own flags"               sh -c "[ $CODE = 1 ] && grep -qF \"unknown option '--no-docker'\" '$W/out'"
+world; run -- services --help
+check "a subcommand's --help prints the usage, exits 0"     sh -c "[ $CODE = 0 ] && grep -qF 'bash scripts/setup.sh [--no-install]' '$W/out'"
+
+world; call -- 'true'
+check "sourced: defines helpers, runs and prints nothing"   sh -c "[ $CODE = 0 ] && [ ! -s '$W/out' ] && [ ! -s '$W/log' ]"
+call -- 'need_value --project my-project && echo next'
+check "need_value: a flag's value is there"                 sh -c "[ $CODE = 0 ] && grep -qx next '$W/out'"
+call -- 'need_value --project; echo next'
+check "need_value: a missing value fails naming the flag"   sh -c "[ $CODE = 1 ] && grep -qF 'setup: --project needs a value' '$W/out' && ! grep -q next '$W/out'"
+call -- 'need_value --project --force'
+check "need_value: a flag isn't a value"                    sh -c "[ $CODE = 1 ] && grep -qF -- '--project needs a value' '$W/out'"
 
 # --- Hints ---------------------------------------------------------------------------------------------------------
 world; state uname Linux; absent brew docker; run -- --no-install
