@@ -201,6 +201,17 @@ No new ADR (ADR-0013).
     `<<<` and a quoted `<<EOF` no longer start a heredoc (SUP-2, a gap on `main` too). Commands that mention
     neither setup nor gcloud and aren't commits skip the parsing.
   - SEC-13 notes that agents can still read the pulled files.
+- 2026-11-14 – Guard re-review (re-review and QA; QA passed). Red run: 216 passed / 28 failed.
+  - Regression fixed: a `<<` in a `#` comment, `$((…))`, `((…))` or `${…}` no longer queues a heredoc.
+    - The scanner follows the context (quotes, `$(…)`, arithmetic, `${…}`) across lines and into `"$(…)"`.
+    - The delimiter is the next word with its quotes and backslashes removed (`E\OF`, `'E'OF`, `"E"OF`, `E-F`).
+  - Fail-closed rule: a heredoc body line that is a `--no-verify` commit or a `setup.sh infra` run on its own is
+    refused. A `-m "$(cat <<'EOF' … EOF)"` message that only mentions them passes (the QA false positive).
+  - Read-only exemptions: `less` is gone. `git` counts only as a builtin without `-c` or `GIT_CONFIG_*`, which keeps
+    `git add scripts/setup.sh infra` allowed. A git alias set on the command line, in a command with a commit, push
+    or `setup.sh`, is refused.
+  - The terraform, Cloud Run, Secret Manager and force-push rules also run on the de-quoted words. gcloud flags may
+    sit between a group and its verb.
 
 ## Parking lot
 - A task to manage the state bucket's IAM and a second admin's roles in Terraform, when a second admin is named.
