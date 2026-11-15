@@ -117,6 +117,19 @@ describe("theme contrast", () => {
     expect(token(theme, name).toLowerCase()).toBe(value);
   });
 
+  // shadcn primitives pair each fill with its -foreground; a missing one is an undefined color.
+  it.each(["light", "dark"] as const)("%s: defines --accent-foreground for the flame accent", (theme) => {
+    expect(token(theme, "accent-foreground").toLowerCase()).toBe("#f6f7eb");
+  });
+
+  it("gives every color token a value in both themes and a Tailwind color", () => {
+    const names = (text: string) => [...text.matchAll(/(?<![\w-])--([\w-]+):/g)].map(([, name]) => name);
+    const colors = names(block("light")).filter((name) => name !== "radius");
+    const theme = css.slice(css.indexOf("@theme inline"));
+    expect(names(block("dark")).sort()).toEqual([...colors].sort());
+    for (const name of colors) expect(theme).toContain(`--color-${name}: var(--${name});`);
+  });
+
   // The outline button hovers to --secondary inside its --border: the two must stay apart.
   it.each(["light", "dark"] as const)("%s: a hovered outline button keeps its border", (theme) => {
     expect(contrast(token(theme, "secondary"), token(theme, "border"))).toBeGreaterThanOrEqual(1.08);
