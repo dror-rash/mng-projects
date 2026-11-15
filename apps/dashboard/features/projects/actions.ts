@@ -10,8 +10,10 @@ import { requireWorkspaceForAction } from "@/features/workspaces/require-workspa
 import { parseProjectInput } from "./project-input";
 import { parseProjectLifecycle } from "./project-lifecycle";
 import { checkCustomerAndSite, newProjectOwner } from "./project-owner-check";
+import { DEFAULT_STAGE, parseStageChoice } from "./project-stage";
 import { requireProjectAccess } from "./require-project-access";
 import { revalidateOverviews } from "./revalidate";
+import { recordFirstStage } from "./stage-history";
 
 // Each action does its reads and writes in one `withAccess` transaction, and redirects after it commits.
 
@@ -32,11 +34,18 @@ export async function createProjectAction(_prev: FormState, formData: FormData):
     if (!checked.ok) {
       return checked.state;
     }
+    // Inquiry unless the form's Stage select says otherwise (task 101).
+    const stage = parseStageChoice(formData);
+    if (!stage.ok) {
+      return invalid(stage.error, formData, stage.field);
+    }
 
     const id = crypto.randomUUID();
+    const value = stage.value ?? DEFAULT_STAGE;
     await getDb()
       .insert(schema.project)
-      .values({ id, ...checked.value, ...owner, ownerId: session.user.id, workspaceId: workspace.id });
+      .values({ id, ...checked.value, ...owner, stage: value, ownerId: session.user.id, workspaceId: workspace.id });
+    await recordFirstStage(id, value, session.user.id);
     return { id };
   });
   if (!("id" in result)) {

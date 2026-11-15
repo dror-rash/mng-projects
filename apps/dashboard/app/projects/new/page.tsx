@@ -9,6 +9,7 @@ import { listPartners } from "@/features/partners/queries";
 import { initialCustomerAndSite, newProjectCancelHref } from "@/features/projects/initial-customer-site";
 import { ProjectForm } from "@/features/projects/project-form";
 import { INTERNAL_OWNER } from "@/features/projects/project-owner";
+import { stageLabels } from "@/features/projects/stage-labels";
 import { canSeeSiteById } from "@/features/sites/queries";
 import { listSiteChoices } from "@/features/sites/site-choices";
 import { requireWorkspace } from "@/features/workspaces/require-workspace";
@@ -26,10 +27,11 @@ export default async function NewProjectPage({ searchParams }: { searchParams: S
   }
   // A partner's users create their own partner's projects, for its customers; admins choose the owner.
   const partnerId = workspace.role === "partner" ? workspace.partnerId : null;
-  const [customers, sites, partners] = await Promise.all([
+  const [customers, sites, partners, stages] = await Promise.all([
     listCustomerNames(session.user.id, workspace.id, partnerId),
     listSiteChoices(session.user.id, workspace.id, partnerId),
     workspace.role === "admin" ? listPartners(session.user.id, workspace.id) : null,
+    stageLabels(),
   ]);
   // No Owner select before the workspace has partners: the project is internal.
   const owners = partners?.length
@@ -63,6 +65,7 @@ export default async function NewProjectPage({ searchParams }: { searchParams: S
               owners={owners}
               customerRequired={partnerId !== null}
               canAddSite={workspace.role === "admin"}
+              stages={stages.options}
             />
           </CardContent>
         </Card>

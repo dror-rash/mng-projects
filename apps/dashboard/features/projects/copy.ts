@@ -3,7 +3,9 @@ import { and, asc, eq, getDb, isNull, schema, sql, withAccess } from "@repo/db";
 import { canSeeCustomerName, partnerServesCustomer } from "@/features/access/predicates";
 
 import { customerAllowed, mayCreateFor, siteAllowed } from "./project-owner-check";
+import { DEFAULT_STAGE } from "./project-stage";
 import { requireProjectAccess } from "./require-project-access";
+import { recordFirstStage } from "./stage-history";
 
 export type CopyProjectInput = {
   name: string;
@@ -51,6 +53,8 @@ export async function copyProject(userId: string, sourceId: string, input: CopyP
       ownerId: userId,
       copiedFromId: source.id,
     });
+    // A copy starts over at Inquiry (task 101), whatever the source's stage.
+    await recordFirstStage(id, DEFAULT_STAGE, userId);
 
     // A task's own customer stays only if the new owner may see its name (rule 7a): a partner's customers
     // for a partner's project, any the copier sees for an internal one (only admins create those).
