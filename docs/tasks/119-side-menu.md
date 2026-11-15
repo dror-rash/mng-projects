@@ -1,6 +1,6 @@
 # Task 119: A side menu instead of the dashboard's top header
 
-- **Status:** in-review
+- **Status:** done
 - **Milestone:** M21 Side menu and palette
 - **Zone / package:** `packages/ui` (new Sidebar parts and a Sheet, `lucide-react`), `apps/dashboard` (`features/layout`, the 27 pages that render `AppHeader`, `messages/en.json` and `he.json`), `e2e` (layout steps, screenshots)
 - **Feature file:** `docs/features/home-and-menu.feature` (`@task:119`); one `@task:119` outline in `docs/features/zone-navigation.feature`; one existing outline changed (below)
