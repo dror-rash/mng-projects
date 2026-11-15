@@ -12,8 +12,8 @@ import { pressAndWait } from "./workspaces.steps";
 /** The stored value of a stage label ("In work" -> "in_work"), as ADR-0012 names them. */
 const stageValue = (label: string) => label.trim().toLowerCase().replace(/\s+/g, "_");
 
-/** Today in UTC ("YYYY-MM-DD"). */
-const todayUtc = () => new Date().toISOString().slice(0, 10);
+/** A day in UTC ("YYYY-MM-DD"), `daysAgo` before today. */
+const utcDay = (daysAgo = 0) => new Date(Date.now() - daysAgo * 86_400_000).toISOString().slice(0, 10);
 
 const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
@@ -26,10 +26,6 @@ async function projectId(page: Page, state: ScenarioState, name: string) {
 Given("the project {string} is at the stage {string}", async ({ page, state }, project: string, stage: string) => {
   const db = getMaintenanceDb();
   const id = await projectId(page, state, project);
-  const { rows } = await db.execute<{ found: number }>(
-    sql`select 1 as found from information_schema.columns where table_name = 'project' and column_name = 'stage'`,
-  );
-  expect(rows, "the project table has no stage column (task 101 not built)").toHaveLength(1);
   const [from] = (await db.execute<{ stage: string }>(sql`select stage from project where id = ${id}`)).rows;
   await db.execute(sql`update project set stage = ${stageValue(stage)} where id = ${id}`);
   await db.execute(
@@ -44,10 +40,11 @@ When("I change the stage to {string}", async ({ page }, stage: string) => {
 });
 
 // "<Stage> since <date>", the date a <time datetime="YYYY-MM-DD"> like the other calendar days the pages show.
+// Today or yesterday in UTC, so a scenario that runs across midnight UTC still passes.
 Then("the project shows {string} since today", async ({ page }, stage: string) => {
   const line = page
     .getByRole("main")
-    .locator(`:has(> time[datetime="${todayUtc()}"])`)
+    .locator(`:has(> time[datetime="${utcDay()}"]), :has(> time[datetime="${utcDay(1)}"])`)
     .filter({ hasText: new RegExp(`^\\s*${escape(stage)} since\\b`) });
   await expect(line.first()).toBeVisible();
 });

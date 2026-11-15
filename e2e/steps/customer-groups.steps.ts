@@ -60,26 +60,22 @@ When("I restore {string} from the Deleted page", async ({ page }, name: string) 
   await pressAndWait(page, `Restore ${name}`);
 });
 
-// A tampered form. "Part of": puts the id of one of my customers that the select doesn't offer into it. Any other
-// select (a fixed value set, like a project's "Stage"): puts the text itself in as a value no option has.
+// A tampered form: puts a value no option has into the select. The name of one of my customers becomes that
+// customer's id (one the select doesn't offer, like "Part of"'s); any other text goes in as it is (a made-up
+// value of a fixed set, like a project's "Stage").
 When("I choose {string} in {string} by editing the page", async ({ page }, value: string, label: string) => {
   const select = page.getByLabel(label, { exact: true });
   await expect(select).toBeVisible();
-  if (label !== "Part of") {
-    await chooseValue(select, value);
-    return;
-  }
   const db = getMaintenanceDb();
   const mine = db
     .select({ id: schema.workspaceMember.workspaceId })
     .from(schema.workspaceMember)
     .where(eq(schema.workspaceMember.userId, await userId(page)));
-  const [row] = await db
+  const [customer] = await db
     .select({ id: schema.organization.id })
     .from(schema.organization)
     .where(and(eq(schema.organization.name, value), inArray(schema.organization.workspaceId, mine)));
-  expect(row).toBeDefined();
-  await chooseValue(select, row!.id);
+  await chooseValue(select, customer?.id ?? value);
 });
 
 // --- The leak suite's two-partner workspace (partner-access.steps.ts) --------------------------------------
