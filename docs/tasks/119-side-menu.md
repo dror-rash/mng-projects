@@ -1,6 +1,6 @@
 # Task 119: A side menu instead of the dashboard's top header
 
-- **Status:** todo
+- **Status:** in-progress
 - **Milestone:** M21 Side menu and palette
 - **Zone / package:** `packages/ui` (new Sidebar parts and a Sheet, `lucide-react`), `apps/dashboard` (`features/layout`, the 27 pages that render `AppHeader`, `messages/en.json` and `he.json`), `e2e` (layout steps, screenshots)
 - **Feature file:** `docs/features/home-and-menu.feature` (`@task:119`); one `@task:119` outline in `docs/features/zone-navigation.feature`; one existing outline changed (below)
@@ -93,3 +93,4 @@ On a phone today's header takes three rows before any content, and on desktop se
 - A Vercel-style top context bar on desktop.
 - A "Skip to content" link before the menu.
 - Rename "header" to "menu" in the step wording of the scenarios listed above (a `docs(features):` commit), once the side menu has settled.
+- 2026-11-15: started in lane 2, in parallel with task 118 (lane 1) at the owner's request. Built against the `--sidebar-*` token names fixed in task 118; rebased on main after 118 merges, before QA and screenshots.
