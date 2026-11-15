@@ -108,6 +108,8 @@ Feature: Project stages
     And the project "GX App" is at the stage "Quote"
     And I am signed in as a user of "Northwind"
     When I post a stage change of "GX App" to "Closed"
+    Then I see "Something went wrong", the same as with a made-up id
+    When I open the address of the "GX App" project
     Then I see "Project not found", the same as for a made-up project address
     And the admin opens the "GX App" project page
     Then the admin sees the text "Quote"
