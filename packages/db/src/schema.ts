@@ -217,6 +217,11 @@ export const workspaceInvite = pgTable(
   ],
 );
 
+/** The stored stages (task 101, ADR-0012), for the check constraints; the app's list is `PROJECT_STAGES`. */
+const PROJECT_STAGE_SQL = sql.raw(
+  ["inquiry", "quote", "ordered", "scheduled", "in_work", "reporting", "billing", "closed"].map((s) => `'${s}'`).join(", "),
+);
+
 export const project = pgTable("project", {
   id: text("id").primaryKey(),
   name: text("name").notNull(),
@@ -250,6 +255,11 @@ export const project = pgTable("project", {
   siteId: text("site_id")
     .notNull()
     .references((): AnyPgColumn => site.id, { onDelete: "no action" }),
+  /**
+   * Where the job is in the flow (task 101, ADR-0012), changed by hand on the project page, each change a
+   * `project_stage_change` row. The values are `PROJECT_STAGES` (apps/dashboard/features/projects/project-stage.ts).
+   */
+  stage: text("stage").notNull().default("inquiry"),
   createdAt: timestamp("created_at").notNull().defaultNow(),
   updatedAt: timestamp("updated_at").notNull().defaultNow(),
   deletedAt: timestamp("deleted_at"),
@@ -268,7 +278,32 @@ export const project = pgTable("project", {
   check("project_partner_check", sql`(${table.visibility} = 'partner') = (${table.partnerId} is not null)`),
   check("project_partner_customer_check", sql`${table.visibility} <> 'partner' or ${table.organizationId} is not null`),
   check("project_status_check", sql`${table.lifecycle} in ('active', 'canceled')`),
+  check("project_stage_check", sql`${table.stage} in (${PROJECT_STAGE_SQL})`),
 ]);
+
+/**
+ * A project's stage changes (task 101, ADR-0012): from (null for the first) and to, who and when. Append-only:
+ * whoever sees the project reads them, whoever can change it adds them as themselves, nobody changes or deletes
+ * them (migration 0045).
+ */
+export const projectStageChange = pgTable(
+  "project_stage_change",
+  {
+    id: text("id").primaryKey(),
+    projectId: text("project_id")
+      .notNull()
+      .references(() => project.id, { onDelete: "cascade" }),
+    fromStage: text("from_stage"),
+    toStage: text("to_stage").notNull(),
+    changedBy: text("changed_by").references(() => user.id, { onDelete: "set null" }),
+    changedAt: timestamp("changed_at").notNull().defaultNow(),
+  },
+  (table) => [
+    index("project_stage_change_project_idx").on(table.projectId, table.changedAt),
+    check("project_stage_change_from_check", sql`${table.fromStage} is null or ${table.fromStage} in (${PROJECT_STAGE_SQL})`),
+    check("project_stage_change_to_check", sql`${table.toStage} in (${PROJECT_STAGE_SQL})`),
+  ],
+);
 
 /**
  * A project's crew (task 056, ADR-0008): the workers who see the project and work on its tasks. The member
