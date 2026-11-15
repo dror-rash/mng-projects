@@ -71,6 +71,7 @@ Owner decisions (2026-11-11):
 | M18 | Suppliers and materials | Suppliers in the directory (task 040, supplier kind only), materials received per project (supplier, item, quantity, cost, delivery note) by the office and crews, actual cost against the quote. Flow step 6 | not drafted |
 | M19 | Billing | Bills and invoices issued in the accounting system, recorded on the project (number, amount, file), sent, received and paid, with an unpaid list. Flow step 9 | not drafted |
 | M20 | Scheduling | Planned work dates, scheduled visits with their crew, a week view by worker. Today a visit can't be in the future (`site-visits.feature`, task 058): this milestone changes that rule in its own `docs(features):` commit or adds planned visits as a separate record. Flow step 5 | not drafted |
+| M21 | Side menu and palette | The owner's palette (paper `#F6F7EB`, charcoal `#393E41`, flame `#E94F37`) on the design tokens by the 60-30-10 rule, in every zone and both themes (task 118); the dashboard's top header becomes a Vercel-style side menu on the start side, a drawer on phones (task 119). Owner-approved design proposal, 2026-11-15. No ADR | planned (118, then 119) |
 | Later | External services | Sending from the app by email (provider and custom domain; also SEC-09), capturing emails, WhatsApp Business, Israeli e-invoicing (Tax Authority allocation numbers), e-signature. Each needs an ADR | not drafted |
 
 ## Current milestone
@@ -87,7 +88,8 @@ Owner decisions (2026-11-11):
    - then 104 follow-ups, 105 new inquiry and 106 work order;
    - then 107 order document and 108 timeline.
 3. Alongside M15, in other lanes: M14's 097–100 (translating the existing screens), M13's 062, 063 and 065.
-4. Then M16–M20 in that order, unless the owner reorders. M17's handover and delivery tracking need no new ADR and can run in a lane alongside M16.
+4. M21 (owner-approved 2026-11-15) can run in its own lane alongside M15 (it touches no data; M15 pages added meanwhile switch to the new frame in 119): 118 palette tokens, then 119 side menu. 119 and M14's 096 share the step "the menu is on the right"; 096's lint rule on physical CSS classes applies to 119 if 096 lands first.
+5. Then M16–M20 in that order, unless the owner reorders. M17's handover and delivery tracking need no new ADR and can run in a lane alongside M16.
 
 ## Risks & open questions
 - Invite tokens will appear in Cloud Run / load balancer request logs until a log exclusion is added in `infra/` (task 028 parking lot; do it with M11).
@@ -205,3 +207,4 @@ Owner decisions (2026-11-11):
 - 2026-11-14 – Task 117 (owner request): `pnpm --filter @repo/e2e flow-guide` walks the Target flow steps that exist today (1, 5, 7, 8, 10, 11, 12) as an office admin and a field worker and screenshots every screen, for the usage guide; steps 2, 3, 4, 6 and 9 have no screens yet.
 - 2026-11-15 – Tasks 116 and 117 done (PR #109, PR #110).
 - 2026-11-15 – Task 101 in review (M15): project stages (ADR-0012): `project.stage` with an append-only `project_stage_change` history, a Stage control on the project page ("<Stage> since <date>"), Stage on the new project form, and a Stage column, filter and sort in the projects table. Existing projects start at In work; new projects and copies start at Inquiry. SEC-53 (P3) added.
+- 2026-11-15 – Planned M21 Side menu and palette from the owner-approved design proposal: task 118 (palette tokens, 60-30-10, contrast unit test, no new scenarios: visual only) and task 119 (side menu, depends on 118; 6 `@wip` scenarios in `home-and-menu.feature`, one outline in `zone-navigation.feature`; the `@task:030` outline drops its 360 and 768 rows at the task's start). Owner decisions recorded in the tasks: the same three menu items, no desktop collapse, visible account buttons, a dark charcoal menu, In progress in amber. Planner defaults: focus marks on charcoal use a lighter accent step (`#E94F37` is 2.9:1 there), the destructive red is stepped to 4.5:1 on the new surfaces, the dark chart track is the menu step. No ADR.
