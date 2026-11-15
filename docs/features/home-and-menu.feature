@@ -43,7 +43,7 @@ Feature: The dashboard is home, with a short menu
 
   # Task 119: the side menu. Below 1024px it folds into a drawer that opens from a menu button.
 
-  @wip @task:119 @zone:dashboard
+  @task:119 @zone:dashboard
   Scenario: The menu marks the page I am on
     Given I am signed in with an existing account
     And I have a project named "Panel upgrade"
@@ -58,7 +58,7 @@ Feature: The dashboard is home, with a short menu
     When I open "/dashboard/my-tasks"
     Then no menu item is marked as the current page
 
-  @wip @task:119 @zone:dashboard
+  @task:119 @zone:dashboard
   Scenario: The menu shows my workspace, my role and my account
     Given I am signed in with an existing account
     When I open "/dashboard"
@@ -67,7 +67,7 @@ Feature: The dashboard is home, with a short menu
     And I see my email address
     And I see the "Log out" button
 
-  @wip @task:119 @zone:dashboard
+  @task:119 @zone:dashboard
   Scenario: On a phone the menu opens from a button and closes with Escape
     Given I am signed in with an existing account
     And my screen is 360 pixels wide
@@ -79,7 +79,7 @@ Feature: The dashboard is home, with a short menu
     When I close the menu with the Escape key
     Then the dashboard menu is closed
 
-  @wip @task:119 @zone:dashboard
+  @task:119 @zone:dashboard
   Scenario: On a phone, choosing a page in the menu opens it and closes the menu
     Given I am signed in with an existing account
     And my screen is 360 pixels wide
@@ -89,7 +89,7 @@ Feature: The dashboard is home, with a short menu
     Then I see the heading "All projects"
     And the dashboard menu is closed
 
-  @wip @task:119 @zone:dashboard
+  @task:119 @zone:dashboard
   Scenario: On a phone I log out from the menu
     Given I am signed in with an existing account
     And my screen is 360 pixels wide
@@ -98,7 +98,7 @@ Feature: The dashboard is home, with a short menu
     And I log out
     Then I am sent to the login page
 
-  @wip @task:119 @zone:dashboard
+  @task:119 @zone:dashboard
   Scenario: In Hebrew the menu is on the right
     Given I am signed in with an existing account
     And my language cookie is set to "he"

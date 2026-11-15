@@ -84,6 +84,7 @@ On a phone today's header takes three rows before any content, and on desktop se
 
 ## Progress log
 - 2026-11-15 – Drafted from the owner-approved design proposal ("Waypoint Side Menu"); owner decisions recorded above.
+- 2026-11-15 – Red: `@wip` off the 7 `@task:119` scenarios (8 runs), new menu steps in `layout.steps.ts`; the header steps now look outside `<main>` (the menu frame) and the nav steps at the visible `Dashboard` nav. All 8 fail on the missing menu (no `aria-current`, no role badge, no "Open menu" button, content not beside the menu); the affected feature files otherwise pass.
 
 ## Parking lot
 - An icon-only collapse on desktop.

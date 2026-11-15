@@ -57,7 +57,8 @@ When("I log out", async ({ page }) => {
 });
 
 Then("I see my email address", async ({ page, account }) => {
-  await expect(page.getByText(account.email)).toBeVisible();
+  // The side menu and the phone drawer can both hold it; only the copy on screen counts.
+  await expect(page.getByText(account.email).filter({ visible: true })).toBeVisible();
 });
 
 Then("I see the error {string}", async ({ page }, message: string) => {
