@@ -1,6 +1,6 @@
 # Task 101: Project stages
 
-- **Status:** todo
+- **Status:** in-progress
 - **Milestone:** M15 Pipeline and communications
 - **Zone / package:** `packages/db`, `apps/dashboard` (`features/projects`), `e2e`
 - **Feature file:** `docs/features/project-stages.feature` (`@task:101`)
@@ -36,7 +36,7 @@ The owner's flow (PLAN "Target flow", steps 1–10) needs one answer to "where i
 - [ ] A stage can move back. ("A stage can go back")
 - [ ] The projects table shows and filters by stage; a canceled project keeps its stage. ("The projects table shows and filters by stage", "A canceled project keeps its stage")
 - [ ] New projects start at Inquiry unless another stage is chosen. ("A new project starts at Inquiry")
-- [ ] Workers and auditors see the stage but can't change it; a partner changes their own project's stage; another partner's stage change is refused like a made-up id. ("Who can change a stage", "Another partner's project's stage can't be changed")
+- [ ] Workers and auditors see the stage but can't change it; a partner changes their own project's stage; another partner's stage change is refused like a made-up id. ("Who can change a stage", "A worker sees the stage but can't change it", "Another partner's project's stage can't be changed")
 - [ ] A made-up stage value is refused. ("A made-up stage is refused")
 
 ## Security notes
@@ -57,7 +57,8 @@ The owner's flow (PLAN "Target flow", steps 1–10) needs one answer to "where i
   - `the project {string} is at the stage {string}`;
   - `I change the stage to {string}`;
   - `the project shows {string} since today`;
-  - `I post a stage change of {string} to {string}` (leak).
+  - `I post a stage change of {string} to {string}` (leak);
+  - `I see no {string} button`.
 - **DB:** `project-stages.db.test.ts`.
 - **Unit:** `project-stage.test.ts`, the filter and sort parsers.
 - **Storybook:** `StageControl` (can change, read-only).
@@ -70,6 +71,7 @@ The owner's flow (PLAN "Target flow", steps 1–10) needs one answer to "where i
 
 ## Progress log
 - 2026-11-11 – Drafted with `project-stages.feature` (`@wip`).
+- 2026-11-15 – Started in lane 1 (`feat/project-stages`). Readiness: added the worker scenario the criterion named (planner).
 
 ## Parking lot
 - Rename "Status" (derived from tasks) to "Progress" (changes existing scenarios; owner).
