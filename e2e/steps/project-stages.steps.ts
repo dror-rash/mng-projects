@@ -58,11 +58,10 @@ Then("I see no {string} button", async ({ page }, name: string) => {
   await expect(page.getByRole("button", { name, exact: true })).toHaveCount(0);
 });
 
-// A tampered form: my own project's stage form (NW Site), its hidden project id set to the other partner's project.
-// The refusal must read the same as for a made-up id; then I'm on the other project's address, which a later step
-// compares with a made-up project address.
+// A tampered form: my own project's stage form (NW Site), its hidden project id set to the other partner's
+// project (`state.replay` posts it again with another id).
 When("I post a stage change of {string} to {string}", async ({ page, state }, project: string, stage: string) => {
-  const post = async (id: string) => {
+  state.replay = async (id) => {
     await page.goto(projectPath(state, "NW Site"));
     await page.getByLabel("Stage", { exact: true }).selectOption({ label: stage });
     await page
@@ -72,10 +71,6 @@ When("I post a stage change of {string} to {string}", async ({ page, state }, pr
         (input as HTMLInputElement).value = value;
       }, id);
     await pressAndWait(page, "Change stage");
-    return page.getByRole("main").innerText();
   };
-  const refused = await post(idOf(state, project));
-  await post(crypto.randomUUID());
-  await expect(page.getByRole("main")).toHaveText(refused);
-  await page.goto(projectPath(state, project));
+  await state.replay(idOf(state, project));
 });
