@@ -4,6 +4,11 @@
     "allProjects": "All projects",
     "customers": "Customers"
   },
+  "menu": {
+    "label": "Menu",
+    "open": "Open menu",
+    "close": "Close menu"
+  },
   "projectStage": {
     "inquiry": "Inquiry",
     "quote": "Quote",

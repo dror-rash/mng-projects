@@ -14,12 +14,10 @@ Feature: Navigate between zones
 
     Examples:
       | width |
-      | 360   |
-      | 768   |
       | 1024  |
 
   # Task 119: below 1024px the menu is a drawer, so its links are on screen once it is opened.
-  @wip @zone:dashboard @task:119
+  @zone:dashboard @task:119
   Scenario Outline: The dashboard menu fits a <width>px wide screen once opened
     Given I am signed in with an existing account
     And my screen is <width> pixels wide

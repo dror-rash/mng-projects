@@ -3,6 +3,7 @@ import { eq, schema } from "@repo/db";
 import { getMaintenanceDb } from "@repo/db/maintenance";
 
 import { type Account, authPost, Given, type People, SIGN_IN_PATH, SIGN_UP_PATH, type ScenarioState, signUp, Then, userId, When } from "./fixtures";
+import { dashboardNav } from "./layout.steps";
 import { chooseCustomerAndSite, insertCustomerWithSite } from "./project-form";
 import { pressAndWait } from "./workspaces.steps";
 
@@ -271,7 +272,7 @@ Then(
 );
 
 Then("the header has no {string} link", async ({ page }, name: string) => {
-  const nav = page.getByRole("navigation", { name: "Dashboard" });
+  const nav = dashboardNav(page);
   await expect(nav.getByRole("link", { name: "Overview", exact: true })).toBeVisible();
   await expect(nav.getByRole("link", { name, exact: true })).toHaveCount(0);
 });

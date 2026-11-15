@@ -2,7 +2,7 @@ import { Badge } from "@repo/ui/badge";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 
-import { AppHeader } from "@/features/layout/app-header";
+import { AppFrame } from "@/features/layout/app-frame";
 import { recordWorkspace } from "@/features/layout/record-workspace";
 import { addFieldAction, archiveFormAction, publishFormAction, removeFieldAction } from "@/features/reading-forms/actions";
 import { AddFieldForm } from "@/features/reading-forms/add-field-form";
@@ -30,50 +30,46 @@ export default async function ReadingFormPage({ params }: { params: Promise<{ fo
   const editing = form.canChange && form.status === "draft";
 
   return (
-    <div className="flex min-h-screen flex-col bg-background text-foreground">
-      <AppHeader email={session.user.email} role={workspace.role} {...await recordWorkspace(session.user.id, workspace, form.workspaceId)} />
-
-      <main className="mx-auto w-full max-w-3xl space-y-6 p-6">
-        <nav aria-label="Breadcrumb" className="text-sm text-muted-foreground">
-          <Link href="/forms" className="hover:underline">Reading forms</Link>
-        </nav>
-        <div className="space-y-2">
-          <div className="flex flex-wrap items-center gap-3">
-            <h1 className="text-2xl font-bold tracking-tight">{form.name}</h1>
-            <Badge variant="outline">{formStatusLabel(form.status)}</Badge>
-          </div>
-          {form.description && <p className="whitespace-pre-line text-sm text-muted-foreground">{form.description}</p>}
+    <AppFrame email={session.user.email} name={session.user.name} role={workspace.role} {...await recordWorkspace(session.user.id, workspace, form.workspaceId)} className="max-w-3xl space-y-6 p-6">
+      <nav aria-label="Breadcrumb" className="text-sm text-muted-foreground">
+        <Link href="/forms" className="hover:underline">Reading forms</Link>
+      </nav>
+      <div className="space-y-2">
+        <div className="flex flex-wrap items-center gap-3">
+          <h1 className="text-2xl font-bold tracking-tight">{form.name}</h1>
+          <Badge variant="outline">{formStatusLabel(form.status)}</Badge>
         </div>
+        {form.description && <p className="whitespace-pre-line text-sm text-muted-foreground">{form.description}</p>}
+      </div>
 
-        <FormFieldsSection
-          fields={form.fields}
-          {...(editing
-            ? {
-                removeAction: removeFieldAction,
-                hidden,
-                addForm: <AddFieldForm action={addFieldAction} workspaceId={form.workspaceId} formId={form.id} />,
-              }
-            : {})}
-        />
+      <FormFieldsSection
+        fields={form.fields}
+        {...(editing
+          ? {
+              removeAction: removeFieldAction,
+              hidden,
+              addForm: <AddFieldForm action={addFieldAction} workspaceId={form.workspaceId} formId={form.id} />,
+            }
+          : {})}
+      />
 
-        {editing && (
-          <section aria-labelledby="publish-heading" className="space-y-2">
-            <h2 id="publish-heading" className="text-base font-semibold">Publish</h2>
-            <p className="text-sm text-muted-foreground">
-              Once you publish it, technicians can fill it in and its fields can&apos;t change: to change them later, archive
-              it and build a new form.
-            </p>
-            <FormActionButton action={publishFormAction} hidden={hidden}>Publish</FormActionButton>
-          </section>
-        )}
-        {form.canChange && form.status === "published" && (
-          <section aria-labelledby="archive-heading" className="space-y-2">
-            <h2 id="archive-heading" className="text-base font-semibold">Archive</h2>
-            <p className="text-sm text-muted-foreground">Once you archive it, technicians can no longer fill it in. Readings already taken stay.</p>
-            <FormActionButton action={archiveFormAction} hidden={hidden} variant="outline">Archive</FormActionButton>
-          </section>
-        )}
-      </main>
-    </div>
+      {editing && (
+        <section aria-labelledby="publish-heading" className="space-y-2">
+          <h2 id="publish-heading" className="text-base font-semibold">Publish</h2>
+          <p className="text-sm text-muted-foreground">
+            Once you publish it, technicians can fill it in and its fields can&apos;t change: to change them later, archive
+            it and build a new form.
+          </p>
+          <FormActionButton action={publishFormAction} hidden={hidden}>Publish</FormActionButton>
+        </section>
+      )}
+      {form.canChange && form.status === "published" && (
+        <section aria-labelledby="archive-heading" className="space-y-2">
+          <h2 id="archive-heading" className="text-base font-semibold">Archive</h2>
+          <p className="text-sm text-muted-foreground">Once you archive it, technicians can no longer fill it in. Readings already taken stay.</p>
+          <FormActionButton action={archiveFormAction} hidden={hidden} variant="outline">Archive</FormActionButton>
+        </section>
+      )}
+    </AppFrame>
   );
 }

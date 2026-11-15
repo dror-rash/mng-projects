@@ -2,7 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@repo/ui/card";
 import { notFound } from "next/navigation";
 
 import { canChangeCustomers } from "@/features/access/scope";
-import { AppHeader } from "@/features/layout/app-header";
+import { AppFrame } from "@/features/layout/app-frame";
 import { PartnerForm } from "@/features/partners/partner-form";
 import { requireWorkspace } from "@/features/workspaces/require-workspace";
 
@@ -16,18 +16,15 @@ export default async function NewPartnerPage() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-background text-foreground">
-      <AppHeader email={session.user.email} role={workspace.role} workspaceName={workspace.name} />
-      <main className="mx-auto w-full max-w-3xl p-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>New partner</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <PartnerForm workspaceId={workspace.id} />
-          </CardContent>
-        </Card>
-      </main>
-    </div>
+    <AppFrame email={session.user.email} name={session.user.name} role={workspace.role} workspaceName={workspace.name} className="max-w-3xl p-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>New partner</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <PartnerForm workspaceId={workspace.id} />
+        </CardContent>
+      </Card>
+    </AppFrame>
   );
 }

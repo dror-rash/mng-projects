@@ -13,7 +13,7 @@ import { removeCrewMemberAction } from "@/features/crews/actions";
 import { AddToCrewForm } from "@/features/crews/add-to-crew-form";
 import { CrewSection } from "@/features/crews/crew-section";
 import { listCrew, listCrewChoices } from "@/features/crews/queries";
-import { AppHeader } from "@/features/layout/app-header";
+import { AppFrame } from "@/features/layout/app-frame";
 import { recordWorkspace } from "@/features/layout/record-workspace";
 import { getOrganizationForUser } from "@/features/organizations/queries";
 import { setProjectLifecycleAction } from "@/features/projects/actions";
@@ -79,120 +79,116 @@ export default async function ProjectPage({ params }: { params: Promise<{ projec
     .map(({ id, title, status, priority, dueDate, assigneeName, customerName }) => ({ id, title, status, priority, dueDate, assigneeName, customerName }));
 
   return (
-    <div className="flex min-h-screen flex-col bg-background text-foreground">
-      <AppHeader email={session.user.email} role={workspace.role} {...await recordWorkspace(session.user.id, workspace, project.workspaceId)} />
-
-      <main className="mx-auto w-full max-w-6xl space-y-8 p-6">
-        <section className="flex flex-wrap items-start justify-between gap-4">
-          <div className="space-y-1">
-            <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-2xl font-bold tracking-tight">{project.name}</h1>
-              {canceled && <Badge variant="outline">{projectLifecycleLabel(project.lifecycle)}</Badge>}
-            </div>
-            {project.description && <p className="text-muted-foreground">{project.description}</p>}
-            {/* Every project has a customer (task 071); its name shows to whoever may see it. */}
-            {project.customerName && (
-              <p className="text-sm text-muted-foreground">
-                Customer:{" "}
-                {customerPage ? (
-                  <Link href={`/customers/${customerPage.id}`} className="font-medium text-foreground hover:underline">
-                    {project.customerName}
-                  </Link>
-                ) : (
-                  <span className="font-medium text-foreground">{project.customerName}</span>
-                )}
-              </p>
-            )}
-            {copiedFrom && (
-              <p className="text-sm text-muted-foreground">
-                Copied from{" "}
-                <Link href={`/projects/${copiedFrom.id}`} className="font-medium text-foreground hover:underline">
-                  {copiedFrom.name}
-                </Link>
-              </p>
-            )}
+    <AppFrame email={session.user.email} name={session.user.name} role={workspace.role} {...await recordWorkspace(session.user.id, workspace, project.workspaceId)} className="max-w-6xl space-y-8 p-6">
+      <section className="flex flex-wrap items-start justify-between gap-4">
+        <div className="space-y-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <h1 className="text-2xl font-bold tracking-tight">{project.name}</h1>
+            {canceled && <Badge variant="outline">{projectLifecycleLabel(project.lifecycle)}</Badge>}
           </div>
-          {project.canChange && (
-            <div className="flex flex-wrap gap-2">
-              <Button asChild variant="outline" size="sm">
-                <Link href={`/projects/${project.id}/edit`}>Edit project</Link>
-              </Button>
-              <Button asChild variant="outline" size="sm">
-                <Link href={`/projects/${project.id}/copy`}>Copy to new project</Link>
-              </Button>
-              {/* Cancel or reopen (rule 4b): the project and its tasks stay editable either way. */}
-              <form action={setProjectLifecycleAction}>
-                <input type="hidden" name="projectId" value={project.id} />
-                <input type="hidden" name="lifecycle" value={canceled ? "active" : "canceled"} />
-                <Button type="submit" variant="outline" size="sm">{canceled ? "Reopen project" : "Cancel project"}</Button>
-              </form>
-              <Button asChild variant="ghost" size="sm">
-                <Link href={`/projects/${project.id}/delete`}>Delete project</Link>
-              </Button>
-            </div>
+          {project.description && <p className="text-muted-foreground">{project.description}</p>}
+          {/* Every project has a customer (task 071); its name shows to whoever may see it. */}
+          {project.customerName && (
+            <p className="text-sm text-muted-foreground">
+              Customer:{" "}
+              {customerPage ? (
+                <Link href={`/customers/${customerPage.id}`} className="font-medium text-foreground hover:underline">
+                  {project.customerName}
+                </Link>
+              ) : (
+                <span className="font-medium text-foreground">{project.customerName}</span>
+              )}
+            </p>
           )}
-        </section>
-
-        <StageControl
-          projectId={project.id}
-          stage={project.stage}
-          options={stages.options}
-          line={stages.since(project.stage)}
-          since={stageSince}
-          sinceText={formatDueDate(stageSince)}
-          action={project.canChange ? changeStageAction : undefined}
-        />
-
-        {site && (
-          <ProjectSiteSection
-            site={{
-              id: site.id,
-              name: site.name,
-              address: site.address,
-              accessNotes: site.accessNotes,
-              mapsHref: mapsLink(site),
-              contacts: siteContacts,
-            }}
-          />
+          {copiedFrom && (
+            <p className="text-sm text-muted-foreground">
+              Copied from{" "}
+              <Link href={`/projects/${copiedFrom.id}`} className="font-medium text-foreground hover:underline">
+                {copiedFrom.name}
+              </Link>
+            </p>
+          )}
+        </div>
+        {project.canChange && (
+          <div className="flex flex-wrap gap-2">
+            <Button asChild variant="outline" size="sm">
+              <Link href={`/projects/${project.id}/edit`}>Edit project</Link>
+            </Button>
+            <Button asChild variant="outline" size="sm">
+              <Link href={`/projects/${project.id}/copy`}>Copy to new project</Link>
+            </Button>
+            {/* Cancel or reopen (rule 4b): the project and its tasks stay editable either way. */}
+            <form action={setProjectLifecycleAction}>
+              <input type="hidden" name="projectId" value={project.id} />
+              <input type="hidden" name="lifecycle" value={canceled ? "active" : "canceled"} />
+              <Button type="submit" variant="outline" size="sm">{canceled ? "Reopen project" : "Cancel project"}</Button>
+            </form>
+            <Button asChild variant="ghost" size="sm">
+              <Link href={`/projects/${project.id}/delete`}>Delete project</Link>
+            </Button>
+          </div>
         )}
+      </section>
 
-        <VisitsSection projectId={project.id} visits={visits} canRecord={project.canWork} />
+      <StageControl
+        projectId={project.id}
+        stage={project.stage}
+        options={stages.options}
+        line={stages.since(project.stage)}
+        since={stageSince}
+        sinceText={formatDueDate(stageSince)}
+        action={project.canChange ? changeStageAction : undefined}
+      />
 
-        <ReadingsSection projectId={project.id} readings={readings} showVisitDates />
-
-        <AttachmentsSection
-          projectId={project.id}
-          items={attachments}
-          showVisits
-          uploader={project.canWork ? <AttachmentUploader visitId={null} /> : undefined}
-          deleteAction={project.canWork ? deleteAttachmentAction : undefined}
+      {site && (
+        <ProjectSiteSection
+          site={{
+            id: site.id,
+            name: site.name,
+            address: site.address,
+            accessNotes: site.accessNotes,
+            mapsHref: mapsLink(site),
+            contacts: siteContacts,
+          }}
         />
+      )}
 
-        <ReportsSection
-          projectId={project.id}
-          reports={reports}
-          uploader={project.canWork ? <AttachmentUploader visitId={null} kinds={["report"]} /> : undefined}
-          deleteAction={project.canWork ? deleteAttachmentAction : undefined}
-        />
+      <VisitsSection projectId={project.id} visits={visits} canRecord={project.canWork} />
 
-        <CrewSection
-          projectId={project.id}
-          crew={crew}
-          removeAction={manageCrew ? removeCrewMemberAction : undefined}
-          addForm={manageCrew ? <AddToCrewForm projectId={project.id} workers={crewChoices} /> : undefined}
-        />
+      <ReadingsSection projectId={project.id} readings={readings} showVisitDates />
 
-        {project.canWork && <AddTaskForm projectId={project.id} />}
+      <AttachmentsSection
+        projectId={project.id}
+        items={attachments}
+        showVisits
+        uploader={project.canWork ? <AttachmentUploader visitId={null} /> : undefined}
+        deleteAction={project.canWork ? deleteAttachmentAction : undefined}
+      />
 
-        <TaskBoard
-          projectId={project.id}
-          tasks={boardTasks}
-          today={todayUtc()}
-          moveAction={updateTaskStatusAction}
-          deleteAction={project.canChange ? deleteTaskAction : undefined}
-          readOnly={!project.canWork}
-        />
-      </main>
-    </div>
+      <ReportsSection
+        projectId={project.id}
+        reports={reports}
+        uploader={project.canWork ? <AttachmentUploader visitId={null} kinds={["report"]} /> : undefined}
+        deleteAction={project.canWork ? deleteAttachmentAction : undefined}
+      />
+
+      <CrewSection
+        projectId={project.id}
+        crew={crew}
+        removeAction={manageCrew ? removeCrewMemberAction : undefined}
+        addForm={manageCrew ? <AddToCrewForm projectId={project.id} workers={crewChoices} /> : undefined}
+      />
+
+      {project.canWork && <AddTaskForm projectId={project.id} />}
+
+      <TaskBoard
+        projectId={project.id}
+        tasks={boardTasks}
+        today={todayUtc()}
+        moveAction={updateTaskStatusAction}
+        deleteAction={project.canChange ? deleteTaskAction : undefined}
+        readOnly={!project.canWork}
+      />
+    </AppFrame>
   );
 }

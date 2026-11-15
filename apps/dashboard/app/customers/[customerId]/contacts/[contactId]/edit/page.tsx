@@ -1,7 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@repo/ui/card";
 import { notFound } from "next/navigation";
 
-import { AppHeader } from "@/features/layout/app-header";
+import { AppFrame } from "@/features/layout/app-frame";
 import { recordWorkspace } from "@/features/layout/record-workspace";
 import { ContactForm } from "@/features/organizations/contacts/contact-form";
 import { getOrganizationContact } from "@/features/organizations/contacts/queries";
@@ -25,18 +25,15 @@ export default async function EditContactPage({
   }
 
   return (
-    <div className="flex min-h-screen flex-col bg-background text-foreground">
-      <AppHeader email={session.user.email} role={workspace.role} {...await recordWorkspace(session.user.id, workspace, customer.workspaceId)} />
-      <main className="mx-auto w-full max-w-2xl p-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>Edit contact at {customer.name}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ContactForm owner={{ kind: "customer", id: customer.id }} contact={contact} />
-          </CardContent>
-        </Card>
-      </main>
-    </div>
+    <AppFrame email={session.user.email} name={session.user.name} role={workspace.role} {...await recordWorkspace(session.user.id, workspace, customer.workspaceId)} className="max-w-2xl p-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>Edit contact at {customer.name}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ContactForm owner={{ kind: "customer", id: customer.id }} contact={contact} />
+        </CardContent>
+      </Card>
+    </AppFrame>
   );
 }

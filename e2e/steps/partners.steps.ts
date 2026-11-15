@@ -1,6 +1,7 @@
 import { expect, type Page } from "@playwright/test";
 
 import { Given, Then, When } from "./fixtures";
+import { dashboardNav } from "./layout.steps";
 import { membersRow, pressAndWait } from "./workspaces.steps";
 
 /** Creates a partner from the New partner page; ends on its page. */
@@ -68,7 +69,7 @@ Then(
 Then("the teammate sees no {string} link in the header", async ({ state }, name: string) => {
   const teammate = state.teammate!;
   await teammate.goto("/dashboard");
-  const nav = teammate.getByRole("navigation", { name: "Dashboard" });
+  const nav = dashboardNav(teammate);
   await expect(nav.getByRole("link", { name: "Overview", exact: true })).toBeVisible();
   await expect(nav.getByRole("link", { name, exact: true })).toHaveCount(0);
 });

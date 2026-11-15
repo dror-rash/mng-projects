@@ -17,3 +17,14 @@ const NAV: readonly NavItem[] = [
 export function navFor(role: WorkspaceRole): NavItem[] {
   return canSeeCustomers(role) ? [...NAV] : NAV.filter((item) => item.href !== "/customers");
 }
+
+/**
+ * The menu item for the page at `pathname` (inside the zone, without `/dashboard`), task 119: Overview on
+ * the overview only; any other item on its own address and everything under it (a project, its tasks and
+ * visits). Pages outside the menu (sites, My tasks, Forms, Partners, Deleted, workspaces) get none.
+ */
+export function currentNavItem(pathname: string, items: readonly NavItem[]): NavItem | undefined {
+  return items.find((item) =>
+    item.href === "/" ? pathname === "/" : pathname === item.href || pathname.startsWith(`${item.href}/`),
+  );
+}

@@ -6,7 +6,7 @@ import { canRestore, canSeeDeleted } from "@/features/access/scope";
 import { deletedKindLabel } from "@/features/deleted/deleted-kind";
 import { listDeleted } from "@/features/deleted/queries";
 import { RestoreForm } from "@/features/deleted/restore-form";
-import { AppHeader } from "@/features/layout/app-header";
+import { AppFrame } from "@/features/layout/app-frame";
 import { requireWorkspace } from "@/features/workspaces/require-workspace";
 
 export const dynamic = "force-dynamic";
@@ -26,52 +26,48 @@ export default async function DeletedPage() {
   const restore = canRestore(workspace.role);
 
   return (
-    <div className="flex min-h-screen flex-col bg-background text-foreground">
-      <AppHeader email={session.user.email} role={workspace.role} workspaceName={workspace.name} />
+    <AppFrame email={session.user.email} name={session.user.name} role={workspace.role} workspaceName={workspace.name} className="max-w-5xl space-y-6 p-6">
+      <div className="space-y-1">
+        <h1 className="text-2xl font-bold tracking-tight">Deleted items</h1>
+        <p className="text-sm text-muted-foreground">
+          Deleted items are hidden everywhere else. A deleted project hides its tasks, a deleted customer its contacts, notes and sites, and a deleted site its contacts, until it is restored.
+        </p>
+      </div>
 
-      <main className="mx-auto w-full max-w-5xl space-y-6 p-6">
-        <div className="space-y-1">
-          <h1 className="text-2xl font-bold tracking-tight">Deleted items</h1>
-          <p className="text-sm text-muted-foreground">
-            Deleted items are hidden everywhere else. A deleted project hides its tasks, a deleted customer its contacts, notes and sites, and a deleted site its contacts, until it is restored.
-          </p>
-        </div>
-
-        {items.length === 0 ? (
-          <Card className="border-dashed p-8 text-center text-muted-foreground">Nothing has been deleted.</Card>
-        ) : (
-          <Table>
-            <TableCaption className="sr-only">Deleted items</TableCaption>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Item</TableHead>
-                <TableHead>Kind</TableHead>
-                <TableHead>In</TableHead>
-                <TableHead>Deleted</TableHead>
-                {restore && <TableHead><span className="sr-only">Restore</span></TableHead>}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {items.map((item) => (
-                <TableRow key={`${item.kind}:${item.id}`}>
-                  <TableHead scope="row" className="font-medium">{item.name}</TableHead>
-                  <TableCell>{deletedKindLabel(item.kind)}</TableCell>
-                  <TableCell className="text-muted-foreground">{item.where ?? "—"}</TableCell>
-                  <TableCell className="text-muted-foreground">
-                    <time dateTime={item.deletedAt.toISOString()}>{STAMP.format(item.deletedAt)} UTC</time>
-                    {item.deletedByName && <span> · by {item.deletedByName}</span>}
+      {items.length === 0 ? (
+        <Card className="border-dashed p-8 text-center text-muted-foreground">Nothing has been deleted.</Card>
+      ) : (
+        <Table>
+          <TableCaption className="sr-only">Deleted items</TableCaption>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Item</TableHead>
+              <TableHead>Kind</TableHead>
+              <TableHead>In</TableHead>
+              <TableHead>Deleted</TableHead>
+              {restore && <TableHead><span className="sr-only">Restore</span></TableHead>}
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {items.map((item) => (
+              <TableRow key={`${item.kind}:${item.id}`}>
+                <TableHead scope="row" className="font-medium">{item.name}</TableHead>
+                <TableCell>{deletedKindLabel(item.kind)}</TableCell>
+                <TableCell className="text-muted-foreground">{item.where ?? "—"}</TableCell>
+                <TableCell className="text-muted-foreground">
+                  <time dateTime={item.deletedAt.toISOString()}>{STAMP.format(item.deletedAt)} UTC</time>
+                  {item.deletedByName && <span> · by {item.deletedByName}</span>}
+                </TableCell>
+                {restore && (
+                  <TableCell className="text-right">
+                    <RestoreForm kind={item.kind} id={item.id} name={item.name} />
                   </TableCell>
-                  {restore && (
-                    <TableCell className="text-right">
-                      <RestoreForm kind={item.kind} id={item.id} name={item.name} />
-                    </TableCell>
-                  )}
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        )}
-      </main>
-    </div>
+                )}
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      )}
+    </AppFrame>
   );
 }
