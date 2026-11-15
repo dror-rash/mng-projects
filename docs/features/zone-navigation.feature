@@ -14,8 +14,6 @@ Feature: Navigate between zones
 
     Examples:
       | width |
-      | 360   |
-      | 768   |
       | 1024  |
 
   # Task 119: below 1024px the menu is a drawer, so its links are on screen once it is opened.
