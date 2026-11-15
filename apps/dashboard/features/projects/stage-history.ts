@@ -1,15 +1,13 @@
-import { desc, eq, getDb, schema, withAccess } from "@repo/db";
+import { desc, eq, getDb, recordStageChange, schema, withAccess } from "@repo/db";
 
 import type { ProjectStage } from "./project-stage";
 
 /**
  * A new project's first history row (from nothing to its first stage), by its creator (task 101). Inside the
- * action's `withAccess`, after the project's insert: the policy needs `can_change_project`.
+ * action's `withAccess`, after the project's insert: the policy needs `can_change_project` and the project's stage.
  */
 export async function recordFirstStage(projectId: string, stage: ProjectStage, userId: string) {
-  await getDb()
-    .insert(schema.projectStageChange)
-    .values({ id: crypto.randomUUID(), projectId, fromStage: null, toStage: stage, changedBy: userId });
+  await recordStageChange({ projectId, fromStage: null, toStage: stage, changedBy: userId });
 }
 
 /**

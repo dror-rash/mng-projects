@@ -188,7 +188,7 @@ export const PINS = {
     "public.project/project_insert": "712fc3a8cf934f3800630a68b5191a29d0f5aa25d58fc346fefd02df4caa87a5",
     "public.project/project_select": "e3c217a7b51615f902e4f1f930368724c2612ed98994de3cf7a1c62feb9b66c2",
     "public.project/project_update": "bf149e439728ef64e6044d824bb1e968610f2b842c7747225e2a3d872fdba80f",
-    "public.project_stage_change/project_stage_change_insert": "955c1cd88c96d3934807802cb2204607a70e7215d968e38cce5476ea2381e3f4",
+    "public.project_stage_change/project_stage_change_insert": "ef7d9e0d48d55e8bcf98b53473c635eb1d4d9e9775790d41cd952230573ab2f2",
     "public.project_stage_change/project_stage_change_select": "235a12558fb9a74e5aecaeb5ff6e0b61f0523c06e6dc0c797df4ac9e5e95c1c0",
     "public.project_worker/project_worker_select": "235a12558fb9a74e5aecaeb5ff6e0b61f0523c06e6dc0c797df4ac9e5e95c1c0",
     "public.project_worker/project_worker_write": "8b0d06d36e131123dc3db1c9b3636ea0316926de91dd98c8586dd2748c25e649",

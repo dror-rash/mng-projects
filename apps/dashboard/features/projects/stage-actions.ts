@@ -1,6 +1,6 @@
 "use server";
 
-import { eq, getDb, schema, withAccess } from "@repo/db";
+import { eq, getDb, recordStageChange, schema, withAccess } from "@repo/db";
 
 import { requireActionSession } from "@/features/auth/require-session";
 import { type FormState, invalid } from "@/features/forms/form-state";
@@ -31,13 +31,7 @@ export async function changeStageAction(_prev: FormState, formData: FormData): P
       .for("update");
     if (locked && locked.stage !== choice.value) {
       await db.update(schema.project).set({ stage: choice.value, updatedAt: new Date() }).where(eq(schema.project.id, project.id));
-      await db.insert(schema.projectStageChange).values({
-        id: crypto.randomUUID(),
-        projectId: project.id,
-        fromStage: locked.stage,
-        toStage: choice.value,
-        changedBy: session.user.id,
-      });
+      await recordStageChange({ projectId: project.id, fromStage: locked.stage, toStage: choice.value, changedBy: session.user.id });
     }
     return { id: project.id };
   });
