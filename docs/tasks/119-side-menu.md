@@ -1,6 +1,6 @@
 # Task 119: A side menu instead of the dashboard's top header
 
-- **Status:** in-progress
+- **Status:** in-review
 - **Milestone:** M21 Side menu and palette
 - **Zone / package:** `packages/ui` (new Sidebar parts and a Sheet, `lucide-react`), `apps/dashboard` (`features/layout`, the 27 pages that render `AppHeader`, `messages/en.json` and `he.json`), `e2e` (layout steps, screenshots)
 - **Feature file:** `docs/features/home-and-menu.feature` (`@task:119`); one `@task:119` outline in `docs/features/zone-navigation.feature`; one existing outline changed (below)
@@ -89,6 +89,7 @@ On a phone today's header takes three rows before any content, and on desktop se
 - 2026-11-15 – Leak scenarios added to `home-and-menu.feature` at the access-auditor's request (no `@wip`): a worker's menu and a partner's phone menu have no Customers; on a project from another workspace the menu shows that workspace and "in another workspace", not my "Admin" role from the current one.
 - 2026-11-15 – Review fixes: the switcher hides my role on a record from another workspace (it is my role in the current one, so it mislabelled the record's workspace; `sidebar-menu.test.tsx`); the menu landmark and the drawer are named by the new `menu.label` ("Menu" / "תפריט") instead of the workspace name; the drawer stays open on Ctrl/Cmd/Shift/Alt-click and middle click (a new tab or window); `lucide-react` pinned to 1.72.0 (1.73.0 was inside the 3-day release wait, SUP-1); register: SEC-19 note on the drawer's runtime `<style>` tags (WEB-1) and SEC-54 (hand-added dependencies skip the release wait). Each of these went red first. The planner's leak scenario "On a page from another workspace the menu doesn't show my role from the current one" (575b9e0) came in after the fix was written: with the guard taken out again it failed twice, `And the header does not say "Admin"` → `getByText('Admin').and(locator(':not(main *)')).visible()` expected 0, received 1; with the guard back, home-and-menu and zone-navigation passed 16/16, all 11 `@task:119` runs included. `pnpm test` 8/8 packages (dashboard 501, ui 71), lint, typecheck and `build-storybook` clean.
 - 2026-11-15 – Note on history (review should-fix 2): in the first green pass the unit and component tests (`currentNavItem`, `initials`, `Sheet`, the Sidebar parts, `SidebarNav`) were written first and run red in the lane before each implementation, but they were committed together with their implementation in the `feat(ui)` and `feat(dashboard)` commits, not as separate red commits. The red runs are in the session, not in git history. Left as is rather than rewriting history.
+- 2026-11-15 – QA (lane 2, rebased on 118): lint, typecheck, build, 779 unit tests, Storybook + axe (22 stories, 0 violations, light/dark/RTL) pass; full e2e 344/352 with 2 workers, the 8 failures (readings, workspaces, workspace switching, members; none in the menu) passed alone with 1 worker (load); flow-guide 26/26; screenshots 37/43 (the 6 failures are the stale script, parked). Desktop, dark, Hebrew and phone drawer checked by eye.
 
 ## Parking lot
 - An icon-only collapse on desktop.
@@ -102,3 +103,5 @@ On a phone today's header takes three rows before any content, and on desktop se
 - The phone top bar doesn't show the "in another workspace" hint (it is in the drawer's switcher only).
 - The drawer stays open when the window is resized past `lg` (it sits behind the side menu until closed).
 - Tighten "the header says {string}" to an exact text match (today it matches a substring).
+- In Hebrew an English workspace name or email in the menu is cut with the ellipsis at the start (`dir="auto"` on those spans would fix it) (QA, 2026-11-15).
+- `e2e/scripts/screenshots.mjs` is stale since the project form gained Site and Stage: its "projects" step no longer creates projects, so 6 task-board shots fail (pre-existing, not task 119) (QA, 2026-11-15).
