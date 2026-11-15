@@ -39,11 +39,9 @@ export const Light: Story = { args: { theme: "light" }, decorators: [onTheme(fal
 export const Dark: Story = { args: { theme: "dark" }, decorators: [onTheme(true)] };
 export const System: Story = { args: { theme: "system" } };
 
-/** The shared tokens on the dark surface: text, buttons, errors, badges and the chart tokens. */
-export const DarkTokens: Story = {
-  args: { theme: "dark" },
-  decorators: [onTheme(true)],
-  render: (args) => (
+/** The shared tokens on a theme's surface: text, buttons, errors, badges and the chart tokens. */
+function Tokens(args: React.ComponentProps<typeof ThemeToggle>) {
+  return (
     <div className="flex max-w-md flex-col gap-4">
       <ThemeToggle {...args} />
       <p>
@@ -64,11 +62,14 @@ export const DarkTokens: Story = {
       <StackedBar
         label="Tasks by status"
         segments={[
-          { label: "To do", value: 3 },
-          { label: "In progress", value: 2 },
-          { label: "Done", value: 5 },
+          { label: "To do", value: 3, slot: 1 },
+          { label: "In progress", value: 2, slot: 4 },
+          { label: "Done", value: 5, slot: 3 },
         ]}
       />
     </div>
-  ),
-};
+  );
+}
+
+export const LightTokens: Story = { args: { theme: "light" }, decorators: [onTheme(false)], render: Tokens };
+export const DarkTokens: Story = { args: { theme: "dark" }, decorators: [onTheme(true)], render: Tokens };
