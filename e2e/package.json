@@ -21,7 +21,7 @@
     "@types/node": "^22.0.0",
     "eslint": "^9.0.0",
     "playwright-bdd": "^9.2.1",
-    "typescript": "^5.9.0",
+    "typescript": "^6.0.3",
     "vitest": "^3.2.0"
   }
 }
