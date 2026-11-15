@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import { ORGANIZATION_STATUSES } from "@/features/organizations/organization-kinds";
+import { PROJECT_STAGES } from "@/features/projects/project-stage";
 import { fieldInputName, parseReadingValues, type ReadingField, YES_NO } from "@/features/readings/reading-values";
 import { TASK_PRIORITIES } from "@/features/tasks/task-priority";
 import { TASK_STATUSES } from "@/features/tasks/task-status";
@@ -64,6 +65,12 @@ describe("buildDemoPlan", () => {
     const starts = projects.map((p) => p.createdAt.getTime());
     expect(new Set(starts).size).toBeGreaterThan(10);
     expect(starts.every((s) => s <= now.getTime())).toBe(true);
+  });
+
+  it("spreads every customer's projects over all eight stages (task 101)", () => {
+    for (const customer of plan) {
+      expect(new Set(customer.projects.map((p) => p.stage))).toEqual(new Set(PROJECT_STAGES.map((s) => s.stage)));
+    }
   });
 
   it("gives each customer contacts with one primary, and notes", () => {

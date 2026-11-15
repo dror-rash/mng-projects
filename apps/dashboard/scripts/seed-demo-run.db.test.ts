@@ -163,6 +163,14 @@ describe("seed:demo (local)", () => {
       from form_submission r join site_visit v on v.id = r.visit_id join project p on p.id = v.project_id
       where p.workspace_id = ${me.workspaceId}`);
     expect(readings.rows[0]!.ok).toBe(true);
+
+    // Every project at its stage since it started, by the seeding user (task 101), and some at each stage.
+    const stages = await db.execute<{ ok: boolean; stages: number }>(sql`
+      select bool_and(c.from_stage is null and c.to_stage = p.stage and c.changed_by = ${me.id} and c.changed_at = p.created_at) as ok,
+        count(distinct p.stage)::int as stages
+      from project p left join project_stage_change c on c.project_id = p.id
+      where p.workspace_id = ${me.workspaceId}`);
+    expect(stages.rows[0]).toEqual({ ok: true, stages: 8 });
   });
 
   it("replaces only the demo data on a rerun, and reuses the form", async () => {
