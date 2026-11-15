@@ -49,6 +49,14 @@ describe("StageControl", () => {
     expect(Object.fromEntries(data)).toEqual({ projectId: "p1", stage: "ordered" });
   });
 
+  it("starts the select over from the current stage when the refused value isn't a stage", async () => {
+    const action = vi.fn(async (): Promise<FormState> => ({ error: "Choose a stage", field: "stage", values: { stage: "made_up" } }));
+    render(<StageControl {...props} action={action} />);
+    await userEvent.click(screen.getByRole("button", { name: "Change stage" }));
+    await screen.findByText("Choose a stage");
+    expect(screen.getByLabelText("Stage")).toHaveValue("quote");
+  });
+
   it("shows the error on the Stage select", async () => {
     const action = vi.fn(async (): Promise<FormState> => ({ error: "Choose a stage", field: "stage", values: { stage: "made_up" } }));
     render(<StageControl {...props} action={action} />);
