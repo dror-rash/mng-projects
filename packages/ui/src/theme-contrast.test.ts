@@ -67,6 +67,7 @@ const pairs: { theme: Theme; fg: string; bg: string; min: number; what: string }
   { theme: "light", fg: "sidebar-foreground", bg: "sidebar", min: TEXT, what: "menu labels on the menu" },
   { theme: "light", fg: "sidebar-muted", bg: "sidebar", min: TEXT, what: "menu hints on the menu" },
   { theme: "light", fg: "primary-foreground", bg: "primary", min: TEXT, what: "button text on primary fills" },
+  { theme: "light", fg: "primary-foreground", bg: "primary-hover", min: TEXT, what: "button text on hovered primary fills" },
   { theme: "light", fg: "sidebar-accent-foreground", bg: "sidebar-accent", min: TEXT, what: "the current menu item" },
   { theme: "light", fg: "destructive", bg: "background", min: TEXT, what: "error text on the canvas" },
   { theme: "light", fg: "destructive", bg: "card", min: TEXT, what: "error text on cards" },
@@ -80,6 +81,7 @@ const pairs: { theme: Theme; fg: string; bg: string; min: number; what: string }
   { theme: "dark", fg: "sidebar-foreground", bg: "sidebar", min: TEXT, what: "menu labels on the menu" },
   { theme: "dark", fg: "sidebar-muted", bg: "sidebar", min: TEXT, what: "menu hints on the menu" },
   { theme: "dark", fg: "primary-foreground", bg: "primary", min: TEXT, what: "button text on primary fills" },
+  { theme: "dark", fg: "primary-foreground", bg: "primary-hover", min: TEXT, what: "button text on hovered primary fills" },
   { theme: "dark", fg: "sidebar-accent-foreground", bg: "sidebar-accent", min: TEXT, what: "the current menu item" },
   { theme: "dark", fg: "destructive", bg: "background", min: TEXT, what: "error text on the canvas" },
   { theme: "dark", fg: "destructive", bg: "card", min: TEXT, what: "error text on cards" },
@@ -121,6 +123,16 @@ describe("theme contrast", () => {
     for (const [, alpha] of button.matchAll(/dark:(?:hover:)?bg-destructive\/(\d+)/g)) {
       const fill = mix(token("dark", "destructive"), token("dark", surface), Number(alpha) / 100);
       expect(contrast("#ffffff", fill), `at ${alpha}%`).toBeGreaterThanOrEqual(TEXT);
+    }
+  });
+
+  it("never fades a primary fill on hover, which would lighten it toward the paper under its text", () => {
+    const sources = ["button.tsx", "filter-chip.tsx"].map((file) =>
+      readFileSync(fileURLToPath(new URL(`./components/${file}`, import.meta.url)), "utf8"),
+    );
+    for (const source of sources) {
+      expect(source).not.toMatch(/hover:bg-primary\/\d+/);
+      expect(source).toMatch(/hover:bg-primary-hover/);
     }
   });
 
