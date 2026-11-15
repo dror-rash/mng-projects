@@ -12,6 +12,7 @@
   --card: #fcfcf7; /* a lighter tint of the paper */
   --card-foreground: #393e41;
   --primary: #c73a23; /* 10%: the darker accent step, for fills that carry text */
+  --primary-hover: #ad321e; /* hover darkens: fading toward the paper would drop the text below 4.5:1 */
   --primary-foreground: #f6f7eb;
   --secondary: #ecede0;
   --secondary-foreground: #393e41;
@@ -46,6 +47,7 @@
   --card: #41474a;
   --card-foreground: #f6f7eb;
   --primary: #c73a23;
+  --primary-hover: #ad321e;
   --primary-foreground: #f6f7eb;
   --secondary: #4f5559;
   --secondary-foreground: #f6f7eb;
@@ -78,6 +80,7 @@
   --color-card: var(--card);
   --color-card-foreground: var(--card-foreground);
   --color-primary: var(--primary);
+  --color-primary-hover: var(--primary-hover);
   --color-primary-foreground: var(--primary-foreground);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);

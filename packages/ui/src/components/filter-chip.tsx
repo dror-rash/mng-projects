@@ -15,7 +15,7 @@ export function FilterChip({ selected = false, className, ...props }: FilterChip
       aria-current={selected ? "true" : undefined}
       className={cn(
         "inline-flex items-center rounded-full border px-3 py-1 text-sm hover:bg-secondary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-        selected && "border-primary bg-primary text-primary-foreground hover:bg-primary/90",
+        selected && "border-primary bg-primary text-primary-foreground hover:bg-primary-hover",
         className,
       )}
       {...props}

@@ -143,4 +143,3 @@ No data, roles, pages, actions or access change. CSS tokens and one presentation
 - A light (paper) side menu as a user choice: rejected for now with the approval.
 - Chart slots tuned to the palette (warmer blue and green): only if the owner asks.
 - 2026-11-15: started in lane 1, in parallel with task 119 (lane 2).
-- Hover on primary fills: `hover:bg-primary/90` lightens toward the paper, so button and selected-chip text drops to 4.1:1 while hovered in light (5.3:1 in dark). A hover that darkens (toward charcoal) would keep 4.5:1; not asked for, transient state.
