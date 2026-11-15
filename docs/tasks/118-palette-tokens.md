@@ -148,6 +148,7 @@ No data, roles, pages, actions or access change. CSS tokens and one presentation
   - Dark `--secondary` `#5A6064`, a step above `--border` (`#4F5559`), so a hovered outline button keeps its border; text on it 5.9:1.
   - `--accent-foreground` (`#F6F7EB`, both themes) for the W logotype on the flame mark (3.4:1, exempt as a logotype; never other text). A test checks that every token has a value in both themes and a `--color-*` line.
   - `groupTasksByStatus` passes `chartSlot` through and `summarizeOverview`'s `byStatus` segments carry `slot`, so there is no lookup by label and no silent fallback. `withStatusChartSlots` is gone and `apps/dashboard/app/page.tsx` is unchanged from main. The `overview.test.ts` expectations gained `slot`.
+  - Checks after the review: `pnpm test` 747 unit tests pass, lint and typecheck pass, Storybook builds, and axe `color-contrast` finds no violations in any of the 134 stories. The full e2e suite wasn't rerun locally because the machine was overloaded; CI runs it.
 
 ## Parking lot
 - The example zone and the shell's login page could use the charcoal frame too (a top bar); not asked for.
