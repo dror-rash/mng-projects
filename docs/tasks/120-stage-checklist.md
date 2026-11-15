@@ -4,7 +4,7 @@
 - **Milestone:** M22 Guided project flow
 - **Zone / package:** `packages/db`, `apps/dashboard` (`features/projects`, `messages/`, demo seed), `e2e`
 - **Feature file:** `docs/features/project-stages.feature` (`@task:120`)
-- **Depends on:** task 101 (done, PR #111); task 094 (done); ADR-0014 (proposed with this task; records the owner-approved design)
+- **Depends on:** task 101 (done, PR #111); task 094 (done); ADR-0014 (accepted by the owner, 2026-11-15)
 
 ## Why
 The owner (2026-11-15): the project page says which stage a job is at, but not what that stage needs or who has to act. A checklist per stage with a "whose move" badge answers both, on the page the office already opens.

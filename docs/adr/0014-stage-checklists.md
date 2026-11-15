@@ -1,6 +1,6 @@
 # ADR-0014: Stage checklists and "whose move"
 
-- **Status:** proposed (records the owner-approved design of 2026-11-15; the points marked *default* are the planner's and the owner may change them in task 120's review)
+- **Status:** accepted (owner, 2026-11-15, as proposed, defaults included; records the owner-approved design of 2026-11-15)
 - **Date:** 2026-11-15
 - **Amends:** ADR-0012 (adds a checklist to each stage; the stages, their order and the access rules stay)
 
