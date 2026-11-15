@@ -16,6 +16,8 @@ type Project = {
   /** Null when the user may not see the customer's name. */
   customerName: string | null;
   status: ProjectStatus;
+  /** The stage's label, translated (task 101). */
+  stageLabel: string;
   overdue: number;
 };
 
@@ -84,6 +86,7 @@ export function ProjectTable({
               <TableCell>
                 <Badge variant="outline">{projectStatusLabel(project.status)}</Badge>
               </TableCell>
+              <TableCell className="whitespace-nowrap">{project.stageLabel}</TableCell>
               <TableCell className="min-w-40 space-y-1">
                 <Meter label={`${project.name} progress`} value={summary.completionRate} />
                 <div className="text-xs text-muted-foreground">

@@ -114,9 +114,10 @@ describe("deleting a user whose workspace still exists", () => {
     const by = ids.leaver;
     const r = (name: string) => `${run}-l-${name}`;
     // Everything a member does in the app, as rows: what they made (a customer with a note, a site, a project, a
-    // crew member they added, an invite link, a visit with a photo and a reading of a form they made), what they're
-    // on (a task assigned to them, a visit they're listed on), and what they deleted (a customer, a note, a
-    // contact, a site and a site contact, a project, a task, a visit, a photo, a reading, a partner).
+    // stage change, a crew member they added, an invite link, a visit with a photo and a reading of a form they
+    // made), what they're on (a task assigned to them, a visit they're listed on), and what they deleted (a
+    // customer, a note, a contact, a site and a site contact, a project, a task, a visit, a photo, a reading, a
+    // partner).
     await db.insert(schema.organization).values({ id: r("customer"), workspaceId: ids.workspace, name: "Leaver's customer", ownerId: by });
     await db.insert(schema.organizationNote).values({ id: r("note"), organizationId: r("customer"), body: "Called them", authorId: by });
     await db.insert(schema.organizationNote).values({
@@ -138,6 +139,8 @@ describe("deleting a user whose workspace still exists", () => {
       { id: r("deleted-project"), name: "Deleted", workspaceId: ids.workspace, organizationId: r("customer"), siteId: r("site"), ownerId: ids.admin },
     ]);
     await db.execute(sql`insert into project_worker (project_id, user_id, workspace_id, added_by) values (${ids.project}, ${ids.worker}, ${ids.workspace}, ${by})`);
+    await db.execute(sql`insert into project_stage_change (id, project_id, from_stage, to_stage, changed_by)
+      values (${r("stage-change")}, ${r("project")}, 'inquiry', 'quote', ${by})`);
     await db.insert(schema.workspaceInvite).values({
       id: r("invite"), workspaceId: ids.workspace, tokenHash: r("token"), createdBy: by, expiresAt: new Date(Date.now() + 86_400_000),
     });
@@ -201,6 +204,7 @@ describe("deleting a user whose workspace still exists", () => {
         "project.owner_id",
         "project.deleted_by",
         "project_worker.added_by",
+        "project_stage_change.changed_by",
         "task.assignee_id",
         "task.deleted_by",
         "site_visit.created_by", // the visit with the photo and reading
@@ -237,7 +241,7 @@ describe("changing who made a photo or a visit", () => {
 
 const snapshotTables = [
   "user", "workspace", "workspace_member", "workspace_invite", "partner", "organization", "organization_contact",
-  "organization_note", "site", "site_contact", "project", "project_worker", "task", "site_visit", "site_visit_member", "attachment",
+  "organization_note", "site", "site_contact", "project", "project_stage_change", "project_worker", "task", "site_visit", "site_visit_member", "attachment",
   "form_template", "form_template_version", "form_field", "form_submission",
 ] as const;
 

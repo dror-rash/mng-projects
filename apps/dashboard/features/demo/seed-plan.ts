@@ -1,4 +1,5 @@
 import type { OrganizationStatus } from "@/features/organizations/organization-kinds";
+import { PROJECT_STAGES, type ProjectStage } from "@/features/projects/project-stage";
 import type { FieldInput } from "@/features/reading-forms/field-input";
 import { parseFieldType } from "@/features/reading-forms/field-type";
 import type { ReadingField, ReadingValues } from "@/features/readings/reading-values";
@@ -43,6 +44,8 @@ export type DemoProject = {
   site: string;
   /** Oldest first; none until a task has started. */
   visits: DemoVisit[];
+  /** Where the job is (task 101), since the project started; each customer's projects cover every stage. */
+  stage: ProjectStage;
 };
 
 /** A site with the people to meet there (task 054). Coordinates are decimal strings, both or neither. */
@@ -373,6 +376,7 @@ export function buildDemoPlan(now: Date): DemoCustomer[] {
             linkCustomer: ti % 2 === 0,
           })),
           visits: demoVisits(ci, pi, archetype.startedDaysAgo, archetype.tasks.some(([status]) => status !== "todo"), today),
+          stage: PROJECT_STAGES[(pi + ci) % PROJECT_STAGES.length]!.stage,
         };
       }),
     };

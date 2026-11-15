@@ -1,6 +1,6 @@
 # Task 117: Screenshots of the customer project flow, for the usage guide
 
-- **Status:** in-review
+- **Status:** done
 - **Milestone:** unscheduled (tooling; owner request 2026-11-14)
 - **Zone / package:** `e2e/scripts/flow-guide.mjs`, `e2e/package.json`, `.gitignore`, `CLAUDE.md`
 - **Feature file:** none (a script against running dev servers, like `e2e/scripts/screenshots.mjs`; the behavior it walks through is covered by `poc-flow.feature` and the features of tasks 053–061 and 064)
@@ -23,6 +23,7 @@ The owner wants the 12-step project flow (`docs/PLAN.md`, "Target flow") shown a
 ## Acceptance criteria
 - [x] Against lane 1 (`BASE_URL=http://localhost:3010`): 26 screenshots, 0 failed.
 - [x] `eslint` passes on the script.
+- 2026-11-15 – Merged (PR #110).
 
 ## Parking lot
 - Hebrew screenshots once M14's translations land (097–100).

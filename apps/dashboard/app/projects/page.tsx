@@ -14,6 +14,7 @@ import { parseProjectSort, type ProjectSort, sortParams, sortProjects } from "@/
 import { projectStatus } from "@/features/projects/project-status";
 import { ProjectTable } from "@/features/projects/project-table";
 import { listProjects } from "@/features/projects/queries";
+import { stageLabels } from "@/features/projects/stage-labels";
 import { todayUtc } from "@/features/tasks/due-dates";
 import { groupStatusCountsByProject, summarizeProjectStatusCounts } from "@/features/tasks/progress";
 import { countOverdueTasksByProject, countTasksByProjectAndStatus } from "@/features/tasks/queries";
@@ -23,7 +24,7 @@ export const dynamic = "force-dynamic";
 
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
-const FILTER_KEYS = ["customer", "status", "overdue", "q", "view", "sort", "dir"] as const;
+const FILTER_KEYS = ["customer", "status", "stage", "overdue", "q", "view", "sort", "dir"] as const;
 
 export default async function AllProjectsPage({ searchParams }: { searchParams: SearchParams }) {
   const params = await searchParams;
@@ -32,11 +33,12 @@ export default async function AllProjectsPage({ searchParams }: { searchParams: 
     withParams("/projects", Object.fromEntries(FILTER_KEYS.map((key) => [key, firstParam(params[key])]))),
   );
 
-  const [projects, projectCounts, overdue, customers] = await Promise.all([
+  const [projects, projectCounts, overdue, customers, stages] = await Promise.all([
     listProjects(session.user.id, workspace.id),
     countTasksByProjectAndStatus(session.user.id, workspace.id),
     countOverdueTasksByProject(session.user.id, workspace.id, todayUtc()),
     listCustomerNames(session.user.id, workspace.id),
+    stageLabels(),
   ]);
   const filters = parseProjectFilters(params, customers.map((c) => c.id));
   const sort = parseProjectSort(params);
@@ -45,6 +47,7 @@ export default async function AllProjectsPage({ searchParams }: { searchParams: 
   const rows = projects.map((p) => ({
     ...p,
     status: projectStatus(countsByProject.get(p.id) ?? [], p.lifecycle),
+    stageLabel: stages.label(p.stage),
     overdue: overdue.get(p.id) ?? 0,
     progress: progress.get(p.id)?.completionRate ?? 0,
   }));
@@ -52,7 +55,7 @@ export default async function AllProjectsPage({ searchParams }: { searchParams: 
   // Each link changes one thing and keeps the rest.
   const link = (next: Partial<ProjectFilters>, nextSort: ProjectSort = sort) =>
     withParams("/projects", { ...filterParams({ ...filters, ...next }), ...sortParams(nextSort) });
-  const clearFilters = link({ customer: undefined, status: undefined, overdue: false, q: undefined });
+  const clearFilters = link({ customer: undefined, status: undefined, stage: undefined, overdue: false, q: undefined });
 
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
@@ -80,6 +83,7 @@ export default async function AllProjectsPage({ searchParams }: { searchParams: 
                 filters={filters}
                 sortParams={sortParams(sort)}
                 customers={customers}
+                stages={stages.options}
               />
               <nav aria-label="View" className="flex gap-2">
                 <FilterChip selected={filters.view === "table"}>

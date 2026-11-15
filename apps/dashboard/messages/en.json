@@ -3,5 +3,16 @@
     "overview": "Overview",
     "allProjects": "All projects",
     "customers": "Customers"
+  },
+  "projectStage": {
+    "inquiry": "Inquiry",
+    "quote": "Quote",
+    "ordered": "Ordered",
+    "scheduled": "Scheduled",
+    "inWork": "In work",
+    "reporting": "Reporting",
+    "billing": "Billing",
+    "closed": "Closed",
+    "since": "<label>{stage}</label> since"
   }
 }

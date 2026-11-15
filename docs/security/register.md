@@ -11,9 +11,9 @@ The one list of known security gaps and their status. The process that feeds it 
 | P0 – fix now | 0 | 0 | 0 | 5 | 0 |
 | P1 – before real customer data on `main` | 2 | 0 | 2 | 10 | 0 |
 | P2 – hardening | 19 | 0 | 1 | 0 | 1 |
-| P3 – info / decide | 12 | 0 | 0 | 0 | 0 |
+| P3 – info / decide | 13 | 0 | 0 | 0 | 0 |
 
-Counted from the rows below (2026-11-14). "Fixed" includes SEC-14 and SEC-17, merged but not live until the owner applies their Terraform, and rows whose code part is fixed with an owner setting left in the row (SEC-11, SEC-15).
+Counted from the rows below (2026-11-15). "Fixed" includes SEC-14 and SEC-17, merged but not live until the owner applies their Terraform, and rows whose code part is fixed with an owner setting left in the row (SEC-11, SEC-15).
 
 No Critical findings. One High (SEC-01). Nothing in the review showed one workspace's data reaching another through the app: every page, route handler and server action checks access on the server, and row-level security is on for every app table.
 
@@ -59,7 +59,7 @@ No Critical findings. One High (SEC-01). Nothing in the review showed one worksp
 |---|---|---|---|---|---|---|
 | SEC-19 | Low | No security headers on any zone (CSP, frame-ancestors, nosniff, Referrer-Policy, Permissions-Policy); `x-powered-by` sent | Web | S / M (CSP nonces) | open | WEB-3 |
 | SEC-20 | Low | The dashboard and example zones are public at their own run.app URLs, bypassing the shell; zones build URLs from client `x-forwarded-host` | Web / infra | S (headers per zone) / L (private ingress) | open | WEB-4, INF-6 |
-| SEC-21 | Low | The DB still allows hard deletes (grants and delete policies) on soft-delete tables; a project hard delete cascades to readings and files; default privileges give future tables full DML | DB | S | open (cascade parked in task 061) | ACC-2 |
+| SEC-21 | Low | The DB still allows hard deletes (grants and delete policies) on soft-delete tables; a project hard delete cascades to readings, files and (task 101) its stage history; default privileges give future tables full DML | DB | S | open (cascade parked in task 061) | ACC-2 |
 | SEC-22 | Low | The members page shows partners and workers the emails of every admin (and workers see every worker) | Access | S | open (**owner decision:** what partners and workers should see) | ACC-4 |
 | SEC-23 | Low | A partner on a sub-company gets the unassigned parent company's id in the new-project page payload | Access | S | open | ACC-5 |
 | SEC-24 | Low | The database doesn't check that a partner's project site belongs to a sub-company the partner serves, or that a task's organization and assignee are in the project's workspace (the app does) | DB | S–M | open | ACC-6 |
@@ -95,6 +95,7 @@ No Critical findings. One High (SEC-01). Nothing in the review showed one worksp
 | SEC-50 | Info | The `use-intl` and `icu-minify` overrides in `package.json` pin next-intl's family at 4.14.9; a Dependabot bump of `next-intl` alone leaves them pinned to the old release | Supply chain | open (move the overrides with every `next-intl` bump, or drop them) | task 094 review |
 | SEC-51 | Info | The `locale` cookie has no `Secure` flag, so a network attacker could plant it over http; worst case the page's language changes (the value is parsed, never interpolated) | Web | open (optional: add `; secure` on https) | task 094 review |
 | SEC-52 | Info | fake-gcs-server 1.52.2 writes uploads to `<root>/<bucket>/<name>` without escaping the object name (path traversal), and its CORS is `*`. The no-Docker fallback (task 113) runs it with `-backend memory` on 127.0.0.1. The Docker path (`pnpm db:up`) is contained by the container but still publishes 4443 on all interfaces | Tooling | open (fallback: memory backend; Docker: consider publishing on 127.0.0.1) | task 113 review (WEB-1) |
+| SEC-53 | Info | The database doesn't keep a project's stage and its history in step: `project_stage_change.from_stage` is whatever the writer says, and `project_update` lets anyone who can change the project set `project.stage` without a history row. Defence in depth only: the app's writers (`changeStageAction`, project create and copy, the demo seed) are consistent, and the insert policy checks `to_stage` against the project's stage. Fix: an `AFTER UPDATE OF stage` trigger that writes the row, or a definer function as the only way to change a stage | DB | open | task 101 review |
 
 ## Change log
 - 2026-11-08 – Register created from the first full review (41 gaps: 1 High, 12 Medium, rest Low/Info).
@@ -121,3 +122,4 @@ No Critical findings. One High (SEC-01). Nothing in the review showed one worksp
 - 2026-11-14 – Task 111 (workspace setup script): SEC-31 partly fixed (`.env.*` ignored except `.env.example`); SEC-39 notes that a local `.env` now gets a random `BETTER_AUTH_SECRET`. Counts recomputed from the rows.
 - 2026-11-14 – SEC-52 added (P3) from task 113's security review: fake-gcs-server's path traversal; the no-Docker fallback uses its memory backend. Counts recomputed from the rows.
 - 2026-11-14 – Task 114 (flaky `@poc` flow): SEC-09 notes that the e2e failure diagnostics must redact password-reset and email-verification token paths once those exist. No new entry; counts unchanged.
+- 2026-11-15 – Task 101 (project stages) review: SEC-53 added (P3), the stage and its history aren't kept in step by the database; SEC-21 notes that a project hard delete also cascades its stage history. Counts recomputed from the rows.

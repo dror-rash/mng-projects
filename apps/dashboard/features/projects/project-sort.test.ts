@@ -50,6 +50,7 @@ const project = (name: string, extra: Partial<Parameters<typeof sortProjects>[0]
   name,
   customerName: "Acme",
   status: "no_tasks" as const,
+  stage: "inquiry",
   progress: 0,
   overdue: 0,
   createdAt: new Date("2026-10-01T00:00:00Z"),
@@ -74,6 +75,22 @@ describe("sortProjects", () => {
   it("sorts statuses in their own order, not alphabetically", () => {
     const rows = [project("done", { status: "done" }), project("new", { status: "not_started" }), project("empty")];
     expect(names(sortProjects(rows, { column: "status", dir: "asc" }))).toEqual(["empty", "new", "done"]);
+  });
+
+  it("sorts stages in the flow's order, an unknown stored stage as Inquiry (task 101)", () => {
+    const rows = [
+      project("billing", { stage: "billing" }),
+      project("quote", { stage: "quote" }),
+      project("in work", { stage: "in_work" }),
+      project("unknown", { stage: "made_up" }),
+    ];
+    expect(names(sortProjects(rows, { column: "stage", dir: "asc" }))).toEqual(["unknown", "quote", "in work", "billing"]);
+    expect(names(sortProjects(rows, { column: "stage", dir: "desc" }))).toEqual(["billing", "in work", "quote", "unknown"]);
+  });
+
+  it("starts the Stage column with the earliest stage", () => {
+    expect(nextSort(DEFAULT_SORT, "stage")).toEqual({ column: "stage", dir: "asc" });
+    expect(parseProjectSort({ sort: "stage" })).toEqual({ column: "stage", dir: "asc" });
   });
 
   it("sorts by progress, overdue and start date", () => {

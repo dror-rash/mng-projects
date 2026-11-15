@@ -9,6 +9,7 @@ import type { ProjectFilters } from "./project-filters";
 import { PROJECT_STATUSES } from "./project-status";
 
 type CustomerOption = { id: string; name: string };
+type StageOption = { value: string; label: string };
 
 /**
  * The All projects filters as a GET form, so they live in the URL. Selects and the checkbox apply on
@@ -20,10 +21,13 @@ export function ProjectFilterForm({
   filters,
   sortParams,
   customers,
+  stages,
 }: {
   filters: ProjectFilters;
   sortParams: Record<string, string>;
   customers: CustomerOption[];
+  /** Every stage in order, translated (task 101). */
+  stages: StageOption[];
 }) {
   const applyNow = (event: React.ChangeEvent<HTMLSelectElement | HTMLInputElement>) => event.currentTarget.form?.requestSubmit();
 
@@ -52,6 +56,15 @@ export function ProjectFilterForm({
           <option value="">Any status</option>
           {PROJECT_STATUSES.map((s) => (
             <option key={s.status} value={s.status}>{s.label}</option>
+          ))}
+        </NativeSelect>
+      </div>
+      <div className="space-y-1">
+        <label htmlFor="stage" className="text-sm font-medium">Stage</label>
+        <NativeSelect id="stage" name="stage" defaultValue={filters.stage ?? ""} onChange={applyNow}>
+          <option value="">Any stage</option>
+          {stages.map((s) => (
+            <option key={s.value} value={s.value}>{s.label}</option>
           ))}
         </NativeSelect>
       </div>

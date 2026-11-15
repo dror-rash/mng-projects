@@ -19,6 +19,10 @@ import { getOrganizationForUser } from "@/features/organizations/queries";
 import { setProjectLifecycleAction } from "@/features/projects/actions";
 import { isCanceled, projectLifecycleLabel } from "@/features/projects/project-lifecycle";
 import { getProjectForUser } from "@/features/projects/queries";
+import { changeStageAction } from "@/features/projects/stage-actions";
+import { StageControl } from "@/features/projects/stage-control";
+import { getStageChangedAt } from "@/features/projects/stage-history";
+import { stageLabels } from "@/features/projects/stage-labels";
 import { listProjectReadings } from "@/features/readings/queries";
 import { ReadingsSection } from "@/features/readings/readings-section";
 import { mapsLink } from "@/features/sites/maps-link";
@@ -29,7 +33,7 @@ import { VisitsSection } from "@/features/visits/visits-section";
 import { deleteTaskAction, updateTaskStatusAction } from "@/features/tasks/actions";
 import { AddTaskForm } from "@/features/tasks/add-task-form";
 import { listProjectTasks } from "@/features/tasks/queries";
-import { todayUtc } from "@/features/tasks/due-dates";
+import { formatDueDate, todayUtc } from "@/features/tasks/due-dates";
 import { byPriority } from "@/features/tasks/task-priority";
 import { TaskBoard } from "@/features/tasks/task-board";
 import { requireWorkspace } from "@/features/workspaces/require-workspace";
@@ -47,7 +51,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ projec
 
   // The customer is a link only for those who can open customer pages; partners see its name only. The
   // project it was copied from shows only to those who can see that one too (rule 4a).
-  const [tasks, customerPage, copiedFrom, site, crew, manageCrew, visits, readings, attachments, reports] = await Promise.all([
+  const [tasks, customerPage, copiedFrom, site, crew, manageCrew, visits, readings, attachments, reports, stageChangedAt, stages] = await Promise.all([
     listProjectTasks(session.user.id, project.id),
     project.customerName ? getOrganizationForUser(session.user.id, project.organizationId, "customer") : null,
     project.copiedFromId ? getProjectForUser(session.user.id, project.copiedFromId) : null,
@@ -58,7 +62,11 @@ export default async function ProjectPage({ params }: { params: Promise<{ projec
     listProjectReadings(session.user.id, project.id),
     listProjectAttachments(session.user.id, project.id),
     listProjectReports(session.user.id, project.id),
+    getStageChangedAt(session.user.id, project.id),
+    stageLabels(),
   ]);
+  // The stage's day (task 101): its latest change, or when the project was made if it has no history yet.
+  const stageSince = todayUtc(stageChangedAt ?? project.createdAt);
   // Admins put the workspace's workers on the crew (task 056).
   const crewChoices = manageCrew ? await listCrewChoices(session.user.id, project) : [];
   // Where the work is (task 055). Every project has a site (task 071); it shows while it isn't deleted.
@@ -124,6 +132,16 @@ export default async function ProjectPage({ params }: { params: Promise<{ projec
             </div>
           )}
         </section>
+
+        <StageControl
+          projectId={project.id}
+          stage={project.stage}
+          options={stages.options}
+          line={stages.since(project.stage)}
+          since={stageSince}
+          sinceText={formatDueDate(stageSince)}
+          action={project.canChange ? changeStageAction : undefined}
+        />
 
         {site && (
           <ProjectSiteSection

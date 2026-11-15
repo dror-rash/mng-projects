@@ -252,8 +252,17 @@ async function seedPlan(tx: Tx, plan: DemoCustomer[], userId: string, workspaceI
         workspaceId,
         organizationId: projectOrganizationId,
         siteId: siteIds.get(`${projectOrganizationId}:${project.site}`)!,
+        stage: project.stage,
         createdAt: project.createdAt,
         updatedAt: project.createdAt,
+      });
+      await tx.insert(schema.projectStageChange).values({
+        id: id(),
+        projectId,
+        fromStage: null,
+        toStage: project.stage,
+        changedBy: userId,
+        changedAt: project.createdAt,
       });
       if (project.tasks.length > 0) {
         await tx.insert(schema.task).values(
