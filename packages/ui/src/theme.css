@@ -49,7 +49,7 @@
   --primary: #c73a23;
   --primary-hover: #ad321e;
   --primary-foreground: #f6f7eb;
-  --secondary: #4f5559;
+  --secondary: #5a6064; /* a step above --border, so the outline button keeps its border on hover */
   --secondary-foreground: #f6f7eb;
   --muted: #44494c;
   --muted-foreground: #b4b8aa;
