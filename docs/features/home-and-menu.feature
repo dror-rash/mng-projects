@@ -105,3 +105,41 @@ Feature: The dashboard is home, with a short menu
     When I open "/dashboard"
     Then the page is right to left
     And the menu is on the right
+
+  # Task 119, leak suite: the menu never offers what my role can't open, and never shows my role from one
+  # workspace on a page of another. The workspace is the leak suite's (partner-access.feature, workers.feature).
+
+  @task:119 @zone:dashboard
+  Scenario: A worker's menu has no Customers
+    Given a workspace with the partners "Northwind" and "Globex", an admin and an auditor
+    And I am signed in as a worker
+    And my screen is 1280 pixels wide
+    When I open "/dashboard"
+    Then the dashboard menu links are "Overview, All projects"
+    And the header has no "Customers" link
+
+  @task:119 @zone:dashboard
+  Scenario: A partner's menu on a phone has no Customers
+    Given a workspace with the partners "Northwind" and "Globex", an admin and an auditor
+    And I am signed in as a user of "Northwind"
+    And my screen is 360 pixels wide
+    When I open "/dashboard"
+    And I open the menu
+    Then the dashboard menu links are "Overview, All projects"
+    And the header has no "Customers" link
+
+  @task:119 @zone:dashboard
+  Scenario: On a page from another workspace the menu doesn't show my role from the current one
+    Given a workspace with the partners "Northwind" and "Globex", an admin and an auditor
+    And the customer "Acme Ltd" is assigned to "Northwind"
+    And "Northwind" has the project "NW Site" for "Acme Ltd" with the task "Copy"
+    And I am signed in as a user of "Northwind"
+    And I am also an admin of my own workspace, with the task "Mine" assigned to me
+    When I switch to "My own"
+    Then the header shows the workspace "My own"
+    And the header says "Admin"
+    When I open the address of the "NW Site" project
+    Then I see the heading "NW Site"
+    And the header shows the workspace "Partner Hub"
+    And the header says "in another workspace"
+    And the header does not say "Admin"
