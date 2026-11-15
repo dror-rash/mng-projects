@@ -3,5 +3,16 @@
     "overview": "סקירה",
     "allProjects": "כל הפרויקטים",
     "customers": "לקוחות"
+  },
+  "projectStage": {
+    "inquiry": "פנייה",
+    "quote": "הצעת מחיר",
+    "ordered": "הוזמן",
+    "scheduled": "מתואם",
+    "inWork": "בביצוע",
+    "reporting": "דוחות",
+    "billing": "חיוב",
+    "closed": "סגור",
+    "since": "<label>{stage}</label> מאז"
   }
 }

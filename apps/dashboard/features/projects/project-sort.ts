@@ -1,5 +1,6 @@
 import { firstParam } from "@/features/navigation/search-params";
 
+import { stageOrder } from "./project-stage";
 import { PROJECT_STATUSES, type ProjectStatus } from "./project-status";
 
 export type SortDirection = "asc" | "desc";
@@ -9,6 +10,7 @@ export const PROJECT_SORTS = [
   { column: "name", label: "Project", first: "asc" },
   { column: "customer", label: "Customer", first: "asc" },
   { column: "status", label: "Status", first: "asc" },
+  { column: "stage", label: "Stage", first: "asc" },
   { column: "progress", label: "Progress", first: "desc" },
   { column: "overdue", label: "Overdue", first: "desc" },
   { column: "started", label: "Started", first: "desc" },
@@ -53,6 +55,8 @@ type SortableProject = {
   /** Null only when the user may not see the customer's name; sorts as an empty name. */
   customerName: string | null;
   status: ProjectStatus;
+  /** The stored stage (task 101); sorts in the flow's order. */
+  stage: string;
   /** Percent of tasks done. */
   progress: number;
   overdue: number;
@@ -66,6 +70,7 @@ const compare: Record<ProjectSortColumn, (a: SortableProject, b: SortableProject
   name: (a, b) => byText(a.name, b.name),
   customer: (a, b) => byText(a.customerName ?? "", b.customerName ?? ""),
   status: (a, b) => statusOrder(a.status) - statusOrder(b.status),
+  stage: (a, b) => stageOrder(a.stage) - stageOrder(b.stage),
   progress: (a, b) => a.progress - b.progress,
   overdue: (a, b) => a.overdue - b.overdue,
   started: (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),

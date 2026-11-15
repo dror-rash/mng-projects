@@ -11,16 +11,16 @@ describe("parseProjectFilters", () => {
 
   it("reads every filter and the view", () => {
     expect(
-      parseProjectFilters({ customer: "acme", status: "done", overdue: "1", q: "  web  ", view: "tiles" }, customers),
-    ).toEqual({ customer: "acme", status: "done", overdue: true, q: "web", view: "tiles" });
+      parseProjectFilters({ customer: "acme", status: "done", stage: "in_work", overdue: "1", q: "  web  ", view: "tiles" }, customers),
+    ).toEqual({ customer: "acme", status: "done", stage: "in_work", overdue: true, q: "web", view: "tiles" });
   });
 
   it("ignores an old link to projects without a customer, which no longer exist (task 071)", () => {
     expect(parseProjectFilters({ customer: "none" }, customers)).toEqual({ overdue: false, view: "table" });
   });
 
-  it("ignores a customer that isn't one of the workspace's, an unknown status and an unknown view", () => {
-    expect(parseProjectFilters({ customer: "someone-else", status: "archived", view: "grid" }, customers)).toEqual({
+  it("ignores a customer that isn't one of the workspace's, an unknown status or stage and an unknown view", () => {
+    expect(parseProjectFilters({ customer: "someone-else", status: "archived", stage: "In work", view: "grid" }, customers)).toEqual({
       overdue: false,
       view: "table",
     });
@@ -37,9 +37,10 @@ describe("filterParams", () => {
   });
 
   it("writes every set filter", () => {
-    expect(filterParams({ customer: "acme", status: "done", overdue: true, q: "web", view: "tiles" })).toEqual({
+    expect(filterParams({ customer: "acme", status: "done", stage: "quote", overdue: true, q: "web", view: "tiles" })).toEqual({
       customer: "acme",
       status: "done",
+      stage: "quote",
       overdue: "1",
       q: "web",
       view: "tiles",
@@ -49,9 +50,9 @@ describe("filterParams", () => {
 
 describe("filterProjects", () => {
   const projects = [
-    { name: "Website Redesign", organizationId: "acme", status: "in_progress" as const, overdue: 0 },
-    { name: "Internal Ops", organizationId: "acme", status: "not_started" as const, overdue: 2 },
-    { name: "Mobile App", organizationId: "globex", status: "done" as const, overdue: 0 },
+    { name: "Website Redesign", organizationId: "acme", status: "in_progress" as const, stage: "quote", overdue: 0 },
+    { name: "Internal Ops", organizationId: "acme", status: "not_started" as const, stage: "made_up", overdue: 2 },
+    { name: "Mobile App", organizationId: "globex", status: "done" as const, stage: "quote", overdue: 0 },
   ];
   const names = (filters: Parameters<typeof filterProjects>[1]) => filterProjects(projects, filters).map((p) => p.name);
 
@@ -66,6 +67,12 @@ describe("filterProjects", () => {
 
   it("filters by status", () => {
     expect(names({ status: "done", overdue: false, view: "table" })).toEqual(["Mobile App"]);
+  });
+
+  it("filters by stage, an unknown stored stage counting as Inquiry (task 101)", () => {
+    expect(names({ stage: "quote", overdue: false, view: "table" })).toEqual(["Website Redesign", "Mobile App"]);
+    expect(names({ stage: "inquiry", overdue: false, view: "table" })).toEqual(["Internal Ops"]);
+    expect(names({ stage: "closed", overdue: false, view: "table" })).toEqual([]);
   });
 
   it("keeps only projects with overdue tasks", () => {
