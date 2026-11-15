@@ -143,6 +143,11 @@ describe("who sees the stage history", () => {
 });
 
 describe("who records a stage change", () => {
+  // A change records the stage the project is now at (the action updates the project first).
+  beforeAll(async () => {
+    await getMaintenanceDb().execute(sql`update project set stage = 'quote' where id = ${ids.projectA}`);
+  });
+
   it("lets whoever can change the project record one as themselves", async () => {
     expect(await writeAs(ids.admin, insertChange(`${run}-by-admin`, ids.projectA, ids.admin))).toBe(1);
     expect(await writeAs(ids.pa, insertChange(`${run}-by-pa`, ids.projectA, ids.pa))).toBe(1);
@@ -155,6 +160,23 @@ describe("who records a stage change", () => {
     expect(await writeAs(ids.outsider, insertChange(`${run}-by-outsider`, ids.projectA, ids.outsider))).toBe("refused");
     expect(await writeAs(ids.pa, insertChange(`${run}-as-admin`, ids.projectA, ids.admin))).toBe("refused");
     expect(await writeAs(ids.pa, insertChange(`${run}-nobody`, ids.projectA, null))).toBe("refused");
+  });
+
+  it("refuses a change to a stage the project isn't at", async () => {
+    expect(await writeAs(ids.admin, insertChange(`${run}-not-at`, ids.projectA, ids.admin, "quote", "closed"))).toBe("refused");
+    expect(await writeAs(ids.pa, insertChange(`${run}-not-at-pa`, ids.projectA, ids.pa, "inquiry", "ordered"))).toBe("refused");
+  });
+
+  it("takes the time of a change from the database, never from the writer", async () => {
+    const backdated = sql`insert into project_stage_change (id, project_id, from_stage, to_stage, changed_by, changed_at)
+      values (${`${run}-backdated`}, ${ids.projectA}, 'inquiry', 'quote', ${ids.admin}, '2020-01-01')`;
+    expect(await writeAs(ids.admin, backdated)).toBe("refused");
+    expect(await writeAs(ids.admin, insertChange(`${run}-timed`, ids.projectA, ids.admin))).toBe(1);
+    const [row] = await as<{ recent: boolean }>(
+      ids.admin,
+      sql`select changed_at > now() - interval '1 minute' as recent from project_stage_change where id = ${`${run}-timed`}`,
+    );
+    expect(row).toEqual({ recent: true });
   });
 
   it("refuses a made-up project and a made-up stage", async () => {
@@ -208,12 +230,12 @@ describe("the stage history is append-only", () => {
 });
 
 // The migration itself, run again on a copy of the state before it (inside a transaction that is rolled back):
-// projects that existed then are In work, with a first history row, and new ones start at Inquiry.
+// projects that existed then are In work since they were made, with a first history row, and new ones start at Inquiry.
 describe("the migration", () => {
   const migrations = fileURLToPath(new URL("../migrations/", import.meta.url));
   const file = readdirSync(migrations).find((name) => name.endsWith("_project_stages.sql"));
 
-  it("puts existing projects at In work with a first history row, canceled ones too, and new ones at Inquiry", async () => {
+  it("puts existing projects at In work since they were made, canceled ones too, and new ones at Inquiry", async () => {
     expect(file, "no *_project_stages.sql migration").toBeDefined();
     const statements = readFileSync(`${migrations}${file}`, "utf8")
       .split("--> statement-breakpoint")
@@ -231,9 +253,10 @@ describe("the migration", () => {
           sql`select id, stage, status from project where id in (${ids.projectA}, ${ids.projectB}) order by id`,
         );
         seen.projects = projects.rows;
-        const changes = await tx.execute<{ project_id: string; from_stage: string | null; to_stage: string; changed_by: string | null }>(
-          sql`select project_id, from_stage, to_stage, changed_by from project_stage_change
-              where project_id in (${ids.projectA}, ${ids.projectB}) order by project_id`,
+        const changes = await tx.execute<{ project_id: string; from_stage: string | null; to_stage: string; changed_by: string | null; since_created: boolean }>(
+          sql`select c.project_id, c.from_stage, c.to_stage, c.changed_by, c.changed_at = p.created_at as since_created
+              from project_stage_change c join project p on p.id = c.project_id
+              where c.project_id in (${ids.projectA}, ${ids.projectB}) order by c.project_id`,
         );
         seen.changes = changes.rows;
         const siteId = `${ids.acme}-site`;
@@ -250,8 +273,8 @@ describe("the migration", () => {
       { id: ids.projectB, stage: "in_work", status: "canceled" },
     ]);
     expect(seen.changes).toEqual([
-      { project_id: ids.projectA, from_stage: null, to_stage: "in_work", changed_by: null },
-      { project_id: ids.projectB, from_stage: null, to_stage: "in_work", changed_by: null },
+      { project_id: ids.projectA, from_stage: null, to_stage: "in_work", changed_by: null, since_created: true },
+      { project_id: ids.projectB, from_stage: null, to_stage: "in_work", changed_by: null, since_created: true },
     ]);
     expect(seen.after).toEqual([{ stage: "inquiry" }]);
   });
