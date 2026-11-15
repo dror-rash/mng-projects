@@ -19,6 +19,8 @@
   --muted: #ecede0; /* a paper step between the canvas and the border: hover rows, empty bars */
   --muted-foreground: #5e6366;
   --accent: #e94f37; /* flame: non-text marks only (the W mark, focus marks) */
+  /* The W logotype on the flame mark (3.4:1). Logotypes are exempt from WCAG 1.4.3; never use it for other text. */
+  --accent-foreground: #f6f7eb;
   /* Same hue as before, stepped so error and "Overdue" text reach 4.5:1 on the paper and cards. */
   --destructive: #d8151c;
   --border: #e2e3d6;
@@ -54,6 +56,7 @@
   --muted: #44494c;
   --muted-foreground: #b4b8aa;
   --accent: #e94f37;
+  --accent-foreground: #f6f7eb; /* the W logotype only, see :root */
   /* Lighter, so error and "Overdue" text reach 4.5:1 on the dark canvas and cards (the button darkens it back). */
   --destructive: #ff9a97;
   --border: #4f5559;
@@ -87,6 +90,7 @@
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
   --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
   --color-border: var(--border);
   --color-ring: var(--ring);

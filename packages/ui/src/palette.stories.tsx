@@ -29,8 +29,10 @@ const GROUPS: { title: string; tokens: { name: string; role: string }[] }[] = [
     title: "Accent (10%)",
     tokens: [
       { name: "primary", role: "Fills that carry text: primary buttons, the current menu item" },
+      { name: "primary-hover", role: "Primary fills when hovered (darker, so the text keeps 4.5:1)" },
       { name: "primary-foreground", role: "Text on those fills" },
       { name: "accent", role: "Non-text marks only: the W mark (never text, 3.4:1)" },
+      { name: "accent-foreground", role: "The W logotype on the mark only (exempt as a logotype)" },
       { name: "ring", role: "Focus marks" },
       { name: "destructive", role: "Errors and Overdue" },
     ],
