@@ -117,13 +117,32 @@ describe("theme contrast", () => {
     expect(token(theme, name).toLowerCase()).toBe(value);
   });
 
-  it.each(["background", "card"])("dark: white text on the destructive button reaches 4.5:1 on --%s", (surface) => {
-    // The dark destructive token is a light red for text; the button lays it over the surface at a low alpha.
+  describe("the destructive button", () => {
     const button = readFileSync(fileURLToPath(new URL("./components/button.tsx", import.meta.url)), "utf8");
-    for (const [, alpha] of button.matchAll(/dark:(?:hover:)?bg-destructive\/(\d+)/g)) {
-      const fill = mix(token("dark", "destructive"), token("dark", surface), Number(alpha) / 100);
-      expect(contrast("#ffffff", fill), `at ${alpha}%`).toBeGreaterThanOrEqual(TEXT);
-    }
+    // Opacity steps of the fill: the light ones (`bg-destructive`, `hover:bg-destructive/NN`) and the dark ones.
+    const alphas = (pattern: RegExp) => [...button.matchAll(pattern)].map(([, alpha]) => Number(alpha ?? 100) / 100);
+    const light = [1, ...alphas(/(?<!dark:)hover:bg-destructive\/(\d+)/g)];
+    const dark = alphas(/dark:(?:hover:)?bg-destructive\/(\d+)/g);
+
+    it("finds its fill and hover in both themes", () => {
+      expect(light).toHaveLength(2);
+      expect(dark).toHaveLength(2);
+    });
+
+    it.each(["background", "card"])("light: white text reaches 4.5:1 at rest and hovered on --%s", (surface) => {
+      for (const alpha of light) {
+        const fill = mix(token("light", "destructive"), token("light", surface), alpha);
+        expect(contrast("#ffffff", fill), `at ${alpha * 100}%`).toBeGreaterThanOrEqual(TEXT);
+      }
+    });
+
+    // The dark destructive token is a light red for text; the button lays it over the surface at a low alpha.
+    it.each(["background", "card"])("dark: white text reaches 4.5:1 at rest and hovered on --%s", (surface) => {
+      for (const alpha of dark) {
+        const fill = mix(token("dark", "destructive"), token("dark", surface), alpha);
+        expect(contrast("#ffffff", fill), `at ${alpha * 100}%`).toBeGreaterThanOrEqual(TEXT);
+      }
+    });
   });
 
   it("never fades a primary fill on hover, which would lighten it toward the paper under its text", () => {
