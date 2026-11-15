@@ -17,9 +17,10 @@ export function parseTaskStatus(value: unknown): TaskStatus | null {
 }
 
 export function groupTasksByStatus<T extends { status: string }>(tasks: T[]) {
-  return TASK_STATUSES.map(({ status, label }) => ({
+  return TASK_STATUSES.map(({ status, label, chartSlot }) => ({
     status,
     label,
+    chartSlot,
     tasks: tasks.filter((t) => (parseTaskStatus(t.status) ?? DEFAULT_STATUS) === status),
   }));
 }
