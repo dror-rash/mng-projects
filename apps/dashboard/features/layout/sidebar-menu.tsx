@@ -22,7 +22,7 @@ export type AppSidebarProps = {
   role: WorkspaceRole;
   /** The workspace of what the page shows: a record's own workspace on record pages. */
   workspaceName: string;
-  /** The record isn't in the current workspace: the switcher says so under the name. */
+  /** The record isn't in the current workspace: the switcher says so under the name, without my role. */
   otherWorkspace?: boolean;
 };
 
@@ -43,7 +43,7 @@ export type SidebarMenuProps = AppSidebarProps & {
   items: (NavItem & { label: string })[];
   theme: Theme;
   locale: Locale;
-  labels: { language: string; openMenu: string; closeMenu: string };
+  labels: { menu: string; language: string; openMenu: string; closeMenu: string };
 };
 
 /**
@@ -63,7 +63,8 @@ export function SidebarMenu({ email, name, role, workspaceName, otherWorkspace =
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="truncate text-sm font-semibold">{workspaceName}</span>
         {otherWorkspace && <span className="truncate text-xs text-sidebar-muted">in another workspace</span>}
-        <span className="text-xs text-sidebar-muted">{workspaceRoleLabel(role)}</span>
+        {/* My role is the current workspace's; on another workspace's record it would mislabel that one. */}
+        {!otherWorkspace && <span className="text-xs text-sidebar-muted">{workspaceRoleLabel(role)}</span>}
       </span>
       <ChevronsUpDownIcon aria-hidden="true" className="size-4 shrink-0 text-sidebar-muted" />
     </Link>
@@ -98,9 +99,9 @@ export function SidebarMenu({ email, name, role, workspaceName, otherWorkspace =
 
   return (
     <>
-      <Sidebar>{panel}</Sidebar>
+      <Sidebar label={labels.menu}>{panel}</Sidebar>
       <SidebarTopBar>
-        <SidebarDrawer openLabel={labels.openMenu} closeLabel={labels.closeMenu} title={workspaceName}>
+        <SidebarDrawer openLabel={labels.openMenu} closeLabel={labels.closeMenu} title={labels.menu}>
           {panel}
         </SidebarDrawer>
         <Mark />

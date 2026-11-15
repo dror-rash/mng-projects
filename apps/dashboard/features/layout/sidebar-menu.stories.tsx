@@ -51,7 +51,7 @@ const meta = {
     items: items("admin"),
     theme: "light",
     locale: "en",
-    labels: { language: "Language", openMenu: "Open menu", closeMenu: "Close menu" },
+    labels: { menu: "Menu", language: "Language", openMenu: "Open menu", closeMenu: "Close menu" },
   },
   decorators: [onPage()],
 } satisfies Meta<typeof SidebarMenu>;

@@ -5,6 +5,7 @@
     "customers": "Customers"
   },
   "menu": {
+    "label": "Menu",
     "open": "Open menu",
     "close": "Close menu"
   },

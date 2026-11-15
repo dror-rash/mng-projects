@@ -25,7 +25,7 @@ export async function AppSidebar(props: AppSidebarProps) {
       items={items}
       theme={theme}
       locale={parseLocale(locale)}
-      labels={{ language: ui("label"), openMenu: menu("open"), closeMenu: menu("close") }}
+      labels={{ menu: menu("label"), language: ui("label"), openMenu: menu("open"), closeMenu: menu("close") }}
     />
   );
 }
