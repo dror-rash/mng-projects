@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { overviewWindow, summarizeOverview, withStatusChartSlots } from "./overview";
+import { overviewWindow, summarizeOverview } from "./overview";
 
 type Counts = { count: number; overdue: number; dueSoon: number; created: number; completed: number };
 const row = (status: string, counts: Partial<Counts>) => ({
@@ -50,16 +50,16 @@ describe("summarizeOverview", () => {
 
   it("lists every board column in order, with zero for an empty one", () => {
     expect(summarizeOverview([row("done", { count: 3 })]).byStatus).toEqual([
-      { label: "To do", value: 0 },
-      { label: "In progress", value: 0 },
-      { label: "Done", value: 3 },
+      { label: "To do", value: 0, slot: 1 },
+      { label: "In progress", value: 0, slot: 4 },
+      { label: "Done", value: 3, slot: 3 },
     ]);
   });
 
   it("puts an unknown status in the To do column and counts its due dates", () => {
     const overview = summarizeOverview([row("legacy", { count: 2, overdue: 1 }), row("todo", { count: 1 })]);
 
-    expect(overview.byStatus[0]).toEqual({ label: "To do", value: 3 });
+    expect(overview.byStatus[0]).toEqual({ label: "To do", value: 3, slot: 1 });
     expect(overview.overdue).toBe(1);
   });
 
@@ -70,22 +70,11 @@ describe("summarizeOverview", () => {
       dueSoon: 0,
       thisWeek: { created: 0, completed: 0 },
       byStatus: [
-        { label: "To do", value: 0 },
-        { label: "In progress", value: 0 },
-        { label: "Done", value: 0 },
+        { label: "To do", value: 0, slot: 1 },
+        { label: "In progress", value: 0, slot: 4 },
+        { label: "Done", value: 0, slot: 3 },
       ],
     });
   });
 });
 
-describe("withStatusChartSlots", () => {
-  it("gives In progress the amber slot, leaving the orange-red to the accent", () => {
-    const { byStatus } = summarizeOverview([row("todo", { count: 2 }), row("in_progress", { count: 1 })]);
-
-    expect(withStatusChartSlots(byStatus)).toEqual([
-      { label: "To do", value: 2, slot: 1 },
-      { label: "In progress", value: 1, slot: 4 },
-      { label: "Done", value: 0, slot: 3 },
-    ]);
-  });
-});
