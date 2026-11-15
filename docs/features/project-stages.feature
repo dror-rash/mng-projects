@@ -6,7 +6,7 @@ Feature: Project stages
 
   # Stages: Inquiry, Quote, Ordered, Scheduled, In work, Reporting, Billing, Closed.
 
-  @wip @task:101
+  @task:101
   Scenario: A new project starts at Inquiry
     Given I am signed in with an existing account
     And I have a customer "Acme Ltd" with status "Active" and tags "retail"
@@ -20,7 +20,7 @@ Feature: Project stages
     Then I see the heading "Panel upgrade"
     And the project shows "Inquiry" since today
 
-  @wip @task:101
+  @task:101
   Scenario: I move a project to the next stage
     Given I am signed in with an existing account
     And I have a project named "Panel upgrade"
@@ -29,7 +29,7 @@ Feature: Project stages
     And I change the stage to "Quote"
     Then the project shows "Quote" since today
 
-  @wip @task:101
+  @task:101
   Scenario: A stage can go back
     Given I am signed in with an existing account
     And I have a project named "Panel upgrade"
@@ -38,7 +38,7 @@ Feature: Project stages
     And I change the stage to "Quote"
     Then the project shows "Quote" since today
 
-  @wip @task:101
+  @task:101
   Scenario: The projects table shows and filters by stage
     Given I am signed in with an existing account
     And I have projects named "Panel upgrade, Shelf lighting, Fire alarm"
@@ -51,7 +51,7 @@ Feature: Project stages
     When I select "Quote" from "Stage"
     Then the projects shown are "Fire alarm, Panel upgrade"
 
-  @wip @task:101
+  @task:101
   Scenario: A canceled project keeps its stage
     Given I am signed in with an existing account
     And I have a project named "Panel upgrade"
@@ -64,7 +64,7 @@ Feature: Project stages
     Then the "Panel upgrade" row shows "Canceled"
     And the "Panel upgrade" row shows "Quote"
 
-  @wip @task:101
+  @task:101
   Scenario: A made-up stage is refused
     Given I am signed in with an existing account
     And I have a project named "Panel upgrade"
@@ -73,7 +73,7 @@ Feature: Project stages
     And I press "Change stage"
     Then I see the error "Choose a stage"
 
-  @wip @task:101
+  @task:101
   Scenario: Who can change a stage
     Given a workspace with the partners "Northwind" and "Globex", an admin and an auditor
     And the customer "Acme Ltd" is assigned to "Northwind" and "Globex"
@@ -87,7 +87,7 @@ Feature: Project stages
     Then the auditor sees the text "Scheduled"
     And the auditor sees no "Change stage" button
 
-  @wip @task:101
+  @task:101
   Scenario: A worker sees the stage but can't change it
     Given a workspace with the partners "Northwind" and "Globex", an admin and an auditor
     And the customer "Acme Ltd" is assigned to "Northwind" and "Globex"
@@ -99,7 +99,7 @@ Feature: Project stages
     Then I see the text "Ordered"
     And I see no "Change stage" button
 
-  @wip @task:101
+  @task:101
   Scenario: Another partner's project's stage can't be changed
     Given a workspace with the partners "Northwind" and "Globex", an admin and an auditor
     And the customer "Acme Ltd" is assigned to "Northwind" and "Globex"

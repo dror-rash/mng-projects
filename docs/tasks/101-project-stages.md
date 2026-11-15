@@ -72,6 +72,7 @@ The owner's flow (PLAN "Target flow", steps 1–10) needs one answer to "where i
 ## Progress log
 - 2026-11-11 – Drafted with `project-stages.feature` (`@wip`).
 - 2026-11-15 – Started in lane 1 (`feat/project-stages`). Readiness: added the worker scenario the criterion named (planner).
+- 2026-11-15 – Acceptance steps written, `@wip` removed; red run: 9 of 9 fail on the missing feature (no "Stage" select, no `project.stage` column) (spec-writer).
 
 ## Parking lot
 - Rename "Status" (derived from tasks) to "Progress" (changes existing scenarios; owner).

@@ -3,7 +3,7 @@ import { and, eq, inArray, schema, sql } from "@repo/db";
 import { getMaintenanceDb } from "@repo/db/maintenance";
 
 import { Given, Then, userId, When } from "./fixtures";
-import { ids, idOf } from "./partner-access.steps";
+import { chooseValue, ids, idOf } from "./partner-access.steps";
 import { myRecordId } from "./sites.steps";
 import { pressAndWait } from "./workspaces.steps";
 
@@ -60,8 +60,15 @@ When("I restore {string} from the Deleted page", async ({ page }, name: string) 
   await pressAndWait(page, `Restore ${name}`);
 });
 
-// A tampered form: puts the id of one of my customers that the select doesn't offer into it.
-When("I choose {string} in {string} by editing the page", async ({ page }, customer: string, label: string) => {
+// A tampered form. "Part of": puts the id of one of my customers that the select doesn't offer into it. Any other
+// select (a fixed value set, like a project's "Stage"): puts the text itself in as a value no option has.
+When("I choose {string} in {string} by editing the page", async ({ page }, value: string, label: string) => {
+  const select = page.getByLabel(label, { exact: true });
+  await expect(select).toBeVisible();
+  if (label !== "Part of") {
+    await chooseValue(select, value);
+    return;
+  }
   const db = getMaintenanceDb();
   const mine = db
     .select({ id: schema.workspaceMember.workspaceId })
@@ -70,15 +77,9 @@ When("I choose {string} in {string} by editing the page", async ({ page }, custo
   const [row] = await db
     .select({ id: schema.organization.id })
     .from(schema.organization)
-    .where(and(eq(schema.organization.name, customer), inArray(schema.organization.workspaceId, mine)));
+    .where(and(eq(schema.organization.name, value), inArray(schema.organization.workspaceId, mine)));
   expect(row).toBeDefined();
-  await page.getByLabel(label, { exact: true }).evaluate((select, id) => {
-    const option = document.createElement("option");
-    option.value = id;
-    option.text = "Tampered";
-    select.appendChild(option);
-    (select as HTMLSelectElement).value = id;
-  }, row!.id);
+  await chooseValue(select, row!.id);
 });
 
 // --- The leak suite's two-partner workspace (partner-access.steps.ts) --------------------------------------
