@@ -4,7 +4,7 @@
 - **Milestone:** M15 Pipeline and communications
 - **Zone / package:** `packages/db`, `apps/dashboard` (new `features/work-orders`, `features/organizations/contacts`, `features/deleted`), `e2e`
 - **Feature file:** `docs/features/work-orders.feature` (`@task:106`)
-- **Depends on:** tasks 101 and 103 (`can_see_commercial`); ADR-0012
+- **Depends on:** tasks 101 and 103 (`can_see_commercial`); ADR-0012; tasks 121 and 122 (the "Move to" button and the Sales tab; M22)
 
 ## Why
 Flow step 4: the customer orders the work through an authorised person, and the payment terms are agreed. The office needs it on record before scheduling and billing.
@@ -17,7 +17,7 @@ Flow step 4: the customer orders the work through an authorised person, and the 
   - RLS: select with `can_see_commercial`, insert and update with `can_change_commercial`, no delete grant;
   - `rls-pins.mjs` updated.
 - **Contacts:** an "Authorised to order" checkbox on the contact form; "Authorised to order" shows on the contact. Visible to those who see contacts today.
-- **Project page:** a "Work orders" section (admins and auditors), newest first, with order number, date, ordered by, payment terms. "Record a work order" (admins) opens a form:
+- **Project page:** a "Work orders" section in the Sales tab (task 122; M22 placement) (admins and auditors), newest first, with order number, date, ordered by, payment terms. "Record a work order" (admins) opens a form:
   - Order number (optional), Ordered on (default today, not in the future);
   - Ordered by: only contacts marked "Authorised to order". If none: "No one at <customer> is authorised to order yet." with a link to the customer page;
   - Payment terms: Immediate מיידי, Net 30 שוטף+30, Net 60 שוטף+60, Net 90 שוטף+90, Other אחר. "Other" needs a note;
@@ -29,7 +29,7 @@ Flow step 4: the customer orders the work through an authorised person, and the 
   - "The order date can't be in the future";
   - "Choose payment terms";
   - "Describe the payment terms" (Other without a note).
-- The stage doesn't move by itself (ADR-0012). After saving, the page offers "Move to Ordered" when the stage is before Ordered.
+- The stage doesn't move by itself (ADR-0012). "Move to Ordered" is the "Next step" card's button (task 121): at Quote with items open it asks first ("Move anyway"). No separate button on the work order.
 
 ## Out of scope
 - The order document upload (task 107).
@@ -69,8 +69,10 @@ DB tests (policies, trigger), parser (unit), actions, section. Reuses `can_see_c
 
 ## Progress log
 - 2026-11-11 – Drafted with `work-orders.feature` (`@wip`).
+- 2026-11-15 – Amended for M22 (planner): the section is in the Sales tab and the `@wip` scenarios open it; "Move to Ordered" is task 121's card button, so the first scenario confirms with "Move anyway". New step `the auditor opens the {string} tab of the {string} project`; `the {string} user sees no {string} section on {string}` opens the Sales tab. Now depends on tasks 121 and 122.
 
 ## Parking lot
 - Default payment terms per customer.
 - An order amount (with the money ADR).
 - A signed order (e-signature, external service).
+- Recording a work order could tick the Ordered checklist item "Work order from an authorised person at the customer" (task 120 parking lot).

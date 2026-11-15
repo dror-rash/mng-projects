@@ -4,13 +4,13 @@
 - **Milestone:** M15 Pipeline and communications
 - **Zone / package:** `apps/dashboard` (new `features/timeline`), `e2e`
 - **Feature file:** `docs/features/timeline.feature` (`@task:108`)
-- **Depends on:** tasks 101, 103 and 106
+- **Depends on:** tasks 101, 103 and 106; task 122 (the timeline lives in the Overview tab)
 
 ## Why
 Following a job from inquiry to close means reading one history, not five sections: stage changes, conversations, the work order, visits and reports in date order.
 
 ## Scope
-- **Project page, "Timeline" section**, newest first, up to 50 entries with "Show more":
+- **Project page, "Timeline" section** in the Overview tab (task 122; M22 placement), linked as "Timeline" from the Communications panel (task 103), newest first, up to 50 entries with "Show more":
   - stage changes ("Stage: Inquiry → Quote", who, when);
   - communications;
   - work orders recorded;
@@ -49,6 +49,7 @@ One `listTimeline(projectId)` query with a `kind` column, mapped to entries in c
 
 ## Progress log
 - 2026-11-11 – Drafted with `timeline.feature` (`@wip`).
+- 2026-11-15 – Placement amended for M22 (planner): the timeline is in the Overview tab; the `@wip` scenarios open that tab, and the partner's check uses a new step `the {string} user opens the {string} tab of the {string} project`. Now depends on task 122.
 
 ## Parking lot
 - Task events in the timeline.

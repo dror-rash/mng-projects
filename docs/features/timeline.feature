@@ -4,6 +4,8 @@ Feature: Project and customer timeline
   I want one history of the project, newest first
   So that I see how it went from inquiry to now without opening every section
 
+  # The project timeline is in the Overview tab (task 122), linked from the Communications panel (task 103).
+
   @wip @task:108
   Scenario: The project timeline tells the job's story
     Given I am signed in with an existing account
@@ -15,6 +17,7 @@ Feature: Project and customer timeline
     And the project "Panel upgrade" has the work order "PO-4471"
     And "Panel upgrade" has a visit 1 days ago with the notes "Measured the panel"
     When I am on the "Panel upgrade" project page
+    And I open the "Overview" tab
     Then the timeline shows "Measured the panel, Work order PO-4471, Stage: Inquiry → Quote, Asked for a quote"
 
   @wip @task:108
@@ -28,10 +31,11 @@ Feature: Project and customer timeline
     And I am signed in as a worker
     And I am on the crew of "NW Site"
     When I am on the "NW Site" project page
+    And I open the "Overview" tab
     Then the timeline shows "Stage: Inquiry → Scheduled"
     And I do not see the text "Customer disputes the price"
     And I do not see the text "PO-4471"
-    And the "Northwind" user opens the "NW Site" project page
+    And the "Northwind" user opens the "Overview" tab of the "NW Site" project
     Then the "Northwind" user sees the text "Stage: Inquiry → Scheduled"
     And the auditor opens the "NW Site" project page
     Then the auditor sees the text "Customer disputes the price"

@@ -4,7 +4,7 @@
 - **Milestone:** M15 Pipeline and communications
 - **Zone / package:** `packages/db`, `apps/dashboard` (new `features/communications`, `features/access`, `features/deleted`), `e2e`
 - **Feature file:** `docs/features/customer-communications.feature` (`@task:103`)
-- **Depends on:** task 094; ADR-0012 (commercial records); tasks 014 and 016 (contacts, projects of a customer; done)
+- **Depends on:** task 094; ADR-0012 (commercial records); tasks 014 and 016 (contacts, projects of a customer; done); task 122 (the project page's tabs, beside which the panel sits; M22)
 
 ## Why
 Flow step 12: the office tracks customers' phone calls, emails and WhatsApp messages. For now they are logged by hand (owner's default, 2026-11-11), on the customer and, when it is about a job, on the project.
@@ -22,7 +22,11 @@ Flow step 12: the office tracks customers' phone calls, emails and WhatsApp mess
 - **`features/communications/`:** channel and direction const lists with labels (Phone שיחת טלפון, Email אימייל, WhatsApp וואטסאפ, Meeting פגישה, Other אחר; From the customer נכנס, To the customer יוצא), a parser (unit tested), queries, actions.
 - **Customer page:** a "Communications" section, newest first. Each entry shows date, channel, direction, contact, project link, summary, author and follow-up date. A "Log a communication" form (admins) has:
   - Channel, Direction, Date (default today), Contact (the customer's contacts, optional), Project (the customer's projects, optional), Summary, Follow up on (optional).
-- **Project page:** the same section with that project's entries; its form fixes the project and the project's customer.
+- **Project page: a "Communications" side panel** (placement from the owner-approved M22 design, 2026-11-15): the same section with that project's entries; its form fixes the project and the project's customer.
+  - It sits beside the tabs of task 122 and shows on every tab: on the end side on wide screens, and on phones under the "Next step" card, before the tabs (*default*).
+  - Top to bottom: the project's open follow-ups (task 104 adds them), "Log a communication", the log newest first, then a "Timeline" link to the Overview tab's timeline (task 108 adds it).
+  - Workers and partner users get no panel at all (ADR-0012); the tab layout doesn't change for them.
+  - Still a region named "Communications", so the scenarios read it as before.
 - **Edit and delete:** the author and admins (in practice admins). Delete is soft; admins restore from the Deleted page (kind "Communication"), which needs the customer not deleted ("Restore its customer first").
 - **Errors:**
   - "Write what was said" (empty summary);
@@ -75,6 +79,7 @@ Flow step 12: the office tracks customers' phone calls, emails and WhatsApp mess
 
 ## Progress log
 - 2026-11-11 – Drafted with `customer-communications.feature` (`@wip`).
+- 2026-11-15 – Placement amended for M22 (planner): on the project page the section is a side panel beside task 122's tabs, on every tab, with follow-ups on top and a link to the timeline. Now depends on task 122.
 
 ## Parking lot
 - Attachments on an entry (a screenshot of a WhatsApp message, an email file).

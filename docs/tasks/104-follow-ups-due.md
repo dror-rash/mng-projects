@@ -4,7 +4,7 @@
 - **Milestone:** M15 Pipeline and communications
 - **Zone / package:** `apps/dashboard` (home page, `features/communications`), `e2e`
 - **Feature file:** `docs/features/customer-communications.feature` (`@task:104`)
-- **Depends on:** task 103
+- **Depends on:** task 103; task 124 ("Needs action" on the overview) if it has landed (placement only, see Scope)
 
 ## Why
 Tracking a quote's answer or a report's receipt (flow steps 3, 8, 9) is mostly "call them back on Tuesday". The office needs one place that lists what is due.
@@ -15,6 +15,9 @@ Tracking a quote's answer or a report's receipt (flow steps 3, 8, 9) is mostly "
   - the customer, the project if any, and the summary.
   - Empty: "No follow-ups due."
 - **"Mark done"** (admins), on the overview and on the entry in the Communications section: sets `follow_up_done_at`. "Done" shows on the entry; "Reopen" clears it.
+- **Placement (M22, owner-approved design 2026-11-15):**
+  - on the overview, "Follow-ups" is the third group of the "Needs action" section (task 124), after "Our move" and "Waiting for customer", still a region named "Follow-ups" and still only for admins and auditors. If task 124 hasn't landed, the section stands on its own and task 124 moves it in;
+  - on the project page, the project's open follow-ups (overdue and due within 7 days, then later ones) sit at the top of the Communications panel (task 103), with "Mark done".
 - No migration (task 103 has the columns).
 
 ## Out of scope
@@ -42,6 +45,7 @@ A query with the date window in SQL (strings compared as dates, CLAUDE.md), one 
 
 ## Progress log
 - 2026-11-11 – Drafted (`@wip`).
+- 2026-11-15 – Placement amended for M22 (planner): the overview's Follow-ups become a group of "Needs action" (task 124); the project's open follow-ups head the Communications panel (task 103).
 
 ## Parking lot
 - A follow-ups page with all open follow-ups.

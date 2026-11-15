@@ -110,6 +110,7 @@ See `docs/adr/`. Index:
 - ADR-0010 – An agent team with enforced rules
 - ADR-0011 – Hebrew and English (i18n and right-to-left)
 - ADR-0012 – Project stages and commercial records
+- ADR-0014 – Stage checklists and "whose move" (proposed)
 
 ## Adding a zone
 1. Copy `apps/example-zone` to `apps/<name>`; rename the package to `@repo/<name>`, pick a free port, set `basePath: "/<name>"`.
