@@ -8,6 +8,7 @@ import { getDb, withAccess } from "./client";
 import { CHECK, errorCode, insertSiteOf } from "./db-test-fixtures";
 import { getMaintenanceDb } from "./maintenance";
 import * as schema from "./schema";
+import { recordStageChange } from "./stage-change";
 
 // Project stages (task 101, ADR-0012) against the migrated database: `project.stage` is one of eight stages,
 // new projects start at Inquiry, and `project_stage_change` is the append-only history: whoever sees the
@@ -177,6 +178,15 @@ describe("who records a stage change", () => {
       sql`select changed_at > now() - interval '1 minute' as recent from project_stage_change where id = ${`${run}-timed`}`,
     );
     expect(row).toEqual({ recent: true });
+  });
+
+  it("takes the app's insert (recordStageChange), which leaves the time out", async () => {
+    await withAccess(ids.pa, () =>
+      recordStageChange({ projectId: ids.projectA, fromStage: "inquiry", toStage: "quote", changedBy: ids.pa }),
+    );
+    const rows = await as(ids.pa, sql`select id from project_stage_change where project_id = ${ids.projectA} and changed_by = ${ids.pa}
+      and changed_at > now() - interval '1 minute'`);
+    expect(rows.length).toBeGreaterThan(0);
   });
 
   it("refuses a made-up project and a made-up stage", async () => {

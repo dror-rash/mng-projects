@@ -25,11 +25,12 @@ vi.mock("@repo/db", async (importOriginal) => {
   const fake = {
     select: () => ({ from: () => ({ where: () => ({ for: async () => [{ stage: db.current }] }) }) }),
     update: () => ({ set: (values: Record<string, unknown>) => ({ where: async () => void db.updates.push(values) }) }),
-    insert: () => ({ values: async (values: Record<string, unknown>) => void db.inserts.push(values) }),
   };
   return {
     ...actual,
     getDb: () => fake,
+    // The runtime role can't insert changed_at, so the action goes through the helper that leaves it out.
+    recordStageChange: async (values: Record<string, unknown>) => void db.inserts.push(values),
     withAccess: async (_userId: string, fn: () => Promise<unknown>) => {
       db.transactions += 1;
       return fn();
