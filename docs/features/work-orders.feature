@@ -5,7 +5,8 @@ Feature: Work orders
   So that we only start work that was ordered, and billing knows the terms (ADR-0012)
 
   # Work orders are commercial records: admins write them, auditors read them, workers and partner users
-  # never see them, their own projects included.
+  # never see them, their own projects included. They sit in the project page's Sales tab (task 122);
+  # "Move to Ordered" is the "Next step" card's button (task 121), which asks first while Quote's items are open.
 
   @wip @task:106
   Scenario: I record a work order from an authorised contact
@@ -17,6 +18,7 @@ Feature: Work orders
     And the project "Panel upgrade" is at the stage "Quote"
     And the contact "Dana Levi" is authorised to order
     When I am on the "Panel upgrade" project page
+    And I open the "Sales" tab
     And I follow the "Record a work order" link
     And I fill in "Order number" with "PO-4471"
     And I select "Dana Levi" from "Ordered by"
@@ -27,6 +29,7 @@ Feature: Work orders
     And the "Work orders" section shows "Net 30"
     And the project shows "Quote" since today
     When I press "Move to Ordered"
+    And I press "Move anyway"
     Then the project shows "Ordered" since today
 
   @wip @task:106
@@ -37,6 +40,7 @@ Feature: Work orders
     And "Acme Ltd" has a site "Haifa warehouse"
     And I have a project named "Panel upgrade" at the site "Haifa warehouse"
     When I am on the "Panel upgrade" project page
+    And I open the "Sales" tab
     And I follow the "Record a work order" link
     Then I see the text "No one at Acme Ltd is authorised to order yet."
     When I choose "Dana Levi" in "Ordered by" by editing the page
@@ -53,6 +57,7 @@ Feature: Work orders
     And I have a project named "Panel upgrade" at the site "Haifa warehouse"
     And the contact "Dana Levi" is authorised to order
     When I am on the "Panel upgrade" project page
+    And I open the "Sales" tab
     And I follow the "Record a work order" link
     And I select "Dana Levi" from "Ordered by"
     And I select "Other" from "Payment terms"
@@ -71,10 +76,12 @@ Feature: Work orders
     And I have a project named "Panel upgrade" at the site "Haifa warehouse"
     And the project "Panel upgrade" has the work order "PO-4471"
     When I am on the "Panel upgrade" project page
+    And I open the "Sales" tab
     And I press "Delete PO-4471"
     Then the "Work orders" section does not show "PO-4471"
     When I restore "PO-4471" from the Deleted page
     And I am on the "Panel upgrade" project page
+    And I open the "Sales" tab
     Then the work orders listed are "PO-4471"
 
   @wip @task:106
@@ -86,11 +93,12 @@ Feature: Work orders
     And I am signed in as a worker
     And I am on the crew of "NW Site"
     When I am on the "NW Site" project page
+    And I open the "Sales" tab
     Then I do not see the text "Work orders"
     And I do not see the text "PO-4471"
     And the "Northwind" user opens the "NW Site" project page
     Then the "Northwind" user sees no "Work orders" section on "NW Site"
-    And the auditor opens the "NW Site" project page
+    And the auditor opens the "Sales" tab of the "NW Site" project
     Then the auditor sees the text "PO-4471"
     And the auditor sees no "Record a work order" link
 
@@ -102,10 +110,12 @@ Feature: Work orders
     And I have a project named "Panel upgrade" at the site "Haifa warehouse"
     And the project "Panel upgrade" has the work order "PO-4471"
     When I am on the "Panel upgrade" project page
+    And I open the "Sales" tab
     And I add the file "po-4471.pdf" with "Upload the order"
     Then the "Work orders" section shows the file "po-4471.pdf"
-    And the "Photos and files" section does not show "po-4471.pdf"
     And the file "po-4471.pdf" downloads as "po-4471.pdf"
+    When I open the "Work" tab
+    Then the "Photos and files" section does not show "po-4471.pdf"
 
   @wip @task:107
   Scenario: An order document must be a document, up to 50 MB
@@ -115,6 +125,7 @@ Feature: Work orders
     And I have a project named "Panel upgrade" at the site "Haifa warehouse"
     And the project "Panel upgrade" has the work order "PO-4471"
     When I am on the "Panel upgrade" project page
+    And I open the "Sales" tab
     And I add the file "order.exe" with "Upload the order"
     Then I see the error "Orders must be PDF, Word, Excel, CSV, text or images"
     When I add a 60 MB file "order.pdf" with "Upload the order"
@@ -140,8 +151,10 @@ Feature: Work orders
     And I have a project named "Panel upgrade" at the site "Haifa warehouse"
     And the project "Panel upgrade" has the work order "PO-4471" with the document "po-4471.pdf"
     When I am on the "Panel upgrade" project page
+    And I open the "Sales" tab
     And I press "Delete po-4471.pdf"
     Then the "Work orders" section does not show "po-4471.pdf"
     When I restore "po-4471.pdf" from the Deleted page
     And I am on the "Panel upgrade" project page
+    And I open the "Sales" tab
     Then the "Work orders" section shows the file "po-4471.pdf"

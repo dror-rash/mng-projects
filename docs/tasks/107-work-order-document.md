@@ -4,7 +4,7 @@
 - **Milestone:** M15 Pipeline and communications
 - **Zone / package:** `packages/db`, `apps/dashboard` (`features/attachments`, `features/work-orders`), `e2e`
 - **Feature file:** `docs/features/work-orders.feature` (`@task:107`)
-- **Depends on:** tasks 106 and 059 (attachments; done)
+- **Depends on:** tasks 106 and 059 (attachments; done); task 122 (Sales tab)
 
 ## Why
 The customer's order usually arrives as a signed PDF or a photo, and it is the proof behind the work order (flow step 4).
@@ -46,6 +46,7 @@ DB tests first (a worker and a partner can't select a `work_order` attachment of
 
 ## Progress log
 - 2026-11-11 – Drafted (`@wip`).
+- 2026-11-15 – Amended for M22 (planner): the `@wip` scenarios open the Sales tab for the work order and the Work tab to check "Photos and files".
 
 ## Parking lot
 - Purging deleted order files (with the attachments retention item).
