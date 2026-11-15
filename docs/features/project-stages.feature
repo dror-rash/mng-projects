@@ -88,6 +88,18 @@ Feature: Project stages
     And the auditor sees no "Change stage" button
 
   @wip @task:101
+  Scenario: A worker sees the stage but can't change it
+    Given a workspace with the partners "Northwind" and "Globex", an admin and an auditor
+    And the customer "Acme Ltd" is assigned to "Northwind" and "Globex"
+    And "Northwind" has the project "NW Site" for "Acme Ltd" with the task "Copy"
+    And the project "NW Site" is at the stage "Ordered"
+    And I am signed in as a worker
+    And I am on the crew of "NW Site"
+    When I am on the "NW Site" project page
+    Then I see the text "Ordered"
+    And I see no "Change stage" button
+
+  @wip @task:101
   Scenario: Another partner's project's stage can't be changed
     Given a workspace with the partners "Northwind" and "Globex", an admin and an auditor
     And the customer "Acme Ltd" is assigned to "Northwind" and "Globex"
