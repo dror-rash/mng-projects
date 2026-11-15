@@ -2,7 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@repo/ui/card";
 import { notFound } from "next/navigation";
 
 import { canChangeCustomers } from "@/features/access/scope";
-import { AppHeader } from "@/features/layout/app-header";
+import { AppFrame } from "@/features/layout/app-frame";
 import { firstParam } from "@/features/navigation/search-params";
 import { CustomerForm } from "@/features/organizations/customer-form";
 import { listParentChoices } from "@/features/organizations/queries";
@@ -23,18 +23,15 @@ export default async function NewCustomerPage({ searchParams }: { searchParams: 
   const defaultParentId = parentChoices.some((c) => c.id === parent) ? parent : undefined;
 
   return (
-    <div className="flex min-h-screen flex-col bg-background text-foreground">
-      <AppHeader email={session.user.email} role={workspace.role} workspaceName={workspace.name} />
-      <main className="mx-auto w-full max-w-3xl p-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>{defaultParentId ? "New sub-company" : "New customer"}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <CustomerForm workspaceId={workspace.id} parentChoices={parentChoices} defaultParentId={defaultParentId} />
-          </CardContent>
-        </Card>
-      </main>
-    </div>
+    <AppFrame email={session.user.email} name={session.user.name} role={workspace.role} workspaceName={workspace.name} className="max-w-3xl p-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>{defaultParentId ? "New sub-company" : "New customer"}</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <CustomerForm workspaceId={workspace.id} parentChoices={parentChoices} defaultParentId={defaultParentId} />
+        </CardContent>
+      </Card>
+    </AppFrame>
   );
 }

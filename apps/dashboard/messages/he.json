@@ -4,6 +4,10 @@
     "allProjects": "כל הפרויקטים",
     "customers": "לקוחות"
   },
+  "menu": {
+    "open": "פתיחת התפריט",
+    "close": "סגירת התפריט"
+  },
   "projectStage": {
     "inquiry": "פנייה",
     "quote": "הצעת מחיר",

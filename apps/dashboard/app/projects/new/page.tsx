@@ -2,7 +2,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@repo/ui/card";
 import { notFound } from "next/navigation";
 
 import { canChange, canSeeCustomers } from "@/features/access/scope";
-import { AppHeader } from "@/features/layout/app-header";
+import { AppFrame } from "@/features/layout/app-frame";
 import { firstParam, withParams } from "@/features/navigation/search-params";
 import { listCustomerNames } from "@/features/organizations/customer-names";
 import { listPartners } from "@/features/partners/queries";
@@ -47,29 +47,26 @@ export default async function NewProjectPage({ searchParams }: { searchParams: S
   });
 
   return (
-    <div className="flex min-h-screen flex-col bg-background text-foreground">
-      <AppHeader email={session.user.email} role={workspace.role} workspaceName={workspace.name} />
-      <main className="mx-auto w-full max-w-3xl p-6">
-        <Card>
-          <CardHeader>
-            <CardTitle>New project</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ProjectForm
-              workspaceId={workspace.id}
-              customers={customers}
-              sites={sites}
-              defaultCustomerId={start.customerId}
-              defaultSiteId={start.siteId}
-              cancelHref={cancelHref}
-              owners={owners}
-              customerRequired={partnerId !== null}
-              canAddSite={workspace.role === "admin"}
-              stages={stages.options}
-            />
-          </CardContent>
-        </Card>
-      </main>
-    </div>
+    <AppFrame email={session.user.email} name={session.user.name} role={workspace.role} workspaceName={workspace.name} className="max-w-3xl p-6">
+      <Card>
+        <CardHeader>
+          <CardTitle>New project</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ProjectForm
+            workspaceId={workspace.id}
+            customers={customers}
+            sites={sites}
+            defaultCustomerId={start.customerId}
+            defaultSiteId={start.siteId}
+            cancelHref={cancelHref}
+            owners={owners}
+            customerRequired={partnerId !== null}
+            canAddSite={workspace.role === "admin"}
+            stages={stages.options}
+          />
+        </CardContent>
+      </Card>
+    </AppFrame>
   );
 }

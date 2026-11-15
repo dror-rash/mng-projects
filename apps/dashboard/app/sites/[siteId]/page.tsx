@@ -4,7 +4,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 
 import { canChange } from "@/features/access/scope";
-import { AppHeader } from "@/features/layout/app-header";
+import { AppFrame } from "@/features/layout/app-frame";
 import { recordWorkspace } from "@/features/layout/record-workspace";
 import { ContactForm } from "@/features/organizations/contacts/contact-form";
 import { listSiteProjects } from "@/features/projects/queries";
@@ -54,97 +54,93 @@ export default async function SitePage({ params }: { params: Promise<{ siteId: s
   const maps = mapsLink(site);
 
   return (
-    <div className="flex min-h-screen flex-col bg-background text-foreground">
-      <AppHeader email={session.user.email} role={workspace.role} {...await recordWorkspace(session.user.id, workspace, site.workspaceId)} />
+    <AppFrame email={session.user.email} name={session.user.name} role={workspace.role} {...await recordWorkspace(session.user.id, workspace, site.workspaceId)} className="max-w-4xl space-y-6 p-6">
+      {site.canSeeCustomer && (
+        <nav aria-label="Breadcrumb" className="text-sm text-muted-foreground">
+          <Link href="/customers" className="hover:underline">Customers</Link>
+        </nav>
+      )}
 
-      <main className="mx-auto w-full max-w-4xl space-y-6 p-6">
-        {site.canSeeCustomer && (
-          <nav aria-label="Breadcrumb" className="text-sm text-muted-foreground">
-            <Link href="/customers" className="hover:underline">Customers</Link>
-          </nav>
-        )}
-
-        <section className="flex flex-wrap items-start justify-between gap-4">
-          <div className="space-y-1">
-            <h1 className="text-2xl font-bold tracking-tight">{site.name}</h1>
-            {/* Partners see the site of their project (task 055), and its customer's name only. */}
-            {site.customerName && (
-              <p className="text-sm text-muted-foreground">
-                Site of{" "}
-                {site.canSeeCustomer ? (
-                  <Link href={`/customers/${site.organizationId}`} className="font-medium text-foreground hover:underline">
-                    {site.customerName}
-                  </Link>
-                ) : (
-                  <span className="font-medium text-foreground">{site.customerName}</span>
-                )}
-              </p>
-            )}
-          </div>
-          {site.canChange && (
-            <div className="flex gap-2">
-              <Button asChild variant="outline" size="sm">
-                <Link href={`/sites/${site.id}/edit`}>Edit site</Link>
-              </Button>
-              <Button asChild variant="ghost" size="sm">
-                <Link href={`/sites/${site.id}/delete`}>Delete site</Link>
-              </Button>
-            </div>
+      <section className="flex flex-wrap items-start justify-between gap-4">
+        <div className="space-y-1">
+          <h1 className="text-2xl font-bold tracking-tight">{site.name}</h1>
+          {/* Partners see the site of their project (task 055), and its customer's name only. */}
+          {site.customerName && (
+            <p className="text-sm text-muted-foreground">
+              Site of{" "}
+              {site.canSeeCustomer ? (
+                <Link href={`/customers/${site.organizationId}`} className="font-medium text-foreground hover:underline">
+                  {site.customerName}
+                </Link>
+              ) : (
+                <span className="font-medium text-foreground">{site.customerName}</span>
+              )}
+            </p>
           )}
-        </section>
+        </div>
+        {site.canChange && (
+          <div className="flex gap-2">
+            <Button asChild variant="outline" size="sm">
+              <Link href={`/sites/${site.id}/edit`}>Edit site</Link>
+            </Button>
+            <Button asChild variant="ghost" size="sm">
+              <Link href={`/sites/${site.id}/delete`}>Delete site</Link>
+            </Button>
+          </div>
+        )}
+      </section>
 
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0">
-            <CardTitle className="text-base">Where</CardTitle>
-            {maps && (
-              <Button asChild variant="outline" size="sm">
-                <a href={maps} target="_blank" rel="noopener noreferrer">Open in maps</a>
-              </Button>
-            )}
-          </CardHeader>
-          <CardContent>
-            <dl className="grid gap-4 sm:grid-cols-2">
-              <Detail label="Address">
-                {site.address ? <span className="whitespace-pre-wrap">{site.address}</span> : missing}
-              </Detail>
-              <Detail label="Coordinates">
-                {site.latitude !== null && site.longitude !== null
-                  ? `${formatCoordinate(site.latitude)}, ${formatCoordinate(site.longitude)}`
-                  : missing}
-              </Detail>
-            </dl>
-          </CardContent>
-        </Card>
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0">
+          <CardTitle className="text-base">Where</CardTitle>
+          {maps && (
+            <Button asChild variant="outline" size="sm">
+              <a href={maps} target="_blank" rel="noopener noreferrer">Open in maps</a>
+            </Button>
+          )}
+        </CardHeader>
+        <CardContent>
+          <dl className="grid gap-4 sm:grid-cols-2">
+            <Detail label="Address">
+              {site.address ? <span className="whitespace-pre-wrap">{site.address}</span> : missing}
+            </Detail>
+            <Detail label="Coordinates">
+              {site.latitude !== null && site.longitude !== null
+                ? `${formatCoordinate(site.latitude)}, ${formatCoordinate(site.longitude)}`
+                : missing}
+            </Detail>
+          </dl>
+        </CardContent>
+      </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base">Access notes</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {site.accessNotes ? (
-              <p className="whitespace-pre-wrap text-sm">{site.accessNotes}</p>
-            ) : (
-              <p className="text-sm text-muted-foreground">
-                {site.canChange ? <>Nothing yet. Use &ldquo;Edit site&rdquo; to add gate codes, hours or safety notes.</> : "Nothing yet."}
-              </p>
-            )}
-          </CardContent>
-        </Card>
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Access notes</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {site.accessNotes ? (
+            <p className="whitespace-pre-wrap text-sm">{site.accessNotes}</p>
+          ) : (
+            <p className="text-sm text-muted-foreground">
+              {site.canChange ? <>Nothing yet. Use &ldquo;Edit site&rdquo; to add gate codes, hours or safety notes.</> : "Nothing yet."}
+            </p>
+          )}
+        </CardContent>
+      </Card>
 
-        <SiteProjectsSection
-          siteId={site.id}
-          projects={projects}
-          progress={summarizeProjectStatusCounts(projectCounts)}
-          canStart={canStart}
-        />
+      <SiteProjectsSection
+        siteId={site.id}
+        projects={projects}
+        progress={summarizeProjectStatusCounts(projectCounts)}
+        canStart={canStart}
+      />
 
-        <SiteContactsSection
-          siteId={site.id}
-          contacts={contacts}
-          removeAction={site.canChange ? removeSiteContactAction : undefined}
-          addForm={site.canChange ? <ContactForm owner={{ kind: "site", id: site.id }} /> : undefined}
-        />
-      </main>
-    </div>
+      <SiteContactsSection
+        siteId={site.id}
+        contacts={contacts}
+        removeAction={site.canChange ? removeSiteContactAction : undefined}
+        addForm={site.canChange ? <ContactForm owner={{ kind: "site", id: site.id }} /> : undefined}
+      />
+    </AppFrame>
   );
 }

@@ -4,6 +4,10 @@
     "allProjects": "All projects",
     "customers": "Customers"
   },
+  "menu": {
+    "open": "Open menu",
+    "close": "Close menu"
+  },
   "projectStage": {
     "inquiry": "Inquiry",
     "quote": "Quote",
