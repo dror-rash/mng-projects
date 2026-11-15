@@ -7,7 +7,7 @@ import { canSeeCustomers } from "@/features/access/scope";
 import { AppHeader } from "@/features/layout/app-header";
 import { ProjectList } from "@/features/projects/project-list";
 import { countProjects, listProjects } from "@/features/projects/queries";
-import { overviewWindow, summarizeOverview } from "@/features/tasks/overview";
+import { overviewWindow, summarizeOverview, withStatusChartSlots } from "@/features/tasks/overview";
 import { summarizeProjectStatusCounts } from "@/features/tasks/progress";
 import { countTasksByProjectAndStatus, countWorkspaceOverview } from "@/features/tasks/queries";
 import { requireWorkspace } from "@/features/workspaces/require-workspace";
@@ -68,7 +68,7 @@ export default async function DashboardPage() {
                 <CardTitle className="text-base">Tasks by status</CardTitle>
               </CardHeader>
               <CardContent>
-                <StackedBar label="Tasks by status" segments={byStatus} emptyText="No tasks yet. Open a project to add some." />
+                <StackedBar label="Tasks by status" segments={withStatusChartSlots(byStatus)} emptyText="No tasks yet. Open a project to add some." />
               </CardContent>
             </Card>
 

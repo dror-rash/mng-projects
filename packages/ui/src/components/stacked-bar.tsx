@@ -3,18 +3,24 @@ import * as React from "react";
 import { cn } from "../lib/utils";
 import { ChartTooltip } from "./chart-tooltip";
 
-export type StackedBarSegment = { label: string; value: number };
+/** A chart color slot (`--chart-1` … `--chart-5`). */
+export type ChartSlot = 1 | 2 | 3 | 4 | 5;
+
+/** `slot` names the segment's color; without it a segment takes the slot of its position. */
+export type StackedBarSegment = { label: string; value: number; slot?: ChartSlot };
 
 type StackedBarProps = Omit<React.ComponentProps<"figure">, "children"> & {
   /** Accessible name of the chart, e.g. "Tasks by status". */
   label: string;
-  /** Up to five segments, colored in fixed order (chart-1 … chart-5). */
+  /** Up to five segments, colored by the slot they name, else in fixed order (chart-1 … chart-5). */
   segments: StackedBarSegment[];
   emptyText?: string;
 };
 
 // Fixed order, never cycled: validated as adjacent pairs for color-vision deficiency in light and dark.
 const SEGMENT_COLORS = ["bg-chart-1", "bg-chart-2", "bg-chart-3", "bg-chart-4", "bg-chart-5"];
+
+const segmentColor = (segment: StackedBarSegment, index: number) => SEGMENT_COLORS[(segment.slot ?? index + 1) - 1];
 
 /**
  * Part-to-whole in one bar. The legend repeats each value, so color is never the only cue.
@@ -47,7 +53,7 @@ function StackedBar({ label, segments, emptyText = "No data yet", className, ...
                   tabIndex={0}
                   className={cn(
                     "h-full first:rounded-l last:rounded-r focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background",
-                    SEGMENT_COLORS[i],
+                    segmentColor(segment, i),
                   )}
                   style={{ flexGrow: segment.value }}
                 />
@@ -59,7 +65,7 @@ function StackedBar({ label, segments, emptyText = "No data yet", className, ...
       <ul className="flex flex-wrap gap-x-6 gap-y-1 text-sm">
         {segments.map((segment, i) => (
           <li key={segment.label} className="flex items-center gap-2">
-            <span aria-hidden="true" className={cn("size-2.5 rounded-sm", SEGMENT_COLORS[i])} />
+            <span aria-hidden="true" className={cn("size-2.5 rounded-sm", segmentColor(segment, i))} />
             <span className="text-muted-foreground">{segment.label}</span>
             <span className="font-medium tabular-nums">{segment.value}</span>
           </li>

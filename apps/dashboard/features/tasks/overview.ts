@@ -1,7 +1,7 @@
 import { type WeeklyActivity, weekAgo } from "./activity";
 import { type CalendarDate, dueSoonUntil, todayUtc } from "./due-dates";
 import { type StatusCount, summarizeStatusCounts, type TaskSummary } from "./progress";
-import { groupTasksByStatus, parseTaskStatus } from "./task-status";
+import { groupTasksByStatus, parseTaskStatus, TASK_STATUSES } from "./task-status";
 
 /** The dates the home counts are taken against, from one clock read so they can't straddle midnight. */
 export type OverviewWindow = { today: CalendarDate; dueSoonUntil: CalendarDate; since: Date };
@@ -37,4 +37,9 @@ export function summarizeOverview(rows: OverviewCount[]): Overview {
     thisWeek: { created: sum(rows, (row) => row.created), completed: sum(rows, (row) => row.completed) },
     byStatus: groupTasksByStatus(rows).map((column) => ({ label: column.label, value: sum(column.tasks, (row) => row.count) })),
   };
+}
+
+/** "Tasks by status" segments, each in its status's chart color. */
+export function withStatusChartSlots(byStatus: Overview["byStatus"]) {
+  return byStatus.map((segment) => ({ ...segment, slot: TASK_STATUSES.find((s) => s.label === segment.label)?.chartSlot }));
 }

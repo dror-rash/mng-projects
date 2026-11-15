@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { overviewWindow, summarizeOverview } from "./overview";
+import { overviewWindow, summarizeOverview, withStatusChartSlots } from "./overview";
 
 type Counts = { count: number; overdue: number; dueSoon: number; created: number; completed: number };
 const row = (status: string, counts: Partial<Counts>) => ({
@@ -75,5 +75,17 @@ describe("summarizeOverview", () => {
         { label: "Done", value: 0 },
       ],
     });
+  });
+});
+
+describe("withStatusChartSlots", () => {
+  it("gives In progress the amber slot, leaving the orange-red to the accent", () => {
+    const { byStatus } = summarizeOverview([row("todo", { count: 2 }), row("in_progress", { count: 1 })]);
+
+    expect(withStatusChartSlots(byStatus)).toEqual([
+      { label: "To do", value: 2, slot: 1 },
+      { label: "In progress", value: 1, slot: 4 },
+      { label: "Done", value: 0, slot: 3 },
+    ]);
   });
 });
