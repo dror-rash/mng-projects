@@ -7,6 +7,8 @@ import { type ReactNode, useActionState } from "react";
 
 import type { FormState } from "@/features/forms/form-state";
 
+import { parseProjectStage } from "./project-stage";
+
 type StageOption = { value: string; label: string };
 
 const noAction = async (): Promise<FormState> => ({});
@@ -39,7 +41,8 @@ export function StageControl({
   action?: (state: FormState, formData: FormData) => Promise<FormState>;
 }) {
   const [state, formAction, pending] = useActionState<FormState, FormData>(action ?? noAction, {});
-  const chosen = state.values?.stage ?? stage;
+  // After a refused value that isn't a stage (a tampered form), the select starts over from the current one.
+  const chosen = parseProjectStage(state.values?.stage) ?? stage;
   const error = state.field === "stage" ? state.error : undefined;
 
   return (
