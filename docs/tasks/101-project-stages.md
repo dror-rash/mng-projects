@@ -1,6 +1,6 @@
 # Task 101: Project stages
 
-- **Status:** in-progress
+- **Status:** in-review
 - **Milestone:** M15 Pipeline and communications
 - **Zone / package:** `packages/db`, `apps/dashboard` (`features/projects`), `e2e`
 - **Feature file:** `docs/features/project-stages.feature` (`@task:101`)
@@ -78,6 +78,7 @@ The owner's flow (PLAN "Target flow", steps 1–10) needs one answer to "where i
 - 2026-11-15 – Note on the red runs: the unit and DB tests were run red locally before each `feat:` commit (shown in the session), not as separate `test:` commits; history is left as it is (implementer).
 - 2026-11-15 – Review fixes (implementer): migration 0045 edited (not on `main` yet; `app_lane1` dropped, recreated and migrated): the insert policy wants `to_stage` to be the project's stage, `app_user` may insert every column but `changed_at`, and the backfill rows are dated at the project's creation. The app writes history through `recordStageChange` (`@repo/db`), since a Drizzle insert names `changed_at` too and the column grant refuses it. `copyProject` did record the first stage (the security reviewer was right); `stage-history.db.test.ts` now covers it as the runtime role. StageControl starts over from the current stage after a made-up value; the tampered-select step looks up a customer by name instead of branching on the label; the since step accepts yesterday (UTC). SEC-53 added, SEC-21 noted.
 
+- 2026-11-15 – Reviews (access, security, code): no leaks, no blockers; fixes above. Local QA stopped: the machine ran at load average 220–240 from other processes (257 zombies), so CI `verify` and `e2e` are the full-suite gate for this PR.
 ## Parking lot
 - May a canceled project's stage change? Today it can (owner).
 - E2E forged stage posts from an auditor, a crew worker, and against a deleted project: they have no form to post from. Covered by `project-stages.db.test.ts` (insert policy) and `stage-actions.test.ts` (`requireProjectAccess`).

@@ -1,6 +1,6 @@
 # Task 116: The shadcn agent skill, pinned and without pre-approved commands
 
-- **Status:** in-review
+- **Status:** done
 - **Milestone:** unscheduled (agent tooling; owner request 2026-11-14)
 - **Zone / package:** `.claude/skills/shadcn/`, `skills-lock.json`
 - **Feature file:** none (agent tooling, no product behavior)
@@ -26,6 +26,7 @@ The owner asked for the shadcn/ui agent skill (`pnpm dlx skills add shadcn/ui`),
 ## Acceptance criteria
 - [x] `.claude/skills/shadcn/` contains no `shadcn@latest` and no `allowed-tools`.
 - [x] `pnpm lint && pnpm typecheck` pass.
+- 2026-11-15 – Merged (PR #109).
 
 ## Parking lot
 - Bump the pinned version together with `components.json` when `packages/ui` next adds or updates shadcn components.
