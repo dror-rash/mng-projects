@@ -26,7 +26,9 @@ function SidebarDrawer({
 }) {
   const [open, setOpen] = React.useState(defaultOpen);
 
+  // A plain click on a link opens the page here; a new tab or window (modifier keys, middle click) keeps the menu.
   function closeOnLink(event: React.MouseEvent) {
+    if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
     if (event.target instanceof Element && event.target.closest("a[href]")) setOpen(false);
   }
 

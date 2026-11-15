@@ -92,6 +92,22 @@ describe("SidebarDrawer", () => {
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
+  it("stays open when I open a link in a new tab or window", async () => {
+    const user = userEvent.setup();
+    render(<Example />);
+
+    await user.click(screen.getByRole("button", { name: "Open menu" }));
+    const link = screen.getByRole("link", { name: "All projects" });
+    for (const keys of ["{Control>}", "{Meta>}", "{Shift>}"]) {
+      await user.keyboard(keys);
+      await user.click(link);
+      await user.keyboard("{/Control}{/Meta}{/Shift}");
+    }
+    await user.pointer({ keys: "[MouseMiddle]", target: link });
+
+    expect(screen.getByRole("dialog")).toBeInTheDocument();
+  });
+
   it("stays open when I press a button inside it", async () => {
     const user = userEvent.setup();
     render(<Example />);

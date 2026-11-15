@@ -81,7 +81,7 @@ function Panel({ otherWorkspace = false }: { otherWorkspace?: boolean }) {
 function Frame({ otherWorkspace }: { otherWorkspace?: boolean }) {
   return (
     <div className="relative h-[560px] overflow-hidden">
-      <Sidebar className="absolute flex">
+      <Sidebar label="Menu" className="absolute flex">
         <Panel otherWorkspace={otherWorkspace} />
       </Sidebar>
       <SidebarInset className="ps-59">
@@ -142,7 +142,7 @@ export const LinkFocus: Story = {
 function TopBar({ open = false }: { open?: boolean }) {
   return (
     <SidebarTopBar className="lg:flex">
-      <SidebarDrawer openLabel="Open menu" closeLabel="Close menu" title="Acme Solar" defaultOpen={open}>
+      <SidebarDrawer openLabel="Open menu" closeLabel="Close menu" title="Menu" defaultOpen={open}>
         <Panel />
       </SidebarDrawer>
       <span aria-hidden="true" className="flex size-8 items-center justify-center rounded-md bg-accent font-bold text-sidebar-accent-foreground">
