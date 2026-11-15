@@ -117,6 +117,11 @@ describe("theme contrast", () => {
     expect(token(theme, name).toLowerCase()).toBe(value);
   });
 
+  // The outline button hovers to --secondary inside its --border: the two must stay apart.
+  it.each(["light", "dark"] as const)("%s: a hovered outline button keeps its border", (theme) => {
+    expect(contrast(token(theme, "secondary"), token(theme, "border"))).toBeGreaterThanOrEqual(1.08);
+  });
+
   describe("the destructive button", () => {
     const button = readFileSync(fileURLToPath(new URL("./components/button.tsx", import.meta.url)), "utf8");
     // Opacity steps of the fill: the light ones (`bg-destructive`, `hover:bg-destructive/NN`) and the dark ones.
