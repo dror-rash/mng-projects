@@ -1,6 +1,6 @@
 # Task 118: The owner's palette on the design tokens (60-30-10)
 
-- **Status:** todo
+- **Status:** in-review
 - **Milestone:** M21 Side menu and palette
 - **Zone / package:** `packages/ui` (`src/theme.css`, `src/components/stacked-bar.tsx`, `src/components/card.tsx` if needed, a contrast unit test); every zone picks the tokens up (`apps/shell`, `apps/example-zone`, `apps/dashboard`) without code changes there, except where a zone hard-codes a color
 - **Feature file:** none. The change is visual only: no page, route, text, role or action changes, so there is no new behavior to write as a scenario. It is checked by a unit test on the token contrasts, Storybook, and the screenshot run in both themes and both languages (see "Test plan"). Every existing scenario must keep passing unchanged.
@@ -129,6 +129,26 @@ No data, roles, pages, actions or access change. CSS tokens and one presentation
 
 ## Progress log
 - 2026-11-15 – Drafted from the owner-approved design proposal ("Waypoint Side Menu", palette and 60-30-10 roles, contrast table).
+- 2026-11-15 – Started in lane 1, in parallel with task 119 (lane 2).
+- 2026-11-15 – Implemented in lane 1.
+  - `theme-contrast.test.ts` first (red: 38 of 41 failed on the grayscale tokens), then the tokens in hex. Picks: light `--muted` and `--secondary` `#ECEDE0` (muted text 5.1:1 on it), dark `--muted` `#44494C` (4.5:1), dark `--secondary` `#4F5559` (later `#5A6064`, see the review below), dark `--sidebar-border` `#303437`, `--destructive` `#D8151C` / `#FF9A97`. Every row of "Acceptance criteria" passes, plus muted text on `--muted`, text on `--secondary` and the current menu item.
+  - The dark destructive button laid the new light red at 60% over charcoal (white text 3.7:1); it now sits at 40% (hover 30%), 5.2:1 on the canvas and 4.9:1 on cards. The contrast test reads the alphas from `button.tsx`.
+  - `StackedBar` segments take an optional `slot` (else positional, so the fixed order holds). `TASK_STATUSES` carries `chartSlot` (To do 1, In progress 4, Done 3); "Tasks by status" first got its slots from a `withStatusChartSlots` helper on the overview page (replaced in review, below).
+  - Sweep: no `bg-white`, `text-gray-*` or hex in any zone. The login page's sign-up link was `text-primary` (now the flame step): made `text-foreground`, underlined.
+  - Stories: `Foundations/Palette` (Light, Dark), `ThemeToggle/LightTokens` beside `DarkTokens`, StackedBar stories with status slots plus `FixedOrder`. ARCHITECTURE.md conventions: the color line.
+  - Checks in the lane: `pnpm test` 736 unit tests pass; lint and typecheck pass; axe `color-contrast` on all 134 built Storybook stories finds no violations. `pnpm test:e2e` (343 scenarios): the first full run had 241 timeouts while the machine was overloaded (load average about 86, lane 2 and another project running e2e as well). Rerunning only the failed ones passed 204 of them with 2 workers and the last 37 with 1 worker. Every failure was a timeout or a page that didn't load in time; none involved a color.
+  - For task 119 (not touched here, `features/layout/*` is its lane): the header's W mark is `bg-primary` with `text-primary-foreground` (4.8:1). If the menu's W mark moves to `bg-accent` (flame), the `W` glyph on it is 3.4:1, so keep the glyph on `bg-primary` or treat it as a mark only. The header is `bg-card` and now has a card background.
+
+- 2026-11-15 – Test-first order, recorded honestly (history not rewritten):
+  - The dark destructive button's new alpha (60% to 40%) went into `94122a1` (the tokens) together with its contrast test. The test was run red against 60% before the change, but test and fix were committed together, not as a separate `test(ui):` commit first.
+  - The `StackedBar` slot (`41c5e25`): its unit tests (`stacked-bar.test.tsx`, then `overview.test.ts`) were run red before the code, but each was committed with its implementation in one `feat` commit, because the overview test imported a function that didn't exist yet and the commit guard runs typecheck.
+- 2026-11-15 – Review fixes, each with its red test in its own `test:` commit first:
+  - `--primary-hover` (`#AD321E`, both themes): primary buttons and selected filter chips darken on hover (text 6.0:1) instead of fading toward the paper (4.1:1). The contrast test checks the pair and that no component fades a primary fill on hover.
+  - The destructive button check asserts it found the fill and the hover in both themes (it could run zero times), and covers light: white on `#D8151C` at rest (5.2:1) and at 90% over the paper and cards (4.7:1). These rows passed on arrival; the guard was shown red by removing the dark alphas from `button.tsx` for one run.
+  - Dark `--secondary` `#5A6064`, a step above `--border` (`#4F5559`), so a hovered outline button keeps its border; text on it 5.9:1.
+  - `--accent-foreground` (`#F6F7EB`, both themes) for the W logotype on the flame mark (3.4:1, exempt as a logotype; never other text). A test checks that every token has a value in both themes and a `--color-*` line.
+  - `groupTasksByStatus` passes `chartSlot` through and `summarizeOverview`'s `byStatus` segments carry `slot`, so there is no lookup by label and no silent fallback. `withStatusChartSlots` is gone and `apps/dashboard/app/page.tsx` is unchanged from main. The `overview.test.ts` expectations gained `slot`.
+  - Checks after the review: `pnpm test` 747 unit tests pass, lint and typecheck pass, Storybook builds, and axe `color-contrast` finds no violations in any of the 134 stories. The full e2e suite wasn't rerun locally because the machine was overloaded; CI runs it.
 
 ## Parking lot
 - The example zone and the shell's login page could use the charcoal frame too (a top bar); not asked for.

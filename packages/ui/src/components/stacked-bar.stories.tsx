@@ -9,9 +9,9 @@ const meta = {
   args: {
     label: "Tasks by status",
     segments: [
-      { label: "To do", value: 5 },
-      { label: "In progress", value: 3 },
-      { label: "Done", value: 8 },
+      { label: "To do", value: 5, slot: 1 },
+      { label: "In progress", value: 3, slot: 4 },
+      { label: "Done", value: 8, slot: 3 },
     ],
   },
   decorators: [(Story) => <div className="w-96 pt-10"><Story /></div>],
@@ -20,7 +20,16 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
+/** Task statuses name their slots: To do blue, In progress amber, Done green (task 118). */
 export const Mixed: Story = {};
+
+/** Segments without a slot take the slots in fixed order (chart-1 … chart-5). */
+export const FixedOrder: Story = {
+  args: {
+    label: "Five slots",
+    segments: ["A", "B", "C", "D", "E"].map((label) => ({ label, value: 1 })),
+  },
+};
 
 /** Tab reaches the segments in order; the focused one shows label, count and share. */
 export const SegmentFocused: Story = {
@@ -40,18 +49,18 @@ export const SegmentHovered: Story = {
 export const SingleStatus: Story = {
   args: {
     segments: [
-      { label: "To do", value: 0 },
-      { label: "In progress", value: 0 },
-      { label: "Done", value: 4 },
+      { label: "To do", value: 0, slot: 1 },
+      { label: "In progress", value: 0, slot: 4 },
+      { label: "Done", value: 4, slot: 3 },
     ],
   },
 };
 export const Empty: Story = {
   args: {
     segments: [
-      { label: "To do", value: 0 },
-      { label: "In progress", value: 0 },
-      { label: "Done", value: 0 },
+      { label: "To do", value: 0, slot: 1 },
+      { label: "In progress", value: 0, slot: 4 },
+      { label: "Done", value: 0, slot: 3 },
     ],
     emptyText: "No tasks yet",
   },

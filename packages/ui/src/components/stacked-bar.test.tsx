@@ -45,6 +45,23 @@ describe("StackedBar", () => {
     expect(colors).toEqual(["bg-chart-1", "bg-chart-2", "bg-chart-3", "bg-chart-4", "bg-chart-5"]);
   });
 
+  it("colors a segment with the chart slot it names, in the bar and the legend", () => {
+    const named = [
+      { label: "To do", value: 2, slot: 1 },
+      { label: "In progress", value: 1, slot: 4 },
+      { label: "Done", value: 1, slot: 3 },
+    ] as const;
+    const { container } = render(<StackedBar label="Tasks by status" segments={[...named]} />);
+
+    const slot = (el: Element) => [...el.classList].find((c) => c.startsWith("bg-chart-"));
+    expect([...container.querySelectorAll("[data-segment]")].map(slot)).toEqual(["bg-chart-1", "bg-chart-4", "bg-chart-3"]);
+    expect([...container.querySelectorAll("li > span[aria-hidden]")].map(slot)).toEqual([
+      "bg-chart-1",
+      "bg-chart-4",
+      "bg-chart-3",
+    ]);
+  });
+
   it("shows the label, count and share of a segment when it is focused", async () => {
     const user = userEvent.setup();
     const tasks = [

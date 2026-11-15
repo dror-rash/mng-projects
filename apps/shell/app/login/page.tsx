@@ -28,7 +28,7 @@ export default async function LoginPage({ searchParams }: { searchParams: Promis
         <CardFooter className="flex justify-center border-t p-4 text-sm text-muted-foreground">
           New here?{" "}
           <a
-            className="ml-1 font-medium text-primary underline hover:text-primary/80"
+            className="ml-1 font-medium text-foreground underline hover:text-foreground/80"
             href={`/signup${next ? `?next=${encodeURIComponent(next)}` : ""}`}
           >
             Create an account

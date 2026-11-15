@@ -23,6 +23,14 @@ describe("parseTaskStatus", () => {
 });
 
 describe("groupTasksByStatus", () => {
+  it("gives each column its chart slot: In progress is amber, leaving orange-red to the accent", () => {
+    expect(groupTasksByStatus([])).toMatchObject([
+      { status: "todo", chartSlot: 1 },
+      { status: "in_progress", chartSlot: 4 },
+      { status: "done", chartSlot: 3 },
+    ]);
+  });
+
   it("puts each task in its status column and keeps empty columns", () => {
     const tasks = [
       { id: "1", status: "done" },
