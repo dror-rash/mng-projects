@@ -1,6 +1,6 @@
 # Task 118: The owner's palette on the design tokens (60-30-10)
 
-- **Status:** todo
+- **Status:** in-progress
 - **Milestone:** M21 Side menu and palette
 - **Zone / package:** `packages/ui` (`src/theme.css`, `src/components/stacked-bar.tsx`, `src/components/card.tsx` if needed, a contrast unit test); every zone picks the tokens up (`apps/shell`, `apps/example-zone`, `apps/dashboard`) without code changes there, except where a zone hard-codes a color
 - **Feature file:** none. The change is visual only: no page, route, text, role or action changes, so there is no new behavior to write as a scenario. It is checked by a unit test on the token contrasts, Storybook, and the screenshot run in both themes and both languages (see "Test plan"). Every existing scenario must keep passing unchanged.
@@ -134,3 +134,4 @@ No data, roles, pages, actions or access change. CSS tokens and one presentation
 - The example zone and the shell's login page could use the charcoal frame too (a top bar); not asked for.
 - A light (paper) side menu as a user choice: rejected for now with the approval.
 - Chart slots tuned to the palette (warmer blue and green): only if the owner asks.
+- 2026-11-15: started in lane 1, in parallel with task 119 (lane 2).
