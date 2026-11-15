@@ -19,7 +19,7 @@
   "dependencies": {
     "@repo/db": "workspace:*",
     "@repo/ui": "workspace:*",
-    "better-auth": "^1.7.18"
+    "better-auth": "^1.7.22"
   },
   "peerDependencies": {
     "next": "^15.0.0",
