@@ -4,61 +4,96 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  /* The owner's palette (task 118), 60-30-10: paper for content, charcoal for the frame and text,
+     flame only where to act. The accent is for marks; fills that carry text use the darker step
+     (#c73a23); links stay charcoal and underlined (flame text is 3.4:1). theme-contrast.test.ts checks every pair. */
+  --background: #f6f7eb; /* 60%: paper, the canvas */
+  --foreground: #393e41; /* 30%: charcoal, headings and body text */
+  --card: #fcfcf7; /* a lighter tint of the paper */
+  --card-foreground: #393e41;
+  --primary: #c73a23; /* 10%: the darker accent step, for fills that carry text */
+  --primary-foreground: #f6f7eb;
+  --secondary: #ecede0;
+  --secondary-foreground: #393e41;
+  --muted: #ecede0; /* a paper step between the canvas and the border: hover rows, empty bars */
+  --muted-foreground: #5e6366;
+  --accent: #e94f37; /* flame: non-text marks only (the W mark, focus marks) */
+  /* Same hue as before, stepped so error and "Overdue" text reach 4.5:1 on the paper and cards. */
+  --destructive: #d8151c;
+  --border: #e2e3d6;
+  --ring: #e94f37;
+  /* The side menu (task 119) and the phone top bar: charcoal on the light page. */
+  --sidebar: #393e41;
+  --sidebar-foreground: #f6f7eb;
+  --sidebar-muted: #b4b8aa;
+  --sidebar-border: #50565a;
+  --sidebar-accent: #c73a23; /* the current menu item */
+  --sidebar-accent-foreground: #f6f7eb;
+  --sidebar-ring: #f57055; /* a lighter accent step: flame is 2.9:1 on charcoal, below 3:1 for focus marks */
   --radius: 0.5rem;
-  /* Chart slots (categorical, fixed order) validated as adjacent pairs on the light surface; track = light step of chart-1. */
+  /* Chart slots (categorical, fixed order) validated as adjacent pairs on the light surface. */
   --chart-1: #2a78d6;
   --chart-2: #eb6834;
   --chart-3: #1baf7a;
   --chart-4: #eda100;
   --chart-5: #e87ba4;
-  --chart-track: #d6e5f7;
+  --chart-track: #e2e3d6; /* the border tint: the chart-1 fill is 3.4:1 on it */
 }
 
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --primary: oklch(0.985 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  /* Lighter, so error and "Overdue" text reach 4.5:1 on the dark surface (the button darkens it back). */
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(0.269 0 0);
-  --ring: oklch(0.556 0 0);
+  --background: #393e41; /* charcoal becomes the canvas */
+  --foreground: #f6f7eb;
+  --card: #41474a;
+  --card-foreground: #f6f7eb;
+  --primary: #c73a23;
+  --primary-foreground: #f6f7eb;
+  --secondary: #4f5559;
+  --secondary-foreground: #f6f7eb;
+  --muted: #44494c;
+  --muted-foreground: #b4b8aa;
+  --accent: #e94f37;
+  /* Lighter, so error and "Overdue" text reach 4.5:1 on the dark canvas and cards (the button darkens it back). */
+  --destructive: #ff9a97;
+  --border: #4f5559;
+  --ring: #f57055; /* the lighter accent step: flame is 2.9:1 on charcoal */
+  --sidebar: #26292b; /* the menu a step darker than the canvas */
+  --sidebar-foreground: #f6f7eb;
+  --sidebar-muted: #b4b8aa;
+  --sidebar-border: #303437;
+  --sidebar-accent: #c73a23;
+  --sidebar-accent-foreground: #f6f7eb;
+  --sidebar-ring: #e94f37; /* 3.9:1 on the darker menu */
   /* Same hues, stepped for the dark surface. */
   --chart-1: #3987e5;
   --chart-2: #d95926;
   --chart-3: #199e70;
   --chart-4: #c98500;
   --chart-5: #d55181;
-  --chart-track: #1e3a5c;
+  --chart-track: #26292b; /* the menu step: the border tint would leave the fill at 2.1:1 */
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
   --color-secondary: var(--secondary);
   --color-secondary-foreground: var(--secondary-foreground);
   --color-muted: var(--muted);
   --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
   --color-destructive: var(--destructive);
   --color-border: var(--border);
   --color-ring: var(--ring);
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-muted: var(--sidebar-muted);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-ring: var(--sidebar-ring);
   --color-chart-1: var(--chart-1);
   --color-chart-2: var(--chart-2);
   --color-chart-3: var(--chart-3);

@@ -47,6 +47,12 @@ function contrast(a: string, b: string): number {
   return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
 }
 
+/** `top` laid over `bottom` at `alpha` (0–1), as `bg-token/NN` paints it. */
+function mix(top: string, bottom: string, alpha: number): string {
+  const [a, b] = [channels(top), channels(bottom)];
+  return `#${a.map((c, i) => Math.round(c * alpha + (b[i] ?? 0) * (1 - alpha)).toString(16).padStart(2, "0")).join("")}`;
+}
+
 const TEXT = 4.5;
 const MARK = 3;
 
@@ -107,6 +113,15 @@ describe("theme contrast", () => {
     ["dark", "sidebar", "#26292b"],
   ] as const)("%s: --%s is the owner's %s", (theme, name, value) => {
     expect(token(theme, name).toLowerCase()).toBe(value);
+  });
+
+  it.each(["background", "card"])("dark: white text on the destructive button reaches 4.5:1 on --%s", (surface) => {
+    // The dark destructive token is a light red for text; the button lays it over the surface at a low alpha.
+    const button = readFileSync(fileURLToPath(new URL("./components/button.tsx", import.meta.url)), "utf8");
+    for (const [, alpha] of button.matchAll(/dark:(?:hover:)?bg-destructive\/(\d+)/g)) {
+      const fill = mix(token("dark", "destructive"), token("dark", surface), Number(alpha) / 100);
+      expect(contrast("#ffffff", fill), `at ${alpha}%`).toBeGreaterThanOrEqual(TEXT);
+    }
   });
 
   it("computes the WCAG ratio (black on white is 21:1)", () => {
