@@ -129,9 +129,17 @@ No data, roles, pages, actions or access change. CSS tokens and one presentation
 
 ## Progress log
 - 2026-11-15 – Drafted from the owner-approved design proposal ("Waypoint Side Menu", palette and 60-30-10 roles, contrast table).
+- 2026-11-15 – Implemented in lane 1.
+  - `theme-contrast.test.ts` first (red: 38 of 41 failed on the grayscale tokens), then the tokens in hex. Picks: light `--muted` and `--secondary` `#ECEDE0` (muted text 5.1:1 on it), dark `--muted` `#44494C` (4.5:1), dark `--secondary` `#4F5559`, dark `--sidebar-border` `#303437`, `--destructive` `#D8151C` / `#FF9A97`. Every row of "Acceptance criteria" passes, plus muted text on `--muted`, text on `--secondary` and the current menu item.
+  - The dark destructive button laid the new light red at 60% over charcoal (white text 3.7:1); it now sits at 40% (hover 30%), 5.2:1 on the canvas and 4.9:1 on cards. The contrast test reads the alphas from `button.tsx` (red first).
+  - `StackedBar` segments take an optional `slot` (else positional, so the fixed order holds). `TASK_STATUSES` carries `chartSlot` (To do 1, In progress 4, Done 3) and `withStatusChartSlots` gives "Tasks by status" its slots; the overview page passes it (one line, not its layout).
+  - Sweep: no `bg-white`, `text-gray-*` or hex in any zone. The login page's sign-up link was `text-primary` (now the flame step): made `text-foreground`, underlined.
+  - Stories: `Foundations/Palette` (Light, Dark), `ThemeToggle/LightTokens` beside `DarkTokens`, StackedBar stories with status slots plus `FixedOrder`. ARCHITECTURE.md conventions: the color line.
+  - For task 119 (not touched here, `features/layout/*` is its lane): the header's W mark is `bg-primary` with `text-primary-foreground` (4.8:1). If the menu's W mark moves to `bg-accent` (flame), the `W` glyph on it is 3.4:1, so keep the glyph on `bg-primary` or treat it as a mark only. The header is `bg-card` and now has a card background.
 
 ## Parking lot
 - The example zone and the shell's login page could use the charcoal frame too (a top bar); not asked for.
 - A light (paper) side menu as a user choice: rejected for now with the approval.
 - Chart slots tuned to the palette (warmer blue and green): only if the owner asks.
 - 2026-11-15: started in lane 1, in parallel with task 119 (lane 2).
+- Hover on primary fills: `hover:bg-primary/90` lightens toward the paper, so button and selected-chip text drops to 4.1:1 while hovered in light (5.3:1 in dark). A hover that darkens (toward charcoal) would keep 4.5:1; not asked for, transient state.
