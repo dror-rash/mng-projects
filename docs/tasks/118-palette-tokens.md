@@ -1,6 +1,6 @@
 # Task 118: The owner's palette on the design tokens (60-30-10)
 
-- **Status:** in-progress
+- **Status:** in-review
 - **Milestone:** M21 Side menu and palette
 - **Zone / package:** `packages/ui` (`src/theme.css`, `src/components/stacked-bar.tsx`, `src/components/card.tsx` if needed, a contrast unit test); every zone picks the tokens up (`apps/shell`, `apps/example-zone`, `apps/dashboard`) without code changes there, except where a zone hard-codes a color
 - **Feature file:** none. The change is visual only: no page, route, text, role or action changes, so there is no new behavior to write as a scenario. It is checked by a unit test on the token contrasts, Storybook, and the screenshot run in both themes and both languages (see "Test plan"). Every existing scenario must keep passing unchanged.
