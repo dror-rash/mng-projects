@@ -117,7 +117,7 @@ Feature: Project stages
   # Stage checklists and "whose move" (task 120, ADR-0014). Each stage has fixed items marked Us or Customer;
   # the first open item decides the badge: Our move, Waiting for customer, or Ready for next stage when all are done.
 
-  @wip @task:120
+  @task:120
   Scenario: The next step card shows the stage's checklist
     Given I am signed in with an existing account
     And I have a project named "Panel upgrade"
@@ -128,7 +128,7 @@ Feature: Project stages
     And the "Next step" section shows "Our move"
     And the project shows "Quote" since today
 
-  @wip @task:120
+  @task:120
   Scenario: Ticking items changes whose move it is
     Given I am signed in with an existing account
     And I have a project named "Panel upgrade"
@@ -142,7 +142,7 @@ Feature: Project stages
     Then the "Next step" section shows "3 of 3 done"
     And the "Next step" section shows "Ready for next stage"
 
-  @wip @task:120
+  @task:120
   Scenario: A ticked item shows who ticked it, and can be unticked
     Given I am signed in with an existing account
     And I have a project named "Panel upgrade"
@@ -154,7 +154,7 @@ Feature: Project stages
     Then "Materials and labour costed" is not ticked
     And the "Next step" section shows "0 of 3 done"
 
-  @wip @task:120
+  @task:120
   Scenario: Ticks stay with their stage
     Given I am signed in with an existing account
     And I have a project named "Panel upgrade"
@@ -169,7 +169,7 @@ Feature: Project stages
     Then the "Next step" section shows "1 of 3 done"
     And "Materials and labour costed" is ticked by me today
 
-  @wip @task:120
+  @task:120
   Scenario: Who can tick the checklist
     Given a workspace with the partners "Northwind" and "Globex", an admin and an auditor
     And the customer "Acme Ltd" is assigned to "Northwind" and "Globex"
@@ -183,7 +183,7 @@ Feature: Project stages
     Then the auditor sees the text "1 of 3 done"
     And the auditor can't tick the checklist
 
-  @wip @task:120
+  @task:120
   Scenario: A worker sees the checklist but can't tick it
     Given a workspace with the partners "Northwind" and "Globex", an admin and an auditor
     And the customer "Acme Ltd" is assigned to "Northwind" and "Globex"
@@ -197,7 +197,7 @@ Feature: Project stages
     And the "Next step" section shows "Our move"
     And I can't tick the checklist
 
-  @wip @task:120
+  @task:120
   Scenario: Another partner's checklist can't be ticked
     Given a workspace with the partners "Northwind" and "Globex", an admin and an auditor
     And the customer "Acme Ltd" is assigned to "Northwind" and "Globex"
@@ -212,7 +212,7 @@ Feature: Project stages
     Then the admin sees the text "0 of 3 done"
 
   # The item texts are the owner's (2026-11-15); the stage label is task 101's.
-  @wip @task:120
+  @task:120
   Scenario: The checklist in Hebrew
     Given I am signed in with an existing account
     And my language cookie is set to "he"
