@@ -2,9 +2,10 @@ import { expect, type Page } from "@playwright/test";
 import { sql } from "@repo/db";
 import { getMaintenanceDb } from "@repo/db/maintenance";
 
-import { Given, type ScenarioState, Then, When } from "./fixtures";
-import { idOf, projectPath } from "./partner-access.steps";
+import { Given, type ScenarioState, Then, userId, When } from "./fixtures";
+import { ids, idOf, pageOf, projectPath, shownText } from "./partner-access.steps";
 import { myRecordId } from "./sites.steps";
+import { myDecoy } from "./workers.steps";
 import { pressAndWait } from "./workspaces.steps";
 
 // Project stages (task 101, ADR-0012).
@@ -70,4 +71,159 @@ When("I post a stage change of {string} to {string}", async ({ page, state }, pr
     await pressAndWait(page, "Change stage");
   };
   await state.replay(idOf(state, project));
+});
+
+// Stage checklists and "whose move" (task 120, ADR-0014). The "Next step" section lists the current stage's
+// items, one list item each; whoever can change the project has a toggle button (`aria-pressed`) in each.
+
+/** The checklist's item keys by their English text (task 120's table), for the rows a Given writes. */
+const CHECKLIST_KEYS: Record<string, string> = {
+  "Customer and site details recorded": "inquiry.details_recorded",
+  "Inquiry logged in the communications log": "inquiry.logged",
+  "Materials and labour costed": "quote.costed",
+  "Quote sent to the customer": "quote.sent",
+  "Customer accepted the quote": "quote.accepted",
+  "Work order from an authorised person at the customer": "ordered.work_order",
+  "Payment terms agreed": "ordered.payment_terms",
+  "Work date set": "scheduled.date_set",
+  "Crew assigned": "scheduled.crew_assigned",
+  "Customer confirmed the date": "scheduled.customer_confirmed",
+  "Site visits done": "in_work.visits_done",
+  "Materials from suppliers reported on the project": "in_work.materials_reported",
+  "Field reports handed over to the office": "in_work.reports_handed_over",
+  "Report prepared in the office": "reporting.prepared",
+  "Report sent to the customer": "reporting.sent",
+  "Customer confirmed receiving the report": "reporting.received",
+  "Bill or invoice prepared": "billing.prepared",
+  "Sent to the customer": "billing.sent",
+  "Customer confirmed receipt": "billing.received",
+  "Work-completion report prepared and sent": "closed.completion_report",
+};
+
+// Named by its heading, "Next step" or, in Hebrew, "הצעד הבא" (task 120).
+const nextStep = (page: Page) => page.getByRole("region", { name: /^(Next step|הצעד הבא)$/ });
+
+/** The checklist item that starts with `label` (its party tag and who ticked it follow). */
+const checklistItem = (page: Page, label: string) =>
+  nextStep(page)
+    .getByRole("listitem")
+    .filter({ hasText: new RegExp(`^\\s*${escape(label)}`) });
+
+const tickButton = (page: Page, label: string) => checklistItem(page, label).getByRole("button");
+
+async function toggle(page: Page, state: ScenarioState, label: string, from: "true" | "false") {
+  const button = tickButton(page, label);
+  await expect(button).toHaveAttribute("aria-pressed", from);
+  await button.click();
+  // The new state, or the refusal when the project went away meanwhile (a later step checks which).
+  const flipped = button.and(page.locator(`[aria-pressed="${from === "true" ? "false" : "true"}"]`));
+  await expect(flipped.or(shownText(page, "Something went wrong"))).toBeVisible();
+  // The same press with a made-up project id, for "the same as with a made-up id".
+  state.replay = (id) => postFromDecoy(page, state, label, id, from === "false");
+}
+
+When("I tick {string}", async ({ page, state }, label: string) => {
+  await toggle(page, state, label, "false");
+});
+
+When("I untick {string}", async ({ page, state }, label: string) => {
+  await toggle(page, state, label, "true");
+});
+
+Then("the checklist items are {string}", async ({ page }, labels: string) => {
+  await expect(nextStep(page).getByRole("listitem")).toHaveText(
+    labels.split(",").map((label) => new RegExp(`^\\s*${escape(label.trim())}`)),
+  );
+});
+
+Then("{string} is ticked by me today", async ({ page }, label: string) => {
+  const [me] = (await getMaintenanceDb().execute<{ name: string }>(sql`select name from "user" where id = ${await userId(page)}`)).rows;
+  const item = checklistItem(page, label);
+  await expect(item.getByRole("button")).toHaveAttribute("aria-pressed", "true");
+  await expect(item).toContainText(`${me!.name},`);
+  await expect(item.locator(`time[datetime="${utcDay()}"], time[datetime="${utcDay(1)}"]`)).toHaveCount(1);
+});
+
+Then("{string} is not ticked", async ({ page }, label: string) => {
+  const item = checklistItem(page, label);
+  await expect(item.getByRole("button")).toHaveAttribute("aria-pressed", "false");
+  await expect(item.locator("time")).toHaveCount(0);
+});
+
+/** The checklist is shown, and none of its items has a button. */
+async function expectNoTickButtons(page: Page) {
+  await expect(nextStep(page).getByRole("listitem").first()).toBeVisible();
+  await expect(nextStep(page).getByRole("listitem").getByRole("button")).toHaveCount(0);
+}
+
+Then("I can't tick the checklist", async ({ page }) => {
+  await expectNoTickButtons(page);
+});
+
+Then("the auditor can't tick the checklist", async ({ people, state }) => {
+  await expectNoTickButtons(await pageOf(state, people, "auditor"));
+});
+
+// A tick as the item's button would write it, by an admin of the project's workspace: the leak workspace's
+// admin, else me (my own projects' workspace is mine).
+Given("the checklist item {string} of {string} is ticked", async ({ page, state }, label: string, project: string) => {
+  const key = CHECKLIST_KEYS[label];
+  expect(key, `no checklist item "${label}"`).toBeDefined();
+  const id = await projectId(page, state, project);
+  const by = state.ids?.Admin ?? (await userId(page));
+  await getMaintenanceDb().execute(
+    sql`insert into project_checklist_tick (project_id, item, ticked_by) values (${id}, ${key}, ${by})`,
+  );
+});
+
+/**
+ * A tampered form: the item's tick (`tick`) or untick button on a project of my own where I can press it (a decoy
+ * in a workspace of mine, at the item's stage, the item ticked for an untick), its hidden project id set to `id`.
+ * Workers, auditors and the other partner's users get a real form this way, not one they never see.
+ */
+async function postFromDecoy(page: Page, state: ScenarioState, label: string, id: string, tick: boolean) {
+  const key = CHECKLIST_KEYS[label];
+  expect(key, `no checklist item "${label}"`).toBeDefined();
+  const db = getMaintenanceDb();
+  if (!state.ids?.Decoy) {
+    ids(state).me ??= await userId(page);
+    ids(state).Decoy = (await myDecoy(state)).projectId;
+  }
+  const decoy = state.ids!.Decoy!;
+  await db.execute(sql`update project set stage = ${key!.split(".")[0]} where id = ${decoy}`);
+  await db.execute(sql`delete from project_checklist_tick where project_id = ${decoy}`);
+  if (!tick) {
+    await db.execute(sql`insert into project_checklist_tick (project_id, item, ticked_by) values (${decoy}, ${key}, ${idOf(state, "me")})`);
+  }
+  await page.goto(`/dashboard/projects/${decoy}`);
+  const button = tickButton(page, label);
+  await expect(button).toHaveAttribute("aria-pressed", tick ? "false" : "true");
+  await button
+    .locator("xpath=ancestor::form[1]")
+    .locator('input[name="projectId"]')
+    .evaluate((input, value) => {
+      (input as HTMLInputElement).value = value;
+    }, id);
+  await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), button.click()]);
+}
+
+When("I post a tick of {string} on {string}", async ({ page, state }, label: string, project: string) => {
+  state.replay = (id) => postFromDecoy(page, state, label, id, true);
+  await state.replay(idOf(state, project));
+});
+
+When("I post an untick of {string} on {string}", async ({ page, state }, label: string, project: string) => {
+  state.replay = (id) => postFromDecoy(page, state, label, id, false);
+  await state.replay(idOf(state, project));
+});
+
+// The project page stays open in this tab while another tab deletes the project.
+When("the project {string} is deleted in another tab", async ({ context, page }, project: string) => {
+  const tab = await context.newPage();
+  await tab.goto(page.url());
+  await expect(tab.getByRole("heading", { name: project, level: 1 })).toBeVisible();
+  await tab.getByRole("link", { name: "Delete project", exact: true }).click();
+  await pressAndWait(tab, "Yes, delete project");
+  await expect(tab.getByRole("heading", { name: project, level: 1 })).toHaveCount(0);
+  await tab.close();
 });

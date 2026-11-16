@@ -1,5 +1,6 @@
 import type { OrganizationStatus } from "@/features/organizations/organization-kinds";
 import { PROJECT_STAGES, type ProjectStage } from "@/features/projects/project-stage";
+import { type ChecklistItemKey, checklistFor } from "@/features/projects/stage-checklist";
 import type { FieldInput } from "@/features/reading-forms/field-input";
 import { parseFieldType } from "@/features/reading-forms/field-type";
 import type { ReadingField, ReadingValues } from "@/features/readings/reading-values";
@@ -46,7 +47,21 @@ export type DemoProject = {
   visits: DemoVisit[];
   /** Where the job is (task 101), since the project started; each customer's projects cover every stage. */
   stage: ProjectStage;
+  /** The first few items of the stage's checklist, ticked by the seeding user (task 120), so the badges vary. */
+  ticks: { item: ChecklistItemKey; tickedAt: Date }[];
 };
+
+/**
+ * The first few items of `stage`'s checklist (task 120), `turn` choosing how many (none to all, so the badges
+ * vary), an hour apart from the project's start and never after `now`.
+ */
+function demoTicks(stage: ProjectStage, turn: number, createdAt: Date, now: Date): DemoProject["ticks"] {
+  const items = checklistFor(stage);
+  return items.slice(0, turn % (items.length + 1)).map((item, i) => ({
+    item: item.key,
+    tickedAt: new Date(Math.min(now.getTime(), createdAt.getTime() + (i + 1) * HOUR)),
+  }));
+}
 
 /** A site with the people to meet there (task 054). Coordinates are decimal strings, both or neither. */
 export type DemoSite = {
@@ -358,6 +373,7 @@ export function buildDemoPlan(now: Date): DemoCustomer[] {
         const createdAt = ago(archetype.startedDaysAgo, ci * 3 + 1);
         const sub = subCompanies[pi % 3];
         const ownSites = sub?.sites ?? sites;
+        const stage = PROJECT_STAGES[(pi + ci) % PROJECT_STAGES.length]!.stage;
         return {
           name: THEMES[(pi + ci * 3) % THEMES.length]!,
           description: archetype.description,
@@ -376,7 +392,8 @@ export function buildDemoPlan(now: Date): DemoCustomer[] {
             linkCustomer: ti % 2 === 0,
           })),
           visits: demoVisits(ci, pi, archetype.startedDaysAgo, archetype.tasks.some(([status]) => status !== "todo"), today),
-          stage: PROJECT_STAGES[(pi + ci) % PROJECT_STAGES.length]!.stage,
+          stage,
+          ticks: demoTicks(stage, pi * 2 + ci, createdAt, now),
         };
       }),
     };

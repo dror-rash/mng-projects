@@ -19,5 +19,43 @@
     "billing": "חיוב",
     "closed": "סגור",
     "since": "<label>{stage}</label> מאז"
+  },
+  "stageChecklist": {
+    "heading": "הצעד הבא",
+    "progress": "{done} מתוך {total} בוצעו",
+    "done": "בוצע",
+    "open": "לא בוצע",
+    "party": {
+      "us": "אנחנו",
+      "customer": "לקוח"
+    },
+    "move": {
+      "ourMove": "תורנו",
+      "waitingForCustomer": "ממתין ללקוח",
+      "ready": "מוכן לשלב הבא",
+      "complete": "העבודה הושלמה"
+    },
+    "items": {
+      "inquiryDetailsRecorded": "פרטי לקוח ואתר נרשמו",
+      "inquiryLogged": "הפנייה תועדה ביומן התקשורת",
+      "quoteCosted": "תמחיר חומרים וכוח אדם",
+      "quoteSent": "ההצעה נשלחה ללקוח",
+      "quoteAccepted": "הלקוח אישר את ההצעה",
+      "orderedWorkOrder": "הזמנת עבודה מגורם מוסמך מטעם הלקוח",
+      "orderedPaymentTerms": "תנאי תשלום סוכמו",
+      "scheduledDateSet": "נקבע מועד לעבודה",
+      "scheduledCrewAssigned": "צוות שובץ",
+      "scheduledCustomerConfirmed": "הלקוח אישר את המועד",
+      "inWorkVisitsDone": "ביקורים בשטח בוצעו",
+      "inWorkMaterialsReported": "חומרים מספקים דווחו לפרויקט",
+      "inWorkReportsHandedOver": "דוחות השטח נמסרו למשרד",
+      "reportingPrepared": "הדוח הוכן במשרד",
+      "reportingSent": "הדוח נשלח ללקוח",
+      "reportingReceived": "הלקוח אישר קבלת הדוח",
+      "billingPrepared": "חשבון / חשבונית הוכנו",
+      "billingSent": "נשלחו ללקוח",
+      "billingReceived": "הלקוח אישר קבלה",
+      "closedCompletionReport": "דוח סיום עבודה הוכן ונשלח"
+    }
   }
 }

@@ -171,6 +171,15 @@ describe("seed:demo (local)", () => {
       from project p left join project_stage_change c on c.project_id = p.id
       where p.workspace_id = ${me.workspaceId}`);
     expect(stages.rows[0]).toEqual({ ok: true, stages: 8 });
+
+    // Some of each project's current stage's checklist ticked by the seeding user (task 120).
+    const ticks = await db.execute<{ ok: boolean; ticks: number }>(sql`
+      select bool_and(t.ticked_by = ${me.id} and split_part(t.item, '.', 1) = p.stage and t.ticked_at >= p.created_at) as ok,
+        count(*)::int as ticks
+      from project_checklist_tick t join project p on p.id = t.project_id
+      where p.workspace_id = ${me.workspaceId}`);
+    expect(ticks.rows[0]!.ok).toBe(true);
+    expect(ticks.rows[0]!.ticks).toBeGreaterThan(10);
   });
 
   it("replaces only the demo data on a rerun, and reuses the form", async () => {

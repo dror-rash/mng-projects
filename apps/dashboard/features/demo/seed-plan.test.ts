@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { ORGANIZATION_STATUSES } from "@/features/organizations/organization-kinds";
 import { PROJECT_STAGES } from "@/features/projects/project-stage";
+import { checklistFor, WHOSE_MOVE, whoseMove } from "@/features/projects/stage-checklist";
 import { fieldInputName, parseReadingValues, type ReadingField, YES_NO } from "@/features/readings/reading-values";
 import { TASK_PRIORITIES } from "@/features/tasks/task-priority";
 import { TASK_STATUSES } from "@/features/tasks/task-status";
@@ -71,6 +72,22 @@ describe("buildDemoPlan", () => {
     for (const customer of plan) {
       expect(new Set(customer.projects.map((p) => p.stage))).toEqual(new Set(PROJECT_STAGES.map((s) => s.stage)));
     }
+  });
+
+  it("ticks some of each project's current stage's checklist, in order, since the project started (task 120)", () => {
+    for (const project of projects) {
+      const stageItems = checklistFor(project.stage).map((i) => i.key);
+      expect(project.ticks.map((t) => t.item)).toEqual(stageItems.slice(0, project.ticks.length));
+      for (const tick of project.ticks) {
+        expect(tick.tickedAt.getTime()).toBeGreaterThanOrEqual(project.createdAt.getTime());
+        expect(tick.tickedAt.getTime()).toBeLessThanOrEqual(now.getTime());
+      }
+    }
+  });
+
+  it("shows every badge across the demo projects (task 120)", () => {
+    const moves = new Set(projects.map((p) => whoseMove(p.stage, p.ticks.map((t) => t.item))));
+    expect(moves).toEqual(new Set(WHOSE_MOVE.map((m) => m.move)));
   });
 
   it("gives each customer contacts with one primary, and notes", () => {

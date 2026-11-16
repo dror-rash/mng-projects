@@ -17,6 +17,10 @@ import { AppFrame } from "@/features/layout/app-frame";
 import { recordWorkspace } from "@/features/layout/record-workspace";
 import { getOrganizationForUser } from "@/features/organizations/queries";
 import { setProjectLifecycleAction } from "@/features/projects/actions";
+import { toggleChecklistItemAction } from "@/features/projects/checklist-actions";
+import { listChecklistTicks } from "@/features/projects/checklist-queries";
+import { nextStep } from "@/features/projects/next-step";
+import { NextStepCard } from "@/features/projects/next-step-card";
 import { isCanceled, projectLifecycleLabel } from "@/features/projects/project-lifecycle";
 import { getProjectForUser } from "@/features/projects/queries";
 import { changeStageAction } from "@/features/projects/stage-actions";
@@ -51,7 +55,7 @@ export default async function ProjectPage({ params }: { params: Promise<{ projec
 
   // The customer is a link only for those who can open customer pages; partners see its name only. The
   // project it was copied from shows only to those who can see that one too (rule 4a).
-  const [tasks, customerPage, copiedFrom, site, crew, manageCrew, visits, readings, attachments, reports, stageChangedAt, stages] = await Promise.all([
+  const [tasks, customerPage, copiedFrom, site, crew, manageCrew, visits, readings, attachments, reports, stageChangedAt, stages, ticks] = await Promise.all([
     listProjectTasks(session.user.id, project.id),
     project.customerName ? getOrganizationForUser(session.user.id, project.organizationId, "customer") : null,
     project.copiedFromId ? getProjectForUser(session.user.id, project.copiedFromId) : null,
@@ -64,9 +68,12 @@ export default async function ProjectPage({ params }: { params: Promise<{ projec
     listProjectReports(session.user.id, project.id),
     getStageChangedAt(session.user.id, project.id),
     stageLabels(),
+    listChecklistTicks(session.user.id, project.id),
   ]);
   // The stage's day (task 101): its latest change, or when the project was made if it has no history yet.
   const stageSince = todayUtc(stageChangedAt ?? project.createdAt);
+  // The current stage's checklist and whose move it is (task 120, ADR-0014); a canceled project's too.
+  const next = await nextStep(project.stage, ticks);
   // Admins put the workspace's workers on the crew (task 056).
   const crewChoices = manageCrew ? await listCrewChoices(session.user.id, project) : [];
   // Where the work is (task 055). Every project has a site (task 071); it shows while it isn't deleted.
@@ -130,14 +137,21 @@ export default async function ProjectPage({ params }: { params: Promise<{ projec
         )}
       </section>
 
-      <StageControl
+      <NextStepCard
         projectId={project.id}
-        stage={project.stage}
-        options={stages.options}
-        line={stages.since(project.stage)}
-        since={stageSince}
-        sinceText={formatDueDate(stageSince)}
-        action={project.canChange ? changeStageAction : undefined}
+        {...next}
+        stageLine={
+          <StageControl
+            projectId={project.id}
+            stage={project.stage}
+            options={stages.options}
+            line={stages.since(project.stage)}
+            since={stageSince}
+            sinceText={formatDueDate(stageSince)}
+            action={project.canChange ? changeStageAction : undefined}
+          />
+        }
+        toggleAction={project.canChange ? toggleChecklistItemAction : undefined}
       />
 
       {site && (

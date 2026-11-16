@@ -264,6 +264,11 @@ async function seedPlan(tx: Tx, plan: DemoCustomer[], userId: string, workspaceI
         changedBy: userId,
         changedAt: project.createdAt,
       });
+      if (project.ticks.length > 0) {
+        await tx.insert(schema.projectChecklistTick).values(
+          project.ticks.map((t) => ({ projectId, item: t.item, tickedBy: userId, tickedAt: t.tickedAt })),
+        );
+      }
       if (project.tasks.length > 0) {
         await tx.insert(schema.task).values(
           project.tasks.map((t) => ({

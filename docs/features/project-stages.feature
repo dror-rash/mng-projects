@@ -117,7 +117,7 @@ Feature: Project stages
   # Stage checklists and "whose move" (task 120, ADR-0014). Each stage has fixed items marked Us or Customer;
   # the first open item decides the badge: Our move, Waiting for customer, or Ready for next stage when all are done.
 
-  @wip @task:120
+  @task:120
   Scenario: The next step card shows the stage's checklist
     Given I am signed in with an existing account
     And I have a project named "Panel upgrade"
@@ -128,7 +128,7 @@ Feature: Project stages
     And the "Next step" section shows "Our move"
     And the project shows "Quote" since today
 
-  @wip @task:120
+  @task:120
   Scenario: Ticking items changes whose move it is
     Given I am signed in with an existing account
     And I have a project named "Panel upgrade"
@@ -142,7 +142,7 @@ Feature: Project stages
     Then the "Next step" section shows "3 of 3 done"
     And the "Next step" section shows "Ready for next stage"
 
-  @wip @task:120
+  @task:120
   Scenario: A ticked item shows who ticked it, and can be unticked
     Given I am signed in with an existing account
     And I have a project named "Panel upgrade"
@@ -154,7 +154,7 @@ Feature: Project stages
     Then "Materials and labour costed" is not ticked
     And the "Next step" section shows "0 of 3 done"
 
-  @wip @task:120
+  @task:120
   Scenario: Ticks stay with their stage
     Given I am signed in with an existing account
     And I have a project named "Panel upgrade"
@@ -169,7 +169,7 @@ Feature: Project stages
     Then the "Next step" section shows "1 of 3 done"
     And "Materials and labour costed" is ticked by me today
 
-  @wip @task:120
+  @task:120
   Scenario: Who can tick the checklist
     Given a workspace with the partners "Northwind" and "Globex", an admin and an auditor
     And the customer "Acme Ltd" is assigned to "Northwind" and "Globex"
@@ -183,7 +183,7 @@ Feature: Project stages
     Then the auditor sees the text "1 of 3 done"
     And the auditor can't tick the checklist
 
-  @wip @task:120
+  @task:120
   Scenario: A worker sees the checklist but can't tick it
     Given a workspace with the partners "Northwind" and "Globex", an admin and an auditor
     And the customer "Acme Ltd" is assigned to "Northwind" and "Globex"
@@ -197,7 +197,7 @@ Feature: Project stages
     And the "Next step" section shows "Our move"
     And I can't tick the checklist
 
-  @wip @task:120
+  @task:120
   Scenario: Another partner's checklist can't be ticked
     Given a workspace with the partners "Northwind" and "Globex", an admin and an auditor
     And the customer "Acme Ltd" is assigned to "Northwind" and "Globex"
@@ -211,8 +211,58 @@ Feature: Project stages
     And the admin opens the "GX App" project page
     Then the admin sees the text "0 of 3 done"
 
+  # Leak scenarios from the task 120 access audit.
+  @task:120
+  Scenario: Another partner's tick can't be unticked
+    Given a workspace with the partners "Northwind" and "Globex", an admin and an auditor
+    And the customer "Acme Ltd" is assigned to "Northwind" and "Globex"
+    And "Northwind" has the project "NW Site" for "Acme Ltd" with the task "Copy"
+    And "Globex" has the project "GX App" for "Acme Ltd" with the task "Login"
+    And the project "GX App" is at the stage "Quote"
+    And the checklist item "Quote sent to the customer" of "GX App" is ticked
+    And I am signed in as a user of "Northwind"
+    When I post an untick of "Quote sent to the customer" on "GX App"
+    Then I see "Something went wrong", the same as with a made-up id
+    And the admin opens the "GX App" project page
+    Then the admin sees the text "1 of 3 done"
+
+  @task:120
+  Scenario: A worker on the crew can't tick by posting the form
+    Given a workspace with the partners "Northwind" and "Globex", an admin and an auditor
+    And the customer "Acme Ltd" is assigned to "Northwind" and "Globex"
+    And "Northwind" has the project "NW Site" for "Acme Ltd" with the task "Copy"
+    And the project "NW Site" is at the stage "Quote"
+    And I am signed in as a worker
+    And I am on the crew of "NW Site"
+    When I post a tick of "Quote sent to the customer" on "NW Site"
+    Then I see "Something went wrong", the same as with a made-up id
+    And the admin opens the "NW Site" project page
+    Then the admin sees the text "0 of 3 done"
+
+  @task:120
+  Scenario: An auditor can't tick by posting the form
+    Given a workspace with the partners "Northwind" and "Globex", an admin and an auditor
+    And the customer "Acme Ltd" is assigned to "Northwind" and "Globex"
+    And "Northwind" has the project "NW Site" for "Acme Ltd" with the task "Copy"
+    And the project "NW Site" is at the stage "Quote"
+    And I am signed in as an auditor
+    When I post a tick of "Quote sent to the customer" on "NW Site"
+    Then I see "Something went wrong", the same as with a made-up id
+    And the admin opens the "NW Site" project page
+    Then the admin sees the text "0 of 3 done"
+
+  @task:120
+  Scenario: A deleted project's checklist can't be ticked
+    Given I am signed in with an existing account
+    And I have a project named "Panel upgrade"
+    And the project "Panel upgrade" is at the stage "Quote"
+    When I am on the "Panel upgrade" project page
+    And the project "Panel upgrade" is deleted in another tab
+    And I tick "Materials and labour costed"
+    Then I see "Something went wrong", the same as with a made-up id
+
   # The item texts are the owner's (2026-11-15); the stage label is task 101's.
-  @wip @task:120
+  @task:120
   Scenario: The checklist in Hebrew
     Given I am signed in with an existing account
     And my language cookie is set to "he"

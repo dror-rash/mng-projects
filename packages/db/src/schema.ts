@@ -306,6 +306,44 @@ export const projectStageChange = pgTable(
 );
 
 /**
+ * The stored checklist item keys (task 120, ADR-0014), for the check constraint; the app's list, in display
+ * order with each item's stage and party, is `STAGE_CHECKLIST` (apps/dashboard/features/projects/stage-checklist.ts).
+ */
+const CHECKLIST_ITEM_SQL = sql.raw(
+  [
+    "inquiry.details_recorded", "inquiry.logged",
+    "quote.costed", "quote.sent", "quote.accepted",
+    "ordered.work_order", "ordered.payment_terms",
+    "scheduled.date_set", "scheduled.crew_assigned", "scheduled.customer_confirmed",
+    "in_work.visits_done", "in_work.materials_reported", "in_work.reports_handed_over",
+    "reporting.prepared", "reporting.sent", "reporting.received",
+    "billing.prepared", "billing.sent", "billing.received",
+    "closed.completion_report",
+  ].map((s) => `'${s}'`).join(", "),
+);
+
+/**
+ * A project's ticked checklist items (task 120, ADR-0014): one row per ticked item, who ticked it and when (the
+ * database's time). Ticking inserts, unticking deletes; whoever sees the project reads them, whoever can change
+ * it ticks as themselves and unticks; nobody updates a tick (migration 0046).
+ */
+export const projectChecklistTick = pgTable(
+  "project_checklist_tick",
+  {
+    projectId: text("project_id")
+      .notNull()
+      .references(() => project.id, { onDelete: "cascade" }),
+    item: text("item").notNull(),
+    tickedBy: text("ticked_by").references(() => user.id, { onDelete: "set null" }),
+    tickedAt: timestamp("ticked_at").notNull().defaultNow(),
+  },
+  (table) => [
+    primaryKey({ columns: [table.projectId, table.item] }),
+    check("project_checklist_tick_item_check", sql`${table.item} in (${CHECKLIST_ITEM_SQL})`),
+  ],
+);
+
+/**
  * A project's crew (task 056, ADR-0008): the workers who see the project and work on its tasks. The member
  * key ties each row to a membership of the project's workspace, so leaving the workspace leaves the crews;
  * a trigger keeps the member a worker of the project's own workspace (migration 0029).

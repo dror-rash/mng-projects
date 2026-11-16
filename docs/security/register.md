@@ -11,9 +11,9 @@ The one list of known security gaps and their status. The process that feeds it 
 | P0 – fix now | 0 | 0 | 0 | 5 | 0 |
 | P1 – before real customer data on `main` | 2 | 0 | 2 | 10 | 0 |
 | P2 – hardening | 19 | 0 | 1 | 0 | 1 |
-| P3 – info / decide | 14 | 0 | 0 | 0 | 0 |
+| P3 – info / decide | 16 | 0 | 0 | 0 | 0 |
 
-Counted from the rows below (2026-11-15). "Fixed" includes SEC-14 and SEC-17, merged but not live until the owner applies their Terraform, and rows whose code part is fixed with an owner setting left in the row (SEC-11, SEC-15).
+Counted from the rows below (2026-11-16). "Fixed" includes SEC-14 and SEC-17, merged but not live until the owner applies their Terraform, and rows whose code part is fixed with an owner setting left in the row (SEC-11, SEC-15).
 
 No Critical findings. One High (SEC-01). Nothing in the review showed one workspace's data reaching another through the app: every page, route handler and server action checks access on the server, and row-level security is on for every app table.
 
@@ -97,6 +97,8 @@ No Critical findings. One High (SEC-01). Nothing in the review showed one worksp
 | SEC-52 | Info | fake-gcs-server 1.52.2 writes uploads to `<root>/<bucket>/<name>` without escaping the object name (path traversal), and its CORS is `*`. The no-Docker fallback (task 113) runs it with `-backend memory` on 127.0.0.1. The Docker path (`pnpm db:up`) is contained by the container but still publishes 4443 on all interfaces | Tooling | open (fallback: memory backend; Docker: consider publishing on 127.0.0.1) | task 113 review (WEB-1) |
 | SEC-53 | Info | The database doesn't keep a project's stage and its history in step: `project_stage_change.from_stage` is whatever the writer says, and `project_update` lets anyone who can change the project set `project.stage` without a history row. Defence in depth only: the app's writers (`changeStageAction`, project create and copy, the demo seed) are consistent, and the insert policy checks `to_stage` against the project's stage. Fix: an `AFTER UPDATE OF stage` trigger that writes the row, or a definer function as the only way to change a stage | DB | open | task 101 review |
 | SEC-54 | Info | Dependencies added by hand (`pnpm add`) skip the 3-day wait Dependabot applies to new releases, so a just-published (possibly compromised) version can land; task 119 first added `lucide-react` 1.73.0 inside that window and pinned 1.72.0 after review | Supply chain | open (consider pnpm `minimumReleaseAge` in `pnpm-workspace.yaml`) | task 119 review |
+| SEC-55 | Info | Unticking a stage checklist item deletes its `project_checklist_tick` row: anyone who can change the project can remove someone else's tick and nothing records who removed it or when (ADR-0014's design, not SEC-21's soft-delete problem). Fix if ticks ever count as evidence (billing, sign-off): an append-only tick/untick log like `project_stage_change` | DB | open | task 120 review |
+| SEC-56 | Info | `project_checklist_tick` follows `can_see_project`, so admins and auditors can still read a deleted project's ticks at the database level (the page can't: it reads ticks only after the project, which filters `deleted_at is null`); tick authors' names show to everyone who sees the project, like assignees and crew (ADR-0014). Any query listing ticks outside the project row must filter `deleted_at is null` | DB | open | task 120 review |
 
 ## Change log
 - 2026-11-08 – Register created from the first full review (41 gaps: 1 High, 12 Medium, rest Low/Info).
@@ -125,3 +127,4 @@ No Critical findings. One High (SEC-01). Nothing in the review showed one worksp
 - 2026-11-14 – Task 114 (flaky `@poc` flow): SEC-09 notes that the e2e failure diagnostics must redact password-reset and email-verification token paths once those exist. No new entry; counts unchanged.
 - 2026-11-15 – Task 101 (project stages) review: SEC-53 added (P3), the stage and its history aren't kept in step by the database; SEC-21 notes that a project hard delete also cascades its stage history. Counts recomputed from the rows.
 - 2026-11-15 – Task 119 review: SEC-54 added (P3, hand-added dependencies skip the release wait); SEC-19 notes the drawer's runtime `<style>` tags for a future nonce CSP.
+- 2026-11-16 – Task 120 (stage checklists) review: SEC-55 (unticking leaves no trace) and SEC-56 (a deleted project's ticks readable at the database level; tick authors' names shown) added (P3). Counts recomputed from the rows.
