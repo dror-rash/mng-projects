@@ -69,6 +69,16 @@
     "moveAnyway": "העבר בכל זאת",
     "cancel": "ביטול"
   },
+  "projectTabs": {
+    "label": "חלקי הפרויקט",
+    "overview": "סקירה",
+    "sales": "מכירה",
+    "work": "ביצוע",
+    "reports": "דוחות",
+    "billing": "חיוב",
+    "salesLater": "הצעות מחיר והזמנות עבודה יופיעו כאן.",
+    "billingLater": "חשבונות יופיעו כאן."
+  },
   "stageBoard": {
     "view": "לוח",
     "label": "לוח שלבים",
