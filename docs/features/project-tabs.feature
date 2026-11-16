@@ -6,7 +6,8 @@ Feature: Project page tabs
 
   # Tabs: Overview (site, tasks), Sales (work orders and quotes, later), Work (visits, readings, photos and
   # files, crew), Reports (reports), Billing (bills, later). The header, the stage bar and "Next step" show on
-  # every tab. Projects written by fixtures start at Inquiry, so they open on Overview.
+  # every tab. Projects written by fixtures start at Inquiry, so they open on Overview. Pages and actions that
+  # lead back to the project return to the tab they belong to; a stage move opens the new stage's tab.
 
   @wip @task:122
   Scenario Outline: The project page opens on the current stage's tab
@@ -78,6 +79,43 @@ Feature: Project page tabs
     And the page does not scroll sideways
     When I open the "דוחות" tab
     Then the "דוחות" tab is open
+
+  @wip @task:122
+  Scenario: Coming back to the tab I was on
+    Given I am signed in with an existing account
+    And I have a project named "Panel upgrade"
+    And "Panel upgrade" has a visit 2 days ago with the notes "Panel delivered"
+    And the project "Panel upgrade" is at the stage "Reporting"
+    When I am on the "Panel upgrade" project page
+    Then the "Reports" tab is open
+    When I open the "Work" tab
+    And I tick "Report prepared in the office"
+    Then the "Work" tab is open
+    When I open the visit "Panel delivered" of "Panel upgrade"
+    And I follow the "Panel upgrade" link
+    Then the "Work" tab is open
+    When I open the visit "Panel delivered" of "Panel upgrade"
+    And I press "Delete visit"
+    Then the "Work" tab is open
+    And the visits listed are ""
+    When I change the stage to "Billing"
+    Then the "Billing" tab is open
+
+  @wip @task:122
+  Scenario: A task's page leads back to the Overview tab
+    Given I am signed in with an existing account
+    And I have a project named "Panel upgrade"
+    And I am on the "Panel upgrade" project page
+    And the project has a task "Order breakers"
+    And the project has a task "Label circuits"
+    And the project "Panel upgrade" is at the stage "In work"
+    When I follow the "Order breakers" link
+    And I follow the "Panel upgrade" link
+    Then the "Overview" tab is open
+    When I follow the "Label circuits" link
+    And I press "Delete task"
+    Then the "Overview" tab is open
+    And I do not see the task "Label circuits"
 
   @wip @task:122
   Scenario: A worker lands on the Work tab
