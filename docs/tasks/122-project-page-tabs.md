@@ -94,6 +94,7 @@ None blocking. Defaults taken:
 - 2026-11-16 – Step fix (implementer): `the auditor sees no {string} button and no {string} button` waited for the crew's "Worker" text, which is on the Work tab only, so the Reports scenario in `reports.feature` could not pass; it now waits for the page's title and open tab. Scenarios unchanged. E2E in the lane (`--workers=1`): `@task:122` 15/15; site-visits, readings, attachments, reports, workers, poc-flow, workspaces, project-stages, project-cancel-copy, project-tasks, task-details, partner-access, soft-delete, roles and language: 168, all green (21 timed out in a first run while the machine slept, `ERR_NETWORK_IO_SUSPENDED`, and passed on a rerun with `--timeout=90000`).
 
 ## Parking lot
+- A `project-stages.feature` phone scenario at a late stage in Hebrew (e.g. Billing, 360 px, the page does not scroll sideways), to pin the stage bar's `relative` fix (task 122) to the bar itself rather than to the tabs scenario.
 - Counts on tabs (e.g. "Work 3" for open visits).
 - Remembering the last tab per person or per project.
 - Hiding Sales and Billing from workers if they find them confusing (owner).

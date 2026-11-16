@@ -74,7 +74,7 @@ Then(
     // The page is there (its title and open tab), so the missing buttons aren't just not loaded yet. Not the crew's
     // "Worker": the Crew section is on the Work tab only (task 122), and the reports' check is on Reports.
     await expect(auditor.getByRole("heading", { level: 1 })).toBeVisible();
-    await expect(auditor.getByRole("navigation", { name: "Project sections" }).locator('[aria-current="page"]')).toBeVisible();
+    await expect(auditor.getByRole("navigation", { name: /^(Project sections|חלקי הפרויקט)$/ }).locator('[aria-current="page"]')).toBeVisible();
     await expect(auditor.getByRole("button", { name: first, exact: true })).toHaveCount(0);
     await expect(auditor.getByRole("button", { name: second, exact: true })).toHaveCount(0);
   },
