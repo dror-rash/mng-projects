@@ -68,5 +68,13 @@
     "openItems": "{count, plural, one {1 item is} other {# items are}} still open in this stage. Move anyway?",
     "moveAnyway": "Move anyway",
     "cancel": "Cancel"
+  },
+  "stageBoard": {
+    "view": "Board",
+    "label": "Stage board",
+    "empty": "No projects",
+    "days": "{days, plural, one {1 day} other {# days}}",
+    "longWait": "more than {days, number} days in this stage",
+    "canceled": "Canceled"
   }
 }

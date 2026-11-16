@@ -3,13 +3,13 @@ import { getMaintenanceDb } from "@repo/db/maintenance";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
 import { copyProject } from "./copy";
-import { getStageChangedAt } from "./stage-history";
+import { getStageChangedAt, listStageChangedAt } from "./stage-history";
 
 // The stage history's writers other than the stage action (task 101), against the migrated database in
 // DATABASE_URL, as the runtime role: a copy starts over at Inquiry with its first history row.
 
 const run = crypto.randomUUID().slice(0, 8);
-const ids = { workspace: `${run}-ws`, admin: `${run}-admin`, customer: `${run}-customer`, site: `${run}-site`, source: `${run}-source` };
+const ids = { workspace: `${run}-ws`, admin: `${run}-admin`, customer: `${run}-customer`, site: `${run}-site`, source: `${run}-source`, moved: `${run}-moved` };
 
 beforeAll(async () => {
   const db = getMaintenanceDb();
@@ -21,6 +21,12 @@ beforeAll(async () => {
   await db.insert(schema.project).values({
     id: ids.source, name: "Panel upgrade", workspaceId: ids.workspace, organizationId: ids.customer, siteId: ids.site, stage: "billing",
   });
+  await db.insert(schema.project).values({
+    id: ids.moved, name: "Fire alarm", workspaceId: ids.workspace, organizationId: ids.customer, siteId: ids.site, stage: "quote",
+  });
+  await db.execute(sql`insert into project_stage_change (id, project_id, from_stage, to_stage, changed_at) values
+    (${`${run}-c1`}, ${ids.moved}, null, 'inquiry', '2026-11-01 08:00'),
+    (${`${run}-c2`}, ${ids.moved}, 'inquiry', 'quote', '2026-11-04 09:30')`);
 });
 
 afterAll(async () => {
@@ -38,5 +44,17 @@ describe("copying a project", () => {
     const changes = await db.execute(sql`select from_stage, to_stage, changed_by from project_stage_change where project_id = ${id}`);
     expect(changes.rows).toEqual([{ from_stage: null, to_stage: "inquiry", changed_by: ids.admin }]);
     expect(await getStageChangedAt(ids.admin, id)).toBeInstanceOf(Date);
+  });
+});
+
+describe("listStageChangedAt", () => {
+  it("gives each listed project's latest stage change, and none for a project without history", async () => {
+    const changed = await listStageChangedAt(ids.admin, ids.workspace, [ids.moved, ids.source]);
+    expect(changed).toEqual(new Map([[ids.moved, new Date("2026-11-04T09:30:00Z")]]));
+  });
+
+  it("gives nothing to someone who can't see the projects, or for no projects", async () => {
+    expect(await listStageChangedAt(`${run}-nobody`, ids.workspace, [ids.moved])).toEqual(new Map());
+    expect(await listStageChangedAt(ids.admin, ids.workspace, [])).toEqual(new Map());
   });
 });

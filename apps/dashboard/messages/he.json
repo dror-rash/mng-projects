@@ -68,5 +68,13 @@
     "openItems": "{count, plural, one {פריט אחד עדיין פתוח} other {# פריטים עדיין פתוחים}} בשלב הזה. להעביר בכל זאת?",
     "moveAnyway": "העבר בכל זאת",
     "cancel": "ביטול"
+  },
+  "stageBoard": {
+    "view": "לוח",
+    "label": "לוח שלבים",
+    "empty": "אין פרויקטים",
+    "days": "{days, plural, one {יום אחד} two {יומיים} other {# ימים}}",
+    "longWait": "יותר מ־{days, number} ימים בשלב הזה",
+    "canceled": "בוטל"
   }
 }

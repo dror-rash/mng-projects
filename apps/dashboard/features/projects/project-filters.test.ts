@@ -19,6 +19,10 @@ describe("parseProjectFilters", () => {
     expect(parseProjectFilters({ customer: "none" }, customers)).toEqual({ overdue: false, view: "table" });
   });
 
+  it("reads the board view", () => {
+    expect(parseProjectFilters({ view: "board", stage: "quote" }, customers)).toEqual({ stage: "quote", overdue: false, view: "board" });
+  });
+
   it("ignores a customer that isn't one of the workspace's, an unknown status or stage and an unknown view", () => {
     expect(parseProjectFilters({ customer: "someone-else", status: "archived", stage: "In work", view: "grid" }, customers)).toEqual({
       overdue: false,
@@ -45,6 +49,12 @@ describe("filterParams", () => {
       q: "web",
       view: "tiles",
     });
+  });
+});
+
+describe("filterParams with the board", () => {
+  it("keeps the board view with the filters", () => {
+    expect(filterParams({ customer: "acme", overdue: false, view: "board" })).toEqual({ customer: "acme", view: "board" });
   });
 });
 
