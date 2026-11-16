@@ -64,6 +64,16 @@ describe("toggleChecklistItemAction", () => {
     expect(redirected).toHaveBeenCalledWith("/projects/project-1");
   });
 
+  it("goes back to the tab the form was posted from (task 122)", async () => {
+    await post({ projectId: "project-1", item: "quote.sent", done: "true", tab: "work" });
+    expect(redirected).toHaveBeenCalledWith("/projects/project-1?tab=work");
+  });
+
+  it("goes back to the bare project page, so the stage's tab, for an unknown tab", async () => {
+    await post({ projectId: "project-1", item: "quote.sent", done: "true", tab: "made-up" });
+    expect(redirected).toHaveBeenCalledWith("/projects/project-1");
+  });
+
   it("takes an item of another stage than the project's", async () => {
     await post({ projectId: "project-1", item: "closed.completion_report", done: "true" });
     expect(db.ticks).toEqual([expect.objectContaining({ item: "closed.completion_report" })]);

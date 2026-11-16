@@ -34,6 +34,7 @@ export type NextStepItem = {
  */
 export function NextStepCard({
   projectId,
+  tab: _tab,
   heading,
   stageLine,
   move,
@@ -47,6 +48,8 @@ export function NextStepCard({
   moveAction,
 }: {
   projectId: string;
+  /** The open tab of the project page, posted with each item so ticking keeps it (task 122). */
+  tab?: string;
   heading: string;
   /** "<Stage> since <date>", with the stage form for those who can change it. */
   stageLine: ReactNode;
