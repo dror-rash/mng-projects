@@ -118,7 +118,7 @@ Feature: Stage board
   Scenario: The board on a phone
     Given I am signed in with an existing account
     And I have projects named "Panel upgrade, Shelf lighting"
-    And the project "Shelf lighting" is at the stage "Billing"
+    And the project "Shelf lighting" has been at the stage "Billing" for 12 days
     When my screen is 360 pixels wide
     And I open "/dashboard/projects?view=board"
     Then the "Inquiry" column lists "Panel upgrade"
