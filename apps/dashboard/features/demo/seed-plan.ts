@@ -51,6 +51,18 @@ export type DemoProject = {
   ticks: { item: ChecklistItemKey; tickedAt: Date }[];
 };
 
+/**
+ * The first few items of `stage`'s checklist (task 120), `turn` choosing how many (none to all, so the badges
+ * vary), an hour apart from the project's start and never after `now`.
+ */
+function demoTicks(stage: ProjectStage, turn: number, createdAt: Date, now: Date): DemoProject["ticks"] {
+  const items = checklistFor(stage);
+  return items.slice(0, turn % (items.length + 1)).map((item, i) => ({
+    item: item.key,
+    tickedAt: new Date(Math.min(now.getTime(), createdAt.getTime() + (i + 1) * HOUR)),
+  }));
+}
+
 /** A site with the people to meet there (task 054). Coordinates are decimal strings, both or neither. */
 export type DemoSite = {
   name: string;
@@ -381,9 +393,7 @@ export function buildDemoPlan(now: Date): DemoCustomer[] {
           })),
           visits: demoVisits(ci, pi, archetype.startedDaysAgo, archetype.tasks.some(([status]) => status !== "todo"), today),
           stage,
-          ticks: checklistFor(stage)
-            .slice(0, (pi * 2 + ci) % (checklistFor(stage).length + 1))
-            .map((item, ti) => ({ item: item.key, tickedAt: new Date(Math.min(now.getTime(), createdAt.getTime() + (ti + 1) * HOUR)) })),
+          ticks: demoTicks(stage, pi * 2 + ci, createdAt, now),
         };
       }),
     };
