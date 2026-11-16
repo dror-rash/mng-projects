@@ -172,6 +172,20 @@ describe("who ticks and unticks", () => {
     expect(await ticks(ids.admin, ids.projectA)).toEqual([]);
   });
 
+  it("lets the admin and the project's partner user tick and untick a canceled project's items", async () => {
+    const db = getMaintenanceDb();
+    await db.execute(sql`update project set status = 'canceled' where id = ${ids.projectA}`);
+    try {
+      expect(await writeAs(ids.admin, insertTick(ids.projectA, "reporting.prepared", ids.admin))).toBe(1);
+      expect(await writeAs(ids.pa, insertTick(ids.projectA, "reporting.sent", ids.pa))).toBe(1);
+      expect(await writeAs(ids.pa, deleteTick(ids.projectA, "reporting.prepared"))).toBe(1);
+      expect(await ticks(ids.admin, ids.projectA)).toEqual(["reporting.sent"]);
+    } finally {
+      await db.execute(sql`update project set status = 'active' where id = ${ids.projectA}`);
+      await clear(ids.projectA);
+    }
+  });
+
   it("takes the time of a tick from the database, never from the writer", async () => {
     const backdated = sql`insert into project_checklist_tick (project_id, item, ticked_by, ticked_at)
       values (${ids.projectA}, 'billing.sent', ${ids.admin}, '2020-01-01')`;
