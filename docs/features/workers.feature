@@ -106,6 +106,7 @@ Feature: Workers: internal technicians on a project's crew
 
   Scenario: Only admins see and change the crew
     When I am on the "NW Site" project page
+    And I open the "Work" tab
     Then I do not see the "Add to crew" button
     And I do not see the "Remove Worker" button
     When the auditor opens the "NW Site" project page

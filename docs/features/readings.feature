@@ -35,6 +35,7 @@ Feature: Readings
     When I open the visit "Panel delivered" of "Panel upgrade"
     Then the "Readings" section shows "Panel check"
     When I am on the "Panel upgrade" project page
+    And I open the "Work" tab
     Then the readings listed are "Panel check"
 
   @task:061
@@ -70,6 +71,7 @@ Feature: Readings
     And I press "Save reading"
     And I send the same reading form again
     And I am on the "Panel upgrade" project page
+    And I open the "Work" tab
     Then the readings listed are "Panel check"
 
   # Roles and isolation: the leak suite's workspace (partner-access.feature, workers.feature).
@@ -141,6 +143,7 @@ Feature: Readings
     When I open the Add a reading page of the visit "Panel delivered" with the form "Their check"
     Then the forms offered are "Panel check"
     When I am on the "Panel upgrade" project page
+    And I open the "Work" tab
     Then I see the text "No readings yet."
 
   @task:061
