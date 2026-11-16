@@ -126,11 +126,15 @@ When("I move the project to the stage {string} by editing the page", async ({ pa
   await pressButton(page, button);
 });
 
-/** The bar is shown with its current stage, without a button, and there is no "Move to" button. */
+/**
+ * The bar is shown with its current stage, without a button, and the "Next step" card has no "Move to" button
+ * (the task board's "Move to <status>" buttons are a worker's, task 005).
+ */
 async function expectNoStageMoves(page: Page) {
   await expect(stageBar(page).locator('[aria-current="step"]')).toBeVisible();
   await expect(stageBar(page).getByRole("button")).toHaveCount(0);
-  await expect(page.getByRole("button", { name: /^(Move to|העבר ל)/ })).toHaveCount(0);
+  await expect(nextStep(page)).toBeVisible();
+  await expect(nextStep(page).getByRole("button", { name: /^(Move to|העבר ל)/ })).toHaveCount(0);
 }
 
 Then("I can't move the project to another stage", async ({ page }) => {
