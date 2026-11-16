@@ -129,3 +129,36 @@ Feature: Project page tabs
     Then the "Work" tab is open
     And the page shows the sections "Visits, Readings, Photos and files, Crew"
     And I see the "Record a visit" link
+
+  @task:122
+  Scenario: Another partner's project is not found on any tab
+    Given a workspace with the partners "Northwind" and "Globex", an admin and an auditor
+    And the customer "Acme Ltd" is assigned to "Northwind" and "Globex"
+    And "Northwind" has the project "NW Site" for "Acme Ltd" with the task "Copy"
+    And "Globex" has the project "GX App" for "Acme Ltd" with the task "Login"
+    And I am signed in as a user of "Northwind"
+    When I open the address of the "GX App" project with "?tab=work"
+    Then I see "Project not found", the same as for a made-up project address
+    When I open the address of the "GX App" project with "?tab=reports"
+    Then I see "Project not found", the same as for a made-up project address
+
+  @task:122
+  Scenario: A worker can't open the Work tab of a project they're not on the crew of
+    Given a workspace with the partners "Northwind" and "Globex", an admin and an auditor
+    And the customer "Acme Ltd" is assigned to "Northwind" and "Globex"
+    And "Northwind" has the project "NW Site" for "Acme Ltd" with the task "Copy"
+    And "Globex" has the project "GX App" for "Acme Ltd" with the task "Login"
+    And I am signed in as a worker
+    And I am on the crew of "NW Site"
+    When I open the address of the "GX App" project with "?tab=work"
+    Then I see "Project not found", the same as for a made-up project address
+
+  @task:122
+  Scenario: A partner's user on the Work tab doesn't manage the crew
+    Given a workspace with the partners "Northwind" and "Globex", an admin and an auditor
+    And the customer "Acme Ltd" is assigned to "Northwind" and "Globex"
+    And "Northwind" has the project "NW Site" for "Acme Ltd" with the task "Copy"
+    And I am signed in as a user of "Northwind"
+    When I am on the "NW Site" project page
+    And I open the "Work" tab
+    Then I do not see the "Add to crew" button
