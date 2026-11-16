@@ -21,7 +21,8 @@ const GROUP_LABEL_KEYS = { our_move: "ourMove", waiting_for_customer: "waitingFo
 
 /**
  * The overview's "Needs action" groups and text in the request's language (ADR-0011, task 124), from the visible
- * projects, their checklist ticks and latest stage changes, `today` UTC.
+ * projects, their checklist ticks and latest stage changes, `today` UTC. "N days" reuses the board's
+ * `stageBoard.days` message (task 123), so both say a wait the same way.
  */
 export async function needsActionSection(
   projects: readonly NeedsActionProject[],

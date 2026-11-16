@@ -164,31 +164,31 @@ Then("the auditor can't tick the checklist", async ({ people, state }) => {
   await expectNoTickButtons(await pageOf(state, people, "auditor"));
 });
 
-// A tick as the item's button would write it, by an admin of the project's workspace: the leak workspace's
-// admin, else me (my own projects' workspace is mine).
-Given("the checklist item {string} of {string} is ticked", async ({ page, state }, label: string, project: string) => {
+/**
+ * A tick as the item's button would write it, by an admin of the project's workspace: the leak workspace's admin,
+ * else me (my own projects' workspace is mine); `daysAgo` sets its time that many days back, else now.
+ */
+async function insertTick(page: Page, state: ScenarioState, label: string, project: string, daysAgo?: number) {
   const key = CHECKLIST_KEYS[label];
   expect(key, `no checklist item "${label}"`).toBeDefined();
   const id = await projectId(page, state, project);
   const by = state.ids?.Admin ?? (await userId(page));
+  // A UTC ISO string: node-postgres would send a Date in the runner's local time, which a `timestamp` keeps as is.
+  const tickedAt = daysAgo === undefined ? sql`now()` : sql`${new Date(Date.now() - daysAgo * 86_400_000).toISOString()}`;
   await getMaintenanceDb().execute(
-    sql`insert into project_checklist_tick (project_id, item, ticked_by) values (${id}, ${key}, ${by})`,
+    sql`insert into project_checklist_tick (project_id, item, ticked_by, ticked_at) values (${id}, ${key}, ${by}, ${tickedAt})`,
   );
+}
+
+Given("the checklist item {string} of {string} is ticked", async ({ page, state }, label: string, project: string) => {
+  await insertTick(page, state, label, project);
 });
 
 // The same tick, that many days ago (task 124).
 Given(
   "the checklist item {string} of {string} was ticked {int} days ago",
   async ({ page, state }, label: string, project: string, days: number) => {
-    const key = CHECKLIST_KEYS[label];
-    expect(key, `no checklist item "${label}"`).toBeDefined();
-    const id = await projectId(page, state, project);
-    const by = state.ids?.Admin ?? (await userId(page));
-    // A UTC ISO string: node-postgres would send a Date in the runner's local time, which a `timestamp` keeps as is.
-    const tickedAt = new Date(Date.now() - days * 86_400_000).toISOString();
-    await getMaintenanceDb().execute(
-      sql`insert into project_checklist_tick (project_id, item, ticked_by, ticked_at) values (${id}, ${key}, ${by}, ${tickedAt})`,
-    );
+    await insertTick(page, state, label, project, days);
   },
 );
 
