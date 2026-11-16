@@ -38,10 +38,12 @@ export function waitingSince(
  * complete). The overview reads the stage changes of these only, so finished jobs, which pile up, aren't asked for.
  */
 export function openProjects<T extends { id: string; stage: string; lifecycle: string }>(
-  _projects: readonly T[],
-  _ticks: readonly { projectId: string; item: string }[],
+  projects: readonly T[],
+  ticks: readonly { projectId: string; item: string }[],
 ): T[] {
-  throw new Error("not implemented");
+  const active = projects.filter((p) => !isCanceled(p.lifecycle));
+  const moves = movesByProject(active, ticks);
+  return active.filter((p) => moves.get(p.id) !== "complete");
 }
 
 type NeedsActionProject = { id: string; name: string; stage: string; lifecycle: string; createdAt: Date };
@@ -58,10 +60,15 @@ export function needsAction<T extends NeedsActionProject>(
   changedAt: ReadonlyMap<string, Date>,
   today: CalendarDate,
 ): { group: NeedsActionGroup; projects: NeedsActionEntry<T>[]; more: boolean }[] {
+  // Canceled projects are left out here too, whatever the caller passes (the overview passes `openProjects`).
   const active = projects.filter((p) => !isCanceled(p.lifecycle));
   const moves = movesByProject(active, ticks);
   const ticksOf = new Map<string, (typeof ticks)[number][]>();
-  for (const t of ticks) ticksOf.set(t.projectId, [...(ticksOf.get(t.projectId) ?? []), t]);
+  for (const t of ticks) {
+    const list = ticksOf.get(t.projectId);
+    if (list) list.push(t);
+    else ticksOf.set(t.projectId, [t]);
+  }
   const entries = active
     .map((p) => {
       const since = waitingSince(p.stage, stageSince(changedAt.get(p.id) ?? null, p.createdAt), ticksOf.get(p.id) ?? []);

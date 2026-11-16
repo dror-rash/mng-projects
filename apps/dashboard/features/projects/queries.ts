@@ -66,10 +66,6 @@ export async function listCustomerProjects(userId: string, workspaceId: string, 
   );
 }
 
-export async function countProjects(userId: string, workspaceId: string) {
-  return withAccess(userId, async () => getDb().$count(schema.project, visibleProjects(userId, workspaceId)));
-}
-
 /**
  * The projects at the site `siteId` that `userId` can see (not deleted), newest first: the site page's
  * Projects section (task 072). A partner's users see only their partner's.
