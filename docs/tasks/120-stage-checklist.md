@@ -1,6 +1,6 @@
 # Task 120: Stage checklist and the "Next step" card
 
-- **Status:** in-progress
+- **Status:** in-review
 - **Milestone:** M22 Guided project flow
 - **Zone / package:** `packages/db`, `apps/dashboard` (`features/projects`, `messages/`, demo seed), `e2e`
 - **Feature file:** `docs/features/project-stages.feature` (`@task:120`)
@@ -112,6 +112,7 @@ None blocking. Defaults taken (owner may change them in review):
   - `whoseMove`, against `stage-checklist.test.ts` + `seed-plan.test.ts` (41 tests): parties swapped → 5 failed; the last open item deciding → 3 failed; no "Job complete" at Closed → 2 failed; other stages' ticks counting → 1 failed.
   - `nextStep` (new `next-step.test.ts`, passed on its first run): N of M counting every tick and a placeholder name for a deleted ticker → 2 of 4 failed.
 - 2026-11-16 – New DB test: a canceled project's items are ticked and unticked by the admin and the project's partner user. It passed on its first run (the policies don't look at the lifecycle); the two canceled-project mutations above turn it red. Also: `WHOSE_MOVE` entries carry their `chartSlot` (the card maps slot to classes; a card test pins the colors, green before and after the refactor); `next-step.tsx` → `next-step.ts` with its unit test; `done` parsed strictly (`true`/`false`, else the made-up-item error; red first: 1 failed); the unused `next/cache` mock removed; ADR-0014 notes tick authors' names and deleted projects' ticks. Checks: unit 815, `@repo/db` test:db 194, dashboard test:db 27, lint and typecheck green; `@task:120` (12 scenarios with the planner's new leak scenarios) 12/12 on two consecutive runs against warm lane servers, after a first run on freshly started servers where all 12 timed out while routes compiled (the cold-start issue noted above). Runs while another session's Playwright run shared the lane's ports were torn down mid-run and don't count.
+- 2026-11-16 – In review: QA PASS (lint, typecheck, unit 815, db 194 + 27, build, Storybook, full e2e 353/364 with the 11 load failures passing in isolation; all 12 `@task:120` scenarios pass). Security Info notes as SEC-55 and SEC-56.
 
 ## Parking lot
 - Ticking items from records as an explicit action: "Work order from an authorised person" when a work order is recorded (task 106), "Quote sent" / "Customer accepted the quote" from quotes (M16), report delivery (M17), bills (M19), "Crew assigned" from the crew list.
