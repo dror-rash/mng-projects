@@ -49,12 +49,12 @@ describe("copying a project", () => {
 
 describe("listStageChangedAt", () => {
   it("gives each listed project's latest stage change, and none for a project without history", async () => {
-    const changed = await listStageChangedAt(ids.admin, [ids.moved, ids.source]);
+    const changed = await listStageChangedAt(ids.admin, ids.workspace, [ids.moved, ids.source]);
     expect(changed).toEqual(new Map([[ids.moved, new Date("2026-11-04T09:30:00Z")]]));
   });
 
   it("gives nothing to someone who can't see the projects, or for no projects", async () => {
-    expect(await listStageChangedAt(`${run}-nobody`, [ids.moved])).toEqual(new Map());
-    expect(await listStageChangedAt(ids.admin, [])).toEqual(new Map());
+    expect(await listStageChangedAt(`${run}-nobody`, ids.workspace, [ids.moved])).toEqual(new Map());
+    expect(await listStageChangedAt(ids.admin, ids.workspace, [])).toEqual(new Map());
   });
 });

@@ -61,8 +61,8 @@ export default async function AllProjectsPage({ searchParams }: { searchParams: 
   // The stage board (task 123): whose move and since when, for the listed projects only (no queries otherwise).
   const boardIds = filters.view === "board" ? shown.map((p) => p.id) : [];
   const [ticks, changedAt] = await Promise.all([
-    listChecklistTicksForProjects(session.user.id, boardIds),
-    listStageChangedAt(session.user.id, boardIds),
+    listChecklistTicksForProjects(session.user.id, workspace.id, boardIds),
+    listStageChangedAt(session.user.id, workspace.id, boardIds),
   ]);
   const board = filters.view === "board" ? await stageBoard(shown, ticks, changedAt, todayUtc()) : null;
   // Each link changes one thing and keeps the rest.

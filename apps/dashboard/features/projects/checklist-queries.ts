@@ -1,6 +1,8 @@
-import { eq, getDb, inArray, schema, withAccess } from "@repo/db";
+import { and, eq, getDb, inArray, schema, withAccess } from "@repo/db";
 
 import { todayUtc } from "@/features/tasks/due-dates";
+
+import { visibleProjects } from "./queries";
 
 /** A ticked checklist item (task 120): who ticked it (null once their account is deleted) and the day, UTC. */
 export type ChecklistTick = { item: string; tickedByName: string | null; tickedOn: string };
@@ -28,10 +30,11 @@ export async function listChecklistTicks(userId: string, projectId: string): Pro
 export type ProjectChecklistTick = { projectId: string; item: string; tickedAt: Date };
 
 /**
- * The ticked checklist items of the listed projects, every stage's, in one query (the stage board, task 123):
- * the caller groups them by project. Rows follow each project's visibility (RLS: `can_see_project`).
+ * The ticked checklist items of the listed projects, every stage's, in one query (the stage board, task 123; task
+ * 124): the caller groups them by project. Only the workspace's projects `userId` can see and not deleted, whatever
+ * ids are asked for (`visibleProjects`, on top of RLS).
  */
-export async function listChecklistTicksForProjects(userId: string, projectIds: string[]): Promise<ProjectChecklistTick[]> {
+export async function listChecklistTicksForProjects(userId: string, workspaceId: string, projectIds: string[]): Promise<ProjectChecklistTick[]> {
   if (projectIds.length === 0) return [];
   return withAccess(userId, () =>
     getDb()
@@ -41,6 +44,7 @@ export async function listChecklistTicksForProjects(userId: string, projectIds: 
         tickedAt: schema.projectChecklistTick.tickedAt,
       })
       .from(schema.projectChecklistTick)
-      .where(inArray(schema.projectChecklistTick.projectId, projectIds)),
+      .innerJoin(schema.project, eq(schema.projectChecklistTick.projectId, schema.project.id))
+      .where(and(inArray(schema.projectChecklistTick.projectId, projectIds), visibleProjects(userId, workspaceId))),
   );
 }

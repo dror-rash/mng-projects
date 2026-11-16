@@ -67,7 +67,7 @@ describe("listChecklistTicks", () => {
 
 describe("listChecklistTicksForProjects", () => {
   it("gives the listed projects' ticks with each tick's project, item and time", async () => {
-    const ticks = await listChecklistTicksForProjects(ids.admin, [ids.project, ids.other]);
+    const ticks = await listChecklistTicksForProjects(ids.admin, ids.workspace, [ids.project, ids.other]);
     expect([...ticks].sort((a, b) => a.tickedAt.getTime() - b.tickedAt.getTime())).toEqual([
       { projectId: ids.project, item: "inquiry.logged", tickedAt: new Date("2026-11-01T08:00:00Z") },
       { projectId: ids.project, item: "quote.costed", tickedAt: new Date("2026-11-02T10:00:00Z") },
@@ -77,13 +77,13 @@ describe("listChecklistTicksForProjects", () => {
   });
 
   it("gives only the listed projects' ticks", async () => {
-    const ticks = await listChecklistTicksForProjects(ids.admin, [ids.other]);
+    const ticks = await listChecklistTicksForProjects(ids.admin, ids.workspace, [ids.other]);
     expect(ticks.map((t) => t.item)).toEqual(["ordered.payment_terms"]);
   });
 
   it("gives nothing to someone who can't see the projects, or for no projects", async () => {
-    expect(await listChecklistTicksForProjects(`${run}-nobody`, [ids.project, ids.other])).toEqual([]);
-    expect(await listChecklistTicksForProjects(ids.admin, [])).toEqual([]);
+    expect(await listChecklistTicksForProjects(`${run}-nobody`, ids.workspace, [ids.project, ids.other])).toEqual([]);
+    expect(await listChecklistTicksForProjects(ids.admin, ids.workspace, [])).toEqual([]);
   });
 });
 
