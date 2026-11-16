@@ -4,7 +4,7 @@
 - **Milestone:** M22 Guided project flow
 - **Zone / package:** `apps/dashboard` (`app/page.tsx`, `features/projects`, `messages/`), `e2e`
 - **Feature file:** `docs/features/needs-action.feature` (`@task:124`; a file of its own, since `dashboard-home.feature` carries `@task:009` and a Background on every scenario)
-- **Depends on:** task 120 (`whoseMove`, ticks); task 123 (`listChecklistTicks` and `daysInStage`; or this task adds them if it runs first). Task 104's follow-ups join this section when 104 lands (see its scope).
+- **Depends on:** task 120 (`whoseMove`, ticks); task 123 (`listChecklistTicksForProjects` and `daysInStage`; or this task adds them if it runs first). Task 104's follow-ups join this section when 104 lands (see its scope).
 
 ## Why
 The overview shows task counts, not the jobs that are stuck. The office wants to open the app and see which projects have waited on us, or on the customer, for too long.
