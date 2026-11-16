@@ -155,10 +155,15 @@ Given("the task {string} has priority {string}", async ({ page }, title: string,
   await backToBoard(page);
 });
 
+// Each card's first link: the task, or on the stage board (task 123) the project, whose customer is a link too.
 Then("the {string} column lists {string}", async ({ page }, column: string, titles: string) => {
-  // The column's name includes its task count ("To do 2"), so match it loosely.
-  const links = page.getByRole("region", { name: column }).getByRole("listitem").getByRole("link");
-  await expect(links).toHaveText(titles.split(",").map((t) => t.trim()));
+  // The column's name includes its count ("To do 2"), so match it loosely.
+  const region = page.getByRole("region", { name: column });
+  await expect(region).toBeVisible();
+  const items = region.getByRole("listitem");
+  await expect
+    .poll(() => items.evaluateAll((lis) => lis.map((li) => li.querySelector("a")?.textContent?.trim() ?? "")))
+    .toEqual(titles.split(",").map((t) => t.trim()));
 });
 
 // Calendar days in UTC, like the app ("today" is the server's UTC date). Scenarios keep a margin of

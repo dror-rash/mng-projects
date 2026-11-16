@@ -7,7 +7,7 @@ Feature: Stage board
   # Columns follow the stages under their phases: Sales (Inquiry, Quote, Ordered), Work (Scheduled, In work),
   # Closing (Reporting, Billing, Closed). Whose move comes from the stage's checklist (task 120, ADR-0014).
 
-  @wip @task:123
+  @task:123
   Scenario: The board shows a column per stage
     Given I am signed in with an existing account
     And I have projects named "Panel upgrade, Shelf lighting, Fire alarm"
@@ -22,7 +22,7 @@ Feature: Stage board
     And the "Closed" column lists "Fire alarm"
     And the "Inquiry" column is empty
 
-  @wip @task:123
+  @task:123
   Scenario: A board card shows whose move and how long
     Given I am signed in with an existing account
     And I have a customer "Acme Ltd" with status "Active" and tags "retail"
@@ -42,7 +42,7 @@ Feature: Stage board
     And the "Fire alarm" project card shows "3 days"
     And the "Fire alarm" project card does not show "more than 7 days in this stage"
 
-  @wip @task:123
+  @task:123
   Scenario: The board keeps the filters
     Given I am signed in with an existing account
     And I have a customer "Acme Ltd" with status "Active" and tags "retail"
@@ -56,7 +56,7 @@ Feature: Stage board
     When I follow the "Table" link
     Then the projects shown are "Panel upgrade"
 
-  @wip @task:123
+  @task:123
   Scenario: A partner's board shows only their projects
     Given a workspace with the partners "Northwind" and "Globex", an admin and an auditor
     And the customer "Acme Ltd" is assigned to "Northwind" and "Globex"
@@ -69,7 +69,7 @@ Feature: Stage board
     Then the "Ordered" column lists "NW Site"
     And the page shows none of "GX App"
 
-  @wip @task:123
+  @task:123
   Scenario: The board on a phone
     Given I am signed in with an existing account
     And I have projects named "Panel upgrade, Shelf lighting"

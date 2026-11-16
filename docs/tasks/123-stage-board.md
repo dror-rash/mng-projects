@@ -63,6 +63,7 @@ None blocking. Defaults taken:
 - 2026-11-15 – Drafted with `project-board.feature` (`@wip`) (planner).
 - 2026-11-16 – Readiness check against task 120 as merged (PR #124): the query renamed `listChecklistTicksForProjects` (task 120 already has `listChecklistTicks` for one project); `STAGE_PHASES` shared with task 121; step notes for the board's cards. READY (planner).
 - 2026-11-16 – In progress in lane 2 (`feat/stage-board`, database `app_lane2`, shell http://localhost:3020).
+- 2026-11-16 – Steps written, `@wip` off; red run: all 5 scenarios fail on the missing board (no "Board" link, no stage column regions). `the {string} column lists {string}` now reads each item's first link (task 018's scenarios still pass) (spec-writer).
 
 ## Parking lot
 - Drag a card to another column to move its stage (owner-approved to park; it would go through `changeStageAction`).
