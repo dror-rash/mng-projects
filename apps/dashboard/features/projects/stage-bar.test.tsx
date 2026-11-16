@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { cleanup, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { FormState } from "@/features/forms/form-state";
 
@@ -21,18 +21,41 @@ const stages = () =>
     .getAllByRole("listitem")
     .filter((item) => within(item).queryAllByRole("listitem").length === 0);
 
-// jsdom lays nothing out, so it has no scrollIntoView; the bar scrolls its current stage into view.
-const scrolled = vi.fn();
+// jsdom lays nothing out: the bar is 300 px wide, its current stage 100 px wide at `currentLeft`, and setting
+// the bar's scrollLeft is recorded. The page itself must never scroll (no scrollIntoView).
+let currentLeft = 50;
+const scrolledTo = vi.fn();
+const scrollIntoView = vi.fn();
 beforeAll(() => {
-  Element.prototype.scrollIntoView = scrolled;
+  Element.prototype.scrollIntoView = scrollIntoView;
 });
-afterEach(cleanup);
+beforeEach(() => {
+  currentLeft = 50;
+  scrolledTo.mockReset();
+  scrollIntoView.mockReset();
+  vi.spyOn(Element.prototype, "scrollLeft", "set").mockImplementation(function (this: Element, value: number) {
+    scrolledTo(this, value);
+  });
+  vi.spyOn(Element.prototype, "scrollLeft", "get").mockReturnValue(0);
+  vi.spyOn(Element.prototype, "getBoundingClientRect").mockImplementation(function (this: Element) {
+    const box = (left: number, width: number) => ({ left, right: left + width, width, top: 0, bottom: 20, height: 20, x: left, y: 0 }) as DOMRect;
+    if (this.getAttribute("aria-current") === "step") return box(currentLeft, 100);
+    return box(0, 300);
+  });
+});
+afterEach(() => {
+  cleanup();
+  vi.restoreAllMocks();
+});
 
 describe("StageBar", () => {
   it("shows the eight stages under their phases", () => {
     render(<StageBar {...props} />);
     const bar = screen.getByRole("group", { name: "Stages" });
-    expect(within(bar).getAllByRole("heading").map((h) => h.textContent)).toEqual(["Sales", "Work", "Closing"]);
+    expect(within(bar).getAllByRole("heading", { level: 3 }).map((h) => h.textContent)).toEqual(["Sales", "Work", "Closing"]);
+    expect(within(bar).getAllByRole("heading")).toHaveLength(3);
+    // The phases sit under a heading of their own, "Stages", outside the group (the page's sections are h2-h3).
+    expect(screen.getByRole("heading", { level: 2, name: "Stages" })).toBeInTheDocument();
     expect(stages().map((s) => s.textContent)).toEqual([
       "Inquiry, done",
       "Quote, done",
@@ -50,7 +73,36 @@ describe("StageBar", () => {
     const current = screen.getByRole("group", { name: "Stages" }).querySelectorAll('[aria-current="step"]');
     expect(current).toHaveLength(1);
     expect(current[0]).toHaveTextContent(/^Scheduled$/);
-    expect(scrolled.mock.contexts.at(-1)).toBe(current[0]);
+  });
+
+  it("leaves the bar where it is when the current stage is in view", () => {
+    render(<StageBar {...props} />);
+    expect(scrolledTo).not.toHaveBeenCalled();
+  });
+
+  it("scrolls only the bar, centring a current stage that is out of view, either way", () => {
+    currentLeft = 500;
+    render(<StageBar {...props} />);
+    const bar = screen.getByRole("group", { name: "Stages" });
+    // 500 - 0 - (300 - 100) / 2 = 400 further along.
+    expect(scrolledTo).toHaveBeenLastCalledWith(bar, 400);
+    cleanup();
+    currentLeft = -400;
+    render(
+      <div dir="rtl">
+        <StageBar {...props} />
+      </div>,
+    );
+    expect(scrolledTo).toHaveBeenLastCalledWith(screen.getByRole("group", { name: "Stages" }), -500);
+    expect(scrollIntoView).not.toHaveBeenCalled();
+  });
+
+  it("can be scrolled with the keyboard by someone who has no buttons on it", () => {
+    render(<StageBar {...props} />);
+    expect(screen.getByRole("group", { name: "Stages" })).toHaveAttribute("tabindex", "0");
+    cleanup();
+    render(<StageBar {...props} action={async () => ({})} />);
+    expect(screen.getByRole("group", { name: "Stages" })).not.toHaveAttribute("tabindex");
   });
 
   it("has no buttons for someone who can't change the project", () => {
