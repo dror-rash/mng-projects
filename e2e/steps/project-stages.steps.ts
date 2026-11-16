@@ -3,8 +3,9 @@ import { sql } from "@repo/db";
 import { getMaintenanceDb } from "@repo/db/maintenance";
 
 import { Given, type ScenarioState, Then, userId, When } from "./fixtures";
-import { idOf, pageOf, projectPath } from "./partner-access.steps";
+import { ids, idOf, pageOf, projectPath, shownText } from "./partner-access.steps";
 import { myRecordId } from "./sites.steps";
+import { myDecoy } from "./workers.steps";
 import { pressAndWait } from "./workspaces.steps";
 
 // Project stages (task 101, ADR-0012).
@@ -110,19 +111,23 @@ const checklistItem = (page: Page, label: string) =>
 
 const tickButton = (page: Page, label: string) => checklistItem(page, label).getByRole("button");
 
-async function toggle(page: Page, label: string, from: "true" | "false") {
+async function toggle(page: Page, state: ScenarioState, label: string, from: "true" | "false") {
   const button = tickButton(page, label);
   await expect(button).toHaveAttribute("aria-pressed", from);
   await button.click();
-  await expect(button).toHaveAttribute("aria-pressed", from === "true" ? "false" : "true");
+  // The new state, or the refusal when the project went away meanwhile (a later step checks which).
+  const flipped = button.and(page.locator(`[aria-pressed="${from === "true" ? "false" : "true"}"]`));
+  await expect(flipped.or(shownText(page, "Something went wrong"))).toBeVisible();
+  // The same press with a made-up project id, for "the same as with a made-up id".
+  state.replay = (id) => postFromDecoy(page, state, label, id, from === "false");
 }
 
-When("I tick {string}", async ({ page }, label: string) => {
-  await toggle(page, label, "false");
+When("I tick {string}", async ({ page, state }, label: string) => {
+  await toggle(page, state, label, "false");
 });
 
-When("I untick {string}", async ({ page }, label: string) => {
-  await toggle(page, label, "true");
+When("I untick {string}", async ({ page, state }, label: string) => {
+  await toggle(page, state, label, "true");
 });
 
 Then("the checklist items are {string}", async ({ page }, labels: string) => {
@@ -171,20 +176,54 @@ Given("the checklist item {string} of {string} is ticked", async ({ page, state 
   );
 });
 
-// A tampered form: the item's form on my own project's page (NW Site, at the same stage), its hidden project id
-// set to the other partner's project (`state.replay` posts it again with another id).
+/**
+ * A tampered form: the item's tick (`tick`) or untick button on a project of my own where I can press it (a decoy
+ * in a workspace of mine, at the item's stage, the item ticked for an untick), its hidden project id set to `id`.
+ * Workers, auditors and the other partner's users get a real form this way, not one they never see.
+ */
+async function postFromDecoy(page: Page, state: ScenarioState, label: string, id: string, tick: boolean) {
+  const key = CHECKLIST_KEYS[label];
+  expect(key, `no checklist item "${label}"`).toBeDefined();
+  const db = getMaintenanceDb();
+  if (!state.ids?.Decoy) {
+    ids(state).me ??= await userId(page);
+    ids(state).Decoy = (await myDecoy(state)).projectId;
+  }
+  const decoy = state.ids!.Decoy!;
+  await db.execute(sql`update project set stage = ${key!.split(".")[0]} where id = ${decoy}`);
+  await db.execute(sql`delete from project_checklist_tick where project_id = ${decoy}`);
+  if (!tick) {
+    await db.execute(sql`insert into project_checklist_tick (project_id, item, ticked_by) values (${decoy}, ${key}, ${idOf(state, "me")})`);
+  }
+  await page.goto(`/dashboard/projects/${decoy}`);
+  const button = tickButton(page, label);
+  await expect(button).toHaveAttribute("aria-pressed", tick ? "false" : "true");
+  await button
+    .locator("xpath=ancestor::form[1]")
+    .locator('input[name="projectId"]')
+    .evaluate((input, value) => {
+      (input as HTMLInputElement).value = value;
+    }, id);
+  await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), button.click()]);
+}
+
 When("I post a tick of {string} on {string}", async ({ page, state }, label: string, project: string) => {
-  state.replay = async (id) => {
-    await page.goto(projectPath(state, "NW Site"));
-    const button = tickButton(page, label);
-    await expect(button).toBeVisible();
-    await button
-      .locator("xpath=ancestor::form[1]")
-      .locator('input[name="projectId"]')
-      .evaluate((input, value) => {
-        (input as HTMLInputElement).value = value;
-      }, id);
-    await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), button.click()]);
-  };
+  state.replay = (id) => postFromDecoy(page, state, label, id, true);
   await state.replay(idOf(state, project));
+});
+
+When("I post an untick of {string} on {string}", async ({ page, state }, label: string, project: string) => {
+  state.replay = (id) => postFromDecoy(page, state, label, id, false);
+  await state.replay(idOf(state, project));
+});
+
+// The project page stays open in this tab while another tab deletes the project.
+When("the project {string} is deleted in another tab", async ({ context, page }, project: string) => {
+  const tab = await context.newPage();
+  await tab.goto(page.url());
+  await expect(tab.getByRole("heading", { name: project, level: 1 })).toBeVisible();
+  await tab.getByRole("link", { name: "Delete project", exact: true }).click();
+  await pressAndWait(tab, "Yes, delete project");
+  await expect(tab.getByRole("heading", { name: project, level: 1 })).toHaveCount(0);
+  await tab.close();
 });
