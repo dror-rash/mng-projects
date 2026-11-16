@@ -1,6 +1,6 @@
 # Task 121: Stage bar and "Move to the next stage"
 
-- **Status:** in-progress
+- **Status:** in-review
 - **Milestone:** M22 Guided project flow
 - **Zone / package:** `apps/dashboard` (`features/projects`, `messages/`), `e2e`
 - **Feature file:** `docs/features/project-stages.feature` (`@task:121`, and three `@task:101` scenarios reworded at the start)
@@ -92,6 +92,7 @@ None blocking. Defaults taken:
 - 2026-11-16 – Access audit (no leaks): three leak scenarios added; the stale "Move to" moved from the parking lot into scope (default: no move, the page shows the real stage, no message) with its scenario (`docs(features)`, not `@wip`) (planner).
 - 2026-11-16 – Steps for the leak and stale-page scenarios (spec-writer): `I post "Move to" on {string}` / `I post "Move anyway" on {string}` and `I post a stage change of {string} to {string}` post from a decoy of mine (so the auditor and the crew worker get a real form), `the admin sees the project at the stage {string}` reads the bar's `aria-current="step"`, `the project {string} is moved to {string} in another tab`. Run (`@task:121 or @task:101`): the three leak scenarios and every other one pass; the scenario `"Move to" from a page left open doesn't move the project back` is red: the action asks about Scheduled's 3 open items and the page stays on "Quote since", because `from=next` isn't checked against the current stage yet.
 - 2026-11-16 – Review fixes (implementer): a `from=next` post whose stage isn't the next one after the locked stage changes nothing and goes back to the project page, before counting (the stale-page scenario); the question carries no `values`; it is `role="alert"`, and Cancel puts focus back on "Move to"; the bar centres its current stage by setting its own `scrollLeft` (physical boxes, so right to left too) instead of `scrollIntoView`; the bar is focusable (`tabIndex=0`) when it has no buttons; phases are h3s under a visually hidden "Stages" h2 that names the group. Reds committed first this time (`test(dashboard)` before each fix).
+- 2026-11-16 – In review: QA PASS (lint, typecheck, unit 565, db 194 + 27, build, Storybook, full e2e 360/372 with the 12 load failures passing alone after a dev-server restart). Main (task 123) merged in; 37/37 stage, checklist and board scenarios after the merge. Review fixes: a stale "Move to" changes nothing, the question is an alert, the bar scrolls only itself. Four leak and stale-page scenarios added.
 
 ## Parking lot
 - Dragging a project between stages (bar or board).
