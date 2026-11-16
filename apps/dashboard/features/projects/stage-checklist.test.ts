@@ -9,6 +9,7 @@ import he from "../../messages/he.json";
 import { PROJECT_STAGES } from "./project-stage";
 import {
   checklistFor,
+  openItemCount,
   parseChecklistItem,
   STAGE_CHECKLIST,
   WHOSE_MOVE,
@@ -163,5 +164,17 @@ describe("whoseMoveChartSlot", () => {
       ["ready", 3],
       ["complete", 3],
     ]);
+  });
+});
+
+describe("openItemCount", () => {
+  it("counts the stage's items not yet ticked", () => {
+    expect(openItemCount("quote", [])).toBe(3);
+    expect(openItemCount("quote", ["quote.costed"])).toBe(2);
+    expect(openItemCount("quote", ["quote.costed", "quote.sent", "quote.accepted"])).toBe(0);
+  });
+
+  it("ignores other stages' ticks", () => {
+    expect(openItemCount("ordered", ["quote.costed", "quote.sent", "quote.accepted"])).toBe(2);
   });
 });

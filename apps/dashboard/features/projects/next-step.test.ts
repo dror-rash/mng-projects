@@ -47,4 +47,14 @@ describe("nextStep", () => {
     const next = await nextStep("closed", [tick("closed.completion_report")]);
     expect([next.move, next.moveLabel, next.progress]).toEqual(["complete", "Job complete", "1 of 1 done"]);
   });
+
+  it("offers the move to the next stage, named in the request's language", async () => {
+    const next = await nextStep("quote", []);
+    expect(next.moveTo).toEqual({ stage: "ordered", label: "Move to Ordered", moveAnyway: "Move anyway", cancel: "Cancel" });
+    expect((await nextStep("in_work", [])).moveTo?.label).toBe("Move to Reporting");
+  });
+
+  it("has no next stage at Closed", async () => {
+    expect((await nextStep("closed", [])).moveTo).toBeUndefined();
+  });
 });

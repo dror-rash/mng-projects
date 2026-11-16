@@ -23,7 +23,9 @@
       "sales": "Sales",
       "work": "Work",
       "closing": "Closing"
-    }
+    },
+    "bar": "Stages",
+    "done": "done"
   },
   "stageChecklist": {
     "heading": "Next step",
@@ -61,7 +63,11 @@
       "billingSent": "Sent to the customer",
       "billingReceived": "Customer confirmed receipt",
       "closedCompletionReport": "Work-completion report prepared and sent"
-    }
+    },
+    "moveTo": "Move to {stage}",
+    "openItems": "{count, plural, one {1 item is} other {# items are}} still open in this stage. Move anyway?",
+    "moveAnyway": "Move anyway",
+    "cancel": "Cancel"
   },
   "stageBoard": {
     "view": "Board",

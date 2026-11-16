@@ -23,7 +23,9 @@
       "sales": "מכירה",
       "work": "ביצוע",
       "closing": "סגירה"
-    }
+    },
+    "bar": "שלבים",
+    "done": "בוצע"
   },
   "stageChecklist": {
     "heading": "הצעד הבא",
@@ -61,7 +63,11 @@
       "billingSent": "נשלחו ללקוח",
       "billingReceived": "הלקוח אישר קבלה",
       "closedCompletionReport": "דוח סיום עבודה הוכן ונשלח"
-    }
+    },
+    "moveTo": "העבר ל־{stage}",
+    "openItems": "{count, plural, one {פריט אחד עדיין פתוח} other {# פריטים עדיין פתוחים}} בשלב הזה. להעביר בכל זאת?",
+    "moveAnyway": "העבר בכל זאת",
+    "cancel": "ביטול"
   },
   "stageBoard": {
     "view": "לוח",

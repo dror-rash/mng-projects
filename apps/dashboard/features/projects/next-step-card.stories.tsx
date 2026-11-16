@@ -1,5 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
-import { expect, within } from "storybook/test";
+import { expect, userEvent, within } from "storybook/test";
 
 import { NextStepCard, type NextStepItem } from "./next-step-card";
 
@@ -106,4 +106,47 @@ export const Hebrew: Story = {
       </div>
     ),
   ],
+};
+
+const moveTo = { stage: "ordered", label: "Move to Ordered", moveAnyway: "Move anyway", cancel: "Cancel" };
+
+/** Every item done, for whoever can change the project: "Move to Ordered" moves at once. */
+export const MoveToNextStage: Story = {
+  args: { move: "ready", moveLabel: "Ready for next stage", progress: "3 of 3 done", items: quote(3), moveTo, moveAction: async () => ({}) },
+  play: async ({ canvasElement }) => {
+    const card = within(canvasElement).getByRole("region", { name: "Next step" });
+    await expect(within(card).getByRole("button", { name: "Move to Ordered" })).toBeInTheDocument();
+  },
+};
+
+/** Items still open: "Move to Ordered" asks first, with "Move anyway" and "Cancel". */
+export const MoveWithOpenItems: Story = {
+  args: {
+    progress: "1 of 3 done",
+    items: quote(1),
+    moveTo,
+    moveAction: async () => ({ error: "2 items are still open in this stage. Move anyway?", field: "confirm" }),
+  },
+  play: async ({ canvasElement }) => {
+    const card = within(canvasElement).getByRole("region", { name: "Next step" });
+    await userEvent.click(within(card).getByRole("button", { name: "Move to Ordered" }));
+    await expect(await within(card).findByText("2 items are still open in this stage. Move anyway?")).toBeInTheDocument();
+    await expect(within(card).getByRole("button", { name: "Move anyway" })).toBeInTheDocument();
+    await expect(within(card).getByRole("link", { name: "Cancel" })).toBeInTheDocument();
+  },
+};
+
+/** The question in Hebrew, right to left. */
+export const MoveWithOpenItemsHebrew: Story = {
+  args: {
+    ...Hebrew.args,
+    moveTo: { stage: "ordered", label: "העבר ל־הוזמן", moveAnyway: "העבר בכל זאת", cancel: "ביטול" },
+    moveAction: async () => ({ error: "פריט אחד עדיין פתוח בשלב הזה. להעביר בכל זאת?", field: "confirm" }),
+  },
+  decorators: Hebrew.decorators,
+  play: async ({ canvasElement }) => {
+    const card = within(canvasElement).getByRole("region", { name: "הצעד הבא" });
+    await userEvent.click(within(card).getByRole("button", { name: "העבר ל־הוזמן" }));
+    await expect(await within(card).findByText("פריט אחד עדיין פתוח בשלב הזה. להעביר בכל זאת?")).toBeInTheDocument();
+  },
 };

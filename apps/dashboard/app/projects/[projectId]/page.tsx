@@ -24,9 +24,10 @@ import { NextStepCard } from "@/features/projects/next-step-card";
 import { isCanceled, projectLifecycleLabel } from "@/features/projects/project-lifecycle";
 import { getProjectForUser } from "@/features/projects/queries";
 import { changeStageAction } from "@/features/projects/stage-actions";
-import { StageControl } from "@/features/projects/stage-control";
+import { StageBar } from "@/features/projects/stage-bar";
 import { getStageChangedAt } from "@/features/projects/stage-history";
 import { stageLabels } from "@/features/projects/stage-labels";
+import { StageSince } from "@/features/projects/stage-since";
 import { listProjectReadings } from "@/features/readings/queries";
 import { ReadingsSection } from "@/features/readings/readings-section";
 import { mapsLink } from "@/features/sites/maps-link";
@@ -137,21 +138,22 @@ export default async function ProjectPage({ params }: { params: Promise<{ projec
         )}
       </section>
 
+      {/* Where the job is (task 121): every stage a button for whoever can change the project. */}
+      <StageBar
+        projectId={project.id}
+        stage={project.stage}
+        phases={stages.phases}
+        label={stages.barLabel}
+        doneLabel={stages.doneLabel}
+        action={project.canChange ? changeStageAction : undefined}
+      />
+
       <NextStepCard
         projectId={project.id}
         {...next}
-        stageLine={
-          <StageControl
-            projectId={project.id}
-            stage={project.stage}
-            options={stages.options}
-            line={stages.since(project.stage)}
-            since={stageSince}
-            sinceText={formatDueDate(stageSince)}
-            action={project.canChange ? changeStageAction : undefined}
-          />
-        }
+        stageLine={<StageSince line={stages.since(project.stage)} since={stageSince} sinceText={formatDueDate(stageSince)} />}
         toggleAction={project.canChange ? toggleChecklistItemAction : undefined}
+        moveAction={project.canChange ? changeStageAction : undefined}
       />
 
       {site && (
