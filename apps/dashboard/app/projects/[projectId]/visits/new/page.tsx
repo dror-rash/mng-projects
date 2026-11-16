@@ -1,6 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@repo/ui/card";
 import { notFound } from "next/navigation";
 
+import { projectTabPath } from "@/features/projects/project-tabs";
 import { getProjectForUser } from "@/features/projects/queries";
 import { todayUtc } from "@/features/tasks/due-dates";
 import { VisitForm } from "@/features/visits/visit-form";
@@ -36,7 +37,7 @@ export default async function NewVisitPage({ params }: { params: Promise<{ proje
             people={people}
             defaultMemberIds={me}
             today={todayUtc()}
-            cancelHref={`/projects/${project.id}`}
+            cancelHref={projectTabPath(project.id, "work")}
           />
         </CardContent>
       </Card>

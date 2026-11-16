@@ -8,6 +8,7 @@ import { type FormState, invalid } from "@/features/forms/form-state";
 import { redirectFromAction } from "@/features/navigation/redirect-from-action";
 import { isCustomerChoice } from "@/features/organizations/customer-names";
 import { isAssignable } from "@/features/workspaces/members";
+import { projectTabPath } from "@/features/projects/project-tabs";
 import { revalidateOverviews } from "@/features/projects/revalidate";
 import { requireProjectAccess, requireProjectWorkAccess } from "@/features/projects/require-project-access";
 
@@ -181,7 +182,7 @@ export async function updateTaskAction(_prev: FormState, formData: FormData): Pr
   return {};
 }
 
-/** Delete from the task's own page, then go back to the board. */
+/** Delete from the task's own page, then go back to the board, on the Overview tab (task 122). */
 export async function deleteTaskFromPageAction(formData: FormData) {
   const projectId = await withProject(
     formData,
@@ -192,5 +193,5 @@ export async function deleteTaskFromPageAction(formData: FormData) {
     "change",
   );
   revalidateProject(projectId);
-  return redirectFromAction(`/projects/${projectId}`);
+  return redirectFromAction(projectTabPath(projectId, "overview"));
 }

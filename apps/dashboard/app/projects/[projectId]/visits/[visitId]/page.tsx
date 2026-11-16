@@ -9,6 +9,7 @@ import { AttachmentsSection } from "@/features/attachments/attachments-section";
 import { listVisitAttachments } from "@/features/attachments/queries";
 import { AppFrame } from "@/features/layout/app-frame";
 import { recordWorkspace } from "@/features/layout/record-workspace";
+import { projectTabPath } from "@/features/projects/project-tabs";
 import { getProjectForUser } from "@/features/projects/queries";
 import { listVisitReadings } from "@/features/readings/queries";
 import { ReadingsSection } from "@/features/readings/readings-section";
@@ -41,7 +42,7 @@ export default async function VisitPage({ params }: { params: Promise<{ projectI
   return (
     <AppFrame email={session.user.email} name={session.user.name} role={workspace.role} {...await recordWorkspace(session.user.id, workspace, project.workspaceId)} className="max-w-3xl space-y-6 p-6">
       <nav aria-label="Breadcrumb" className="text-sm text-muted-foreground">
-        <Link href={`/projects/${project.id}`} className="hover:underline">{project.name}</Link>
+        <Link href={projectTabPath(project.id, "work")} className="hover:underline">{project.name}</Link>
       </nav>
 
       <section className="flex flex-wrap items-start justify-between gap-4">

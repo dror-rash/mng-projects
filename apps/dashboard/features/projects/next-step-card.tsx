@@ -7,6 +7,7 @@ import type { ReactNode } from "react";
 import type { FormState } from "@/features/forms/form-state";
 
 import { MoveToNextStage } from "./move-to-next-stage";
+import { parseProjectTab, projectTabPath } from "./project-tabs";
 import type { WhoseMove } from "./stage-checklist";
 import { WhoseMoveBadge } from "./whose-move-badge";
 
@@ -34,7 +35,7 @@ export type NextStepItem = {
  */
 export function NextStepCard({
   projectId,
-  tab: _tab,
+  tab,
   heading,
   stageLine,
   move,
@@ -84,6 +85,7 @@ export function NextStepCard({
                 {toggleAction ? (
                   <form action={toggleAction}>
                     <input type="hidden" name="projectId" value={projectId} />
+                    {tab && <input type="hidden" name="tab" value={tab} />}
                     <input type="hidden" name="item" value={item.key} />
                     <input type="hidden" name="done" value={item.done ? "false" : "true"} />
                     <button
@@ -115,7 +117,7 @@ export function NextStepCard({
             <MoveToNextStage
               key={moveTo.stage}
               projectId={projectId}
-              projectHref={`/projects/${projectId}`}
+              projectHref={projectTabPath(projectId, parseProjectTab(tab))}
               action={moveAction}
               {...moveTo}
             />
