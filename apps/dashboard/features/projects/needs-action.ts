@@ -33,6 +33,17 @@ export function waitingSince(
     .reduce((latest, day) => (day > latest ? day : latest), stageStart);
 }
 
+/**
+ * The projects that can need action, given their ticks: not canceled, and not Closed with its item done (Job
+ * complete). The overview reads the stage changes of these only, so finished jobs, which pile up, aren't asked for.
+ */
+export function openProjects<T extends { id: string; stage: string; lifecycle: string }>(
+  _projects: readonly T[],
+  _ticks: readonly { projectId: string; item: string }[],
+): T[] {
+  throw new Error("not implemented");
+}
+
 type NeedsActionProject = { id: string; name: string; stage: string; lifecycle: string; createdAt: Date };
 
 export type NeedsActionEntry<T> = T & { move: WhoseMove; days: number };

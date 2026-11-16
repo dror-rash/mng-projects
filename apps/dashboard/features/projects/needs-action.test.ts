@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { NEEDS_ACTION_LIMIT, needsAction, waitingSince } from "./needs-action";
+import { NEEDS_ACTION_LIMIT, needsAction, openProjects, waitingSince } from "./needs-action";
 
 const TODAY = "2026-11-16";
 
@@ -41,6 +41,16 @@ describe("waitingSince", () => {
   it("ignores the ticks of other stages", () => {
     const ticks = [{ item: "inquiry.logged", tickedAt: new Date("2026-11-12T09:00:00Z") }];
     expect(waitingSince("quote", "2026-11-01", ticks)).toBe("2026-11-01");
+  });
+});
+
+describe("openProjects", () => {
+  it("keeps the active projects, Closed ones whose item is open included, and leaves out canceled and complete ones", () => {
+    const open = openProjects(
+      [project("quote", "quote"), project("canceled", "quote", { lifecycle: "canceled" }), project("closed", "closed"), project("done", "closed")],
+      [tick("done", "closed.completion_report", 20), tick("closed", "billing.sent", 20)],
+    );
+    expect(open.map((p) => p.id)).toEqual(["quote", "closed"]);
   });
 });
 
