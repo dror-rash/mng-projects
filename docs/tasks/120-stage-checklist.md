@@ -1,6 +1,6 @@
 # Task 120: Stage checklist and the "Next step" card
 
-- **Status:** todo
+- **Status:** in-progress
 - **Milestone:** M22 Guided project flow
 - **Zone / package:** `packages/db`, `apps/dashboard` (`features/projects`, `messages/`, demo seed), `e2e`
 - **Feature file:** `docs/features/project-stages.feature` (`@task:120`)
@@ -104,6 +104,7 @@ None blocking. Defaults taken (owner may change them in review):
 
 ## Progress log
 - 2026-11-15 – Drafted with `@wip` scenarios in `project-stages.feature` and ADR-0014 (planner).
+- 2026-11-16 – In progress in lane 1 (`feat/stage-checklist`, database `app_lane1`, shell http://localhost:3010).
 
 ## Parking lot
 - Ticking items from records as an explicit action: "Work order from an authorised person" when a work order is recorded (task 106), "Quote sent" / "Customer accepted the quote" from quotes (M16), report delivery (M17), bills (M19), "Crew assigned" from the crew list.
