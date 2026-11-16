@@ -32,7 +32,8 @@ export type StageBoardPhase = {
 /**
  * All projects as a board (task 123): the phases as headings, a column per stage named with its count, and a card
  * per project, longest at its stage first (the page orders them). The columns scroll inside the board, so the page
- * doesn't scroll sideways on a phone. The page passes the translated text.
+ * doesn't scroll sideways on a phone; the board is `relative` so the long wait's `sr-only` text (absolutely
+ * positioned) is placed and clipped inside it too. The page passes the translated text.
  */
 export function StageBoard({
   phases,
@@ -46,7 +47,7 @@ export function StageBoard({
   linkCustomers?: boolean;
 }) {
   return (
-    <section aria-label={text.label} className="min-w-0 overflow-x-auto pb-2">
+    <section aria-label={text.label} className="relative min-w-0 overflow-x-auto pb-2">
       <div className="flex w-max gap-6">
         {phases.map((phase) => (
           <div key={phase.phase} className="space-y-3">

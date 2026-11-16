@@ -1,4 +1,5 @@
 import type { Meta, StoryObj } from "@storybook/react-vite";
+import type { ReactNode } from "react";
 import { expect, within } from "storybook/test";
 
 import { StageBoard, type StageBoardCard, type StageBoardPhase } from "./stage-board-view";
@@ -128,20 +129,44 @@ export const Hebrew: Story = {
   ],
 };
 
-/** A 360 px phone: the columns scroll inside the board, the page doesn't. */
+const phone = (dir: "ltr" | "rtl") => (Story: () => ReactNode) => (
+  <div dir={dir} style={{ width: 360, maxWidth: "100%" }}>
+    <Story />
+  </div>
+);
+
+/**
+ * The columns overflow the board, which scrolls; the 360 px wrapper around it doesn't. Every element in the board
+ * is placed within it: an absolutely positioned one (the long wait's screen-reader text) whose containing block is
+ * outside the scroller isn't clipped and widens the page (QA, task 123).
+ */
+const staysInsideTheBoard: Story["play"] = async ({ canvasElement }) => {
+  const board = within(canvasElement).getByRole("region", { name: /Stage board|לוח שלבים/ });
+  const wrapper = board.parentElement!;
+  await expect(board.scrollWidth).toBeGreaterThan(board.clientWidth);
+  await expect(wrapper.scrollWidth).toBeLessThanOrEqual(wrapper.clientWidth);
+  const escaping = [...board.querySelectorAll<HTMLElement>("*")].filter(
+    (el) => getComputedStyle(el).position === "absolute" && !board.contains(el.offsetParent),
+  );
+  await expect(escaping).toHaveLength(0);
+};
+
+/** A 360 px phone, long waits included: the columns scroll inside the board, the page doesn't. */
 export const Phone: Story = {
+  decorators: [phone("ltr")],
+  play: staysInsideTheBoard,
+};
+
+/** The same phone in Hebrew, right to left. */
+export const PhoneHebrew: Story = {
+  args: Hebrew.args,
   decorators: [
     (Story) => (
-      <div style={{ width: 360, maxWidth: "100%" }}>
+      <div lang="he">
         <Story />
       </div>
     ),
+    phone("rtl"),
   ],
-  play: async ({ canvasElement }) => {
-    const board = within(canvasElement).getByRole("region", { name: "Stage board" });
-    const phone = board.parentElement!;
-    // The columns overflow the board, which scrolls; the 360 px wrapper around it doesn't.
-    await expect(board.scrollWidth).toBeGreaterThan(board.clientWidth);
-    await expect(phone.scrollWidth).toBeLessThanOrEqual(phone.clientWidth);
-  },
+  play: staysInsideTheBoard,
 };
