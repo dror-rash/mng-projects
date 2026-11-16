@@ -325,3 +325,55 @@ Feature: Project stages
     Then the "Next step" section has no button starting with "Move to"
     When I tick "Work-completion report prepared and sent"
     Then the "Next step" section shows "Job complete"
+
+  # Leak scenarios from the task 121 access audit.
+  @task:121
+  Scenario: A worker on the crew can't move the project by posting "Move anyway"
+    Given a workspace with the partners "Northwind" and "Globex", an admin and an auditor
+    And the customer "Acme Ltd" is assigned to "Northwind" and "Globex"
+    And "Northwind" has the project "NW Site" for "Acme Ltd" with the task "Copy"
+    And the project "NW Site" is at the stage "Quote"
+    And I am signed in as a worker
+    And I am on the crew of "NW Site"
+    When I post "Move anyway" on "NW Site"
+    Then I see "Something went wrong", the same as with a made-up id
+    And the admin opens the "NW Site" project page
+    Then the admin sees the project at the stage "Quote"
+
+  @task:121
+  Scenario: An auditor can't move the project by posting the form
+    Given a workspace with the partners "Northwind" and "Globex", an admin and an auditor
+    And the customer "Acme Ltd" is assigned to "Northwind" and "Globex"
+    And "Northwind" has the project "NW Site" for "Acme Ltd" with the task "Copy"
+    And the project "NW Site" is at the stage "Quote"
+    And I am signed in as an auditor
+    When I post a stage change of "NW Site" to "Ordered"
+    Then I see "Something went wrong", the same as with a made-up id
+    And the admin opens the "NW Site" project page
+    Then the admin sees the project at the stage "Quote"
+
+  @task:121
+  Scenario: "Move to" on another partner's project doesn't tell how many items are open
+    Given a workspace with the partners "Northwind" and "Globex", an admin and an auditor
+    And the customer "Acme Ltd" is assigned to "Northwind" and "Globex"
+    And "Northwind" has the project "NW Site" for "Acme Ltd" with the task "Copy"
+    And "Globex" has the project "GX App" for "Acme Ltd" with the task "Login"
+    And the project "GX App" is at the stage "Quote"
+    And I am signed in as a user of "Northwind"
+    When I post "Move to" on "GX App"
+    Then I see "Something went wrong", the same as with a made-up id
+    And I do not see the text "Move anyway?"
+    And the admin opens the "GX App" project page
+    Then the admin sees the project at the stage "Quote"
+
+  # A page left open while another tab moved the project (task 121 review).
+  @task:121
+  Scenario: "Move to" from a page left open doesn't move the project back
+    Given I am signed in with an existing account
+    And I have a project named "Panel upgrade"
+    And the project "Panel upgrade" is at the stage "Quote"
+    When I am on the "Panel upgrade" project page
+    And the project "Panel upgrade" is moved to "Scheduled" in another tab
+    And I press "Move to Ordered"
+    Then the project shows "Scheduled" since today
+    And I do not see the text "Move anyway?"
