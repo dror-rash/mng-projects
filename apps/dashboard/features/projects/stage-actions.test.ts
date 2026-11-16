@@ -162,4 +162,16 @@ describe("changeStageAction", () => {
     await expect(post({ projectId: "someone-elses", stage: "closed", from: "next", confirm: "yes" })).rejects.toThrow("Not found");
     expect(db.inserts).toEqual([]);
   });
+
+  it("a Move to posted after the project moved on changes nothing", async () => {
+    db.current = "scheduled";
+    for (const confirm of [{}, { confirm: "yes" }] as Record<string, string>[]) {
+      const state = await post({ projectId: "project-1", stage: "ordered", from: "next", ...confirm });
+      expect(state).toBeUndefined();
+    }
+    expect(db.updates).toEqual([]);
+    expect(db.inserts).toEqual([]);
+    expect(redirected).toHaveBeenCalledTimes(2);
+    expect(redirected).toHaveBeenCalledWith("/projects/project-1");
+  });
 });
