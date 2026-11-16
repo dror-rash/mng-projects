@@ -111,7 +111,7 @@ Feature: Project stages
     When I open the address of the "GX App" project
     Then I see "Project not found", the same as for a made-up project address
     And the admin opens the "GX App" project page
-    Then the admin sees the text "Quote"
+    Then the admin sees the project at the stage "Quote"
 
   # Stage checklists and "whose move" (task 120, ADR-0014). Each stage has fixed items marked Us or Customer;
   # the first open item decides the badge: Our move, Waiting for customer, or Ready for next stage when all are done.
