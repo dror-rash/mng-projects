@@ -3,7 +3,7 @@ import { sql } from "@repo/db";
 import { getMaintenanceDb } from "@repo/db/maintenance";
 
 import { Given, type ScenarioState, Then, userId, When } from "./fixtures";
-import { ids, idOf, pageOf, projectPath, shownText } from "./partner-access.steps";
+import { ids, idOf, pageOf, shownText } from "./partner-access.steps";
 import { myRecordId } from "./sites.steps";
 import { myDecoy } from "./workers.steps";
 import { pressAndWait } from "./workspaces.steps";
@@ -175,17 +175,90 @@ Then("I see no {string} button", async ({ page }, name: string) => {
   await expect(page.getByRole("button", { name, exact: true })).toHaveCount(0);
 });
 
-// A tampered form: my own project's stage button on the bar (NW Site), its hidden project id set to the other partner's
-// project (`state.replay` posts it again with another id).
+/**
+ * Opens a decoy project of mine (a workspace of mine, where I can press every button) at the stored stage `stage`,
+ * its checklist cleared. Workers, auditors and the other partner's users get a real form this way, not one they
+ * never see.
+ */
+async function openDecoyAt(page: Page, state: ScenarioState, stage: string) {
+  const db = getMaintenanceDb();
+  if (!state.ids?.Decoy) {
+    ids(state).me ??= await userId(page);
+    ids(state).Decoy = (await myDecoy(state)).projectId;
+  }
+  const decoy = state.ids!.Decoy!;
+  await db.execute(sql`update project set stage = ${stage} where id = ${decoy}`);
+  await db.execute(sql`delete from project_checklist_tick where project_id = ${decoy}`);
+  await page.goto(`/dashboard/projects/${decoy}`);
+  await expect(stageBar(page).locator('[aria-current="step"]')).toBeVisible();
+}
+
+/** The stored stage of a project this scenario wrote or one of mine. */
+async function storedStage(page: Page, state: ScenarioState, project: string) {
+  const id = await projectId(page, state, project);
+  const [row] = (await getMaintenanceDb().execute<{ stage: string }>(sql`select stage from project where id = ${id}`)).rows;
+  return row!.stage;
+}
+
+// A tampered form: the stage's button on the bar of a decoy of mine (at another stage, so the button is there), its
+// hidden project id set to the project's (`state.replay` posts it again with another id).
 When("I post a stage change of {string} to {string}", async ({ page, state }, project: string, stage: string) => {
   state.replay = async (id) => {
-    await page.goto(projectPath(state, "NW Site"));
+    await openDecoyAt(page, state, stageValue(stage) === "inquiry" ? "quote" : "inquiry");
     const button = stageButton(page, stage);
-    await expect(button).toBeVisible();
     await setPostedProject(button, id);
     await pressButton(page, button);
   };
   await state.replay(idOf(state, project));
+});
+
+/** The "Next step" card's "Move to <next stage>" button. */
+const moveToButton = (page: Page) => nextStep(page).getByRole("button", { name: /^Move to\b/ });
+
+/**
+ * A tampered "Move to" form from a decoy of mine at the project's stage, its checklist open: without `confirm` the
+ * "Move to" button's own form, with it the question's "Move anyway" form (the decoy asks first), its hidden project
+ * id set to `id`.
+ */
+async function postMoveFromDecoy(page: Page, state: ScenarioState, stage: string, id: string, confirm: boolean) {
+  await openDecoyAt(page, state, stage);
+  let button = moveToButton(page);
+  if (confirm) {
+    await pressButton(page, button);
+    button = nextStep(page).getByRole("button", { name: "Move anyway", exact: true });
+  }
+  await setPostedProject(button, id);
+  await pressButton(page, button);
+}
+
+async function postMove(page: Page, state: ScenarioState, project: string, confirm: boolean) {
+  const stage = await storedStage(page, state, project);
+  state.replay = (id) => postMoveFromDecoy(page, state, stage, id, confirm);
+  await state.replay(idOf(state, project));
+}
+
+When('I post "Move to" on {string}', async ({ page, state }, project: string) => {
+  await postMove(page, state, project, false);
+});
+
+When('I post "Move anyway" on {string}', async ({ page, state }, project: string) => {
+  await postMove(page, state, project, true);
+});
+
+// The bar's current stage: the bar lists every stage name, so the text alone says nothing.
+Then("the admin sees the project at the stage {string}", async ({ people, state }, stage: string) => {
+  const admin = await pageOf(state, people, "admin");
+  await expect(stageBar(admin).locator('[aria-current="step"]')).toHaveText(stage);
+});
+
+// The project page stays open in this tab while another tab presses a stage on the bar.
+When("the project {string} is moved to {string} in another tab", async ({ context, page }, project: string, stage: string) => {
+  const tab = await context.newPage();
+  await tab.goto(page.url());
+  await expect(tab.getByRole("heading", { name: project, level: 1 })).toBeVisible();
+  await pressButton(tab, stageButton(tab, stage));
+  await expect(stageBar(tab).locator('[aria-current="step"]')).toHaveText(stage);
+  await tab.close();
 });
 
 // Stage checklists and "whose move" (task 120, ADR-0014). The "Next step" section lists the current stage's
