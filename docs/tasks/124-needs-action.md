@@ -64,9 +64,11 @@ None blocking. Defaults taken:
 - 2026-11-16 – In progress in lane 2 (`feat/needs-action`, database `app_lane2`, shell http://localhost:3020).
 - 2026-11-16 – `@wip` removed; new step `the checklist item {string} of {string} was ticked {int} days ago` (UTC `ticked_at`), `the project {string} is canceled` falls back to one of my projects. Red run: all 5 scenarios fail at their first Then, no "Our move" / "Needs action" region on the overview (spec-writer).
 - 2026-11-16 – Implemented (TDD, red commits with throwing stubs): `needs-action.ts` (`waitingSince`, `needsAction`), `needs-action-data.ts`, `NeedsActionSection` with stories (both groups, one group, empty, more than 10, partner user, Hebrew), `needsAction` messages in en and he, the overview reads all visible projects once (the recent five are a slice of them). No revalidation added: the overview is `force-dynamic` and "A tick restarts the wait" passes. Unit: 19 new tests; e2e `@task:124` 5/5 (implementer).
+- 2026-11-16 – Review fixes: the batch tick read returns only each project's current-stage ticks (`starts_with(item, stage || '.')`, DB test first; the board unchanged); the overview reads the stage changes of `openProjects` only (not canceled, not Job complete) and counts projects from the list it already reads (`countProjects` removed); a shared tick helper for the two e2e tick steps (implementer).
 
 ## Parking lot
 - A workspace setting for N.
 - A count of "Needs action" in the side menu.
 - Waiting on a supplier (materials, M18) as a third party.
-- The overview passes every visible project's id to two `inArray` queries, which grows with the workspace (Postgres caps a statement at 65,535 bind parameters). If workspaces grow large, push the visible/active filter into the batch queries as a join (access audit, task 124).
+- The overview still passes an id list to two `inArray` queries: every active (not canceled) project's to the tick read, and every one that can still need action (finished jobs left out) to the stage-change read. Both grow with the workspace's active projects (Postgres caps a statement at 65,535 bind parameters). The tick read already returns only the current stage's ticks. If workspaces grow large, push the visible/active filter into the batch queries as a join (access audit, task 124).
+- The rest of the overview (stats, charts, "Recently started") is still English; Needs action is translated. Tracked by task 098 (todo), which should keep this section's messages as they are.
