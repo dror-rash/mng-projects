@@ -6,6 +6,7 @@ import { requireActionSession } from "@/features/auth/require-session";
 import { redirectFromAction } from "@/features/navigation/redirect-from-action";
 
 import { requireProjectAccess } from "./require-project-access";
+import { parseProjectTab, projectTabPath } from "./project-tabs";
 import { parseChecklistItem } from "./stage-checklist";
 
 /**
@@ -13,7 +14,8 @@ import { parseChecklistItem } from "./stage-checklist";
  * change the project (`can_change_project`); others get the same refusal as for a missing one. The form is a
  * single button, so a made-up item or `done` (a tampered form) throws like a made-up task status rather than
  * returning a field error. An item of another stage than the project's is taken (done is done); ticking a
- * ticked item or unticking an open one changes nothing.
+ * ticked item or unticking an open one changes nothing. It goes back to the tab the form was posted from
+ * (task 122); an unknown tab goes to the bare project page, which opens on the stage's tab.
  */
 export async function toggleChecklistItemAction(formData: FormData) {
   const session = await requireActionSession();
@@ -31,5 +33,5 @@ export async function toggleChecklistItemAction(formData: FormData) {
     }
     return project.id;
   });
-  return redirectFromAction(`/projects/${projectId}`);
+  return redirectFromAction(projectTabPath(projectId, parseProjectTab(formData.get("tab"))));
 }

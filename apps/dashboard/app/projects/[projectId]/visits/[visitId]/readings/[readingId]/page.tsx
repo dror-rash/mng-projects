@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 
 import { AppFrame } from "@/features/layout/app-frame";
 import { recordWorkspace } from "@/features/layout/record-workspace";
+import { projectTabPath } from "@/features/projects/project-tabs";
 import { getProjectForUser } from "@/features/projects/queries";
 import { getReading } from "@/features/readings/queries";
 import { isFilledIn, readingValueText } from "@/features/readings/reading-values";
@@ -30,7 +31,7 @@ export default async function ReadingPage({ params }: { params: Promise<{ projec
   return (
     <AppFrame email={session.user.email} name={session.user.name} role={workspace.role} {...await recordWorkspace(session.user.id, workspace, project.workspaceId)} className="max-w-3xl space-y-6 p-6">
       <nav aria-label="Breadcrumb" className="flex gap-2 text-sm text-muted-foreground">
-        <Link href={`/projects/${project.id}`} className="hover:underline">{project.name}</Link>
+        <Link href={projectTabPath(project.id, "work")} className="hover:underline">{project.name}</Link>
         <span aria-hidden>›</span>
         <Link href={visitHref} className="hover:underline">
           Visit on <time dateTime={reading.visitedOn}>{formatDueDate(reading.visitedOn)}</time>

@@ -178,6 +178,7 @@ Feature: Hebrew and English
     And "Acme Ltd" has a site "Haifa warehouse"
     And I have a project named "Panel upgrade" at the site "Haifa warehouse"
     When I am on the "Panel upgrade" project page
+    And I open the "ביצוע" tab
     Then I see the "ביקורים" section
     When I follow the "תיעוד ביקור" link
     And I fill in "תאריך הביקור" with a date 3 days from now

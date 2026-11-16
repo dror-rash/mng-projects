@@ -7,6 +7,7 @@ import type { ReactNode } from "react";
 import type { FormState } from "@/features/forms/form-state";
 
 import { MoveToNextStage } from "./move-to-next-stage";
+import { type ProjectTab, projectTabPath } from "./project-tabs";
 import type { WhoseMove } from "./stage-checklist";
 import { WhoseMoveBadge } from "./whose-move-badge";
 
@@ -34,6 +35,7 @@ export type NextStepItem = {
  */
 export function NextStepCard({
   projectId,
+  tab,
   heading,
   stageLine,
   move,
@@ -47,6 +49,8 @@ export function NextStepCard({
   moveAction,
 }: {
   projectId: string;
+  /** The open tab of the project page, posted with each item so ticking keeps it (task 122). */
+  tab?: ProjectTab;
   heading: string;
   /** "<Stage> since <date>", with the stage form for those who can change it. */
   stageLine: ReactNode;
@@ -81,6 +85,7 @@ export function NextStepCard({
                 {toggleAction ? (
                   <form action={toggleAction}>
                     <input type="hidden" name="projectId" value={projectId} />
+                    {tab && <input type="hidden" name="tab" value={tab} />}
                     <input type="hidden" name="item" value={item.key} />
                     <input type="hidden" name="done" value={item.done ? "false" : "true"} />
                     <button
@@ -112,7 +117,7 @@ export function NextStepCard({
             <MoveToNextStage
               key={moveTo.stage}
               projectId={projectId}
-              projectHref={`/projects/${projectId}`}
+              projectHref={projectTabPath(projectId, tab ?? null)}
               action={moveAction}
               {...moveTo}
             />

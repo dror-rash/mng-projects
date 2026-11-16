@@ -54,6 +54,7 @@ Feature: The POC flow, from a customer to a report
     And I create an invite link for the role "Worker"
     And the worker "Dana Levi" joins with the invite link
     And I am on the "Store wiring" project page
+    And I open the "Work" tab
     And I select "Dana Levi" from "Worker to add"
     And I press "Add to crew"
     Then the "Crew" section shows "Dana Levi"
@@ -67,15 +68,19 @@ Feature: The POC flow, from a customer to a report
     And the worker moves the task "Pull cables" to "Done"
     # The admin again: the report, and everything the worker recorded, on the project
     When I am on the "Store wiring" project page
+    And I open the "Reports" tab
     And I add the file "inspection-report.pdf" with "Upload a report"
     Then the reports listed are "inspection-report.pdf"
     And the report "inspection-report.pdf" downloads as "inspection-report.pdf"
+    And I open the "Work" tab
     And the visits listed are "Main panel checked; breaker 4 trips"
     And the "Photos and files" section shows the photo "panel.jpg"
     And the photo "panel.jpg" opens as an image
     And the readings listed are "Panel check"
+    And I open the "Overview" tab
     And the task "Pull cables" is in the "Done" column
     And the task "Fit the panel" is in the "To do" column
+    And I open the "Work" tab
     When I follow the "Panel check" link in the "Readings" section
     Then I see the text "230 V"
     And I see the text "Dana Levi"

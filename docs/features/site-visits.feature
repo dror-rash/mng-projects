@@ -12,6 +12,7 @@ Feature: Site visits
 
   Scenario: I record a visit with the people who were there and notes
     When I am on the "Panel upgrade" project page
+    And I open the "Work" tab
     And I follow the "Record a visit" link
     Then the "Visited on" field shows today's date
     And the "Test User" box is checked
@@ -22,6 +23,7 @@ Feature: Site visits
     And I see the text "Test User"
     And I see the text "Main panel replaced; breaker 4 still trips"
     When I am on the "Panel upgrade" project page
+    And I open the "Work" tab
     Then the "Visits" section shows "Main panel replaced; breaker 4 still trips"
 
   Scenario: A visit needs a date, not in the future, and someone who was there
@@ -38,6 +40,7 @@ Feature: Site visits
     Given "Panel upgrade" has a visit 5 days ago with the notes "First look"
     And "Panel upgrade" has a visit 2 days ago with the notes "Panel delivered"
     When I am on the "Panel upgrade" project page
+    And I open the "Work" tab
     Then the visits listed are "Panel delivered, First look"
 
   Scenario: Sending the same visit twice records it once
@@ -46,6 +49,7 @@ Feature: Site visits
     And I press "Save visit"
     And I send the same visit form again
     And I am on the "Panel upgrade" project page
+    And I open the "Work" tab
     Then the visits listed are "Sent twice"
 
   Scenario: I edit and delete my visit, and an admin restores it
@@ -60,6 +64,7 @@ Feature: Site visits
     When I open "/dashboard/deleted"
     And I press "Restore Panel delivered and checked"
     And I am on the "Panel upgrade" project page
+    And I open the "Work" tab
     Then the visits listed are "Panel delivered and checked"
 
   # Roles and isolation: the leak suite's workspace (partner-access.feature, workers.feature).
@@ -74,7 +79,7 @@ Feature: Site visits
     When I fill in "Notes" with "Cables pulled"
     And I press "Save visit"
     Then I see the text "Cables pulled"
-    When the auditor opens the "NW Site" project page
+    When the auditor opens the "Work" tab of the "NW Site" project
     Then the auditor sees the text "Cables pulled"
     And the auditor sees no "Record a visit" link
 

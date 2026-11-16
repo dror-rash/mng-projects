@@ -210,7 +210,7 @@ When(
   "I start an upload on {string} with the project id of {string}",
   async ({ page, state }, project: string, other: string) => {
     state.replay = async (id) => {
-      await page.goto(projectPath(state, project));
+      await page.goto(`${projectPath(state, project)}?tab=work`);
       await section(page)
         .locator('input[name="projectId"]')
         .evaluate((input, value) => {
@@ -228,7 +228,7 @@ When(
   "I finish an upload on {string} with the upload id of {string}",
   async ({ page, state }, project: string, name: string) => {
     state.replay = async (id) => {
-      await page.goto(projectPath(state, project));
+      await page.goto(`${projectPath(state, project)}?tab=work`);
       await page.unrouteAll();
       await page.route("**/*", async (route) => {
         const body = route.request().postData();
@@ -255,7 +255,7 @@ Then("the upload is refused, the same as with a made-up id", async ({ page, stat
 
 Then("the admin sees only {string} on {string}", async ({ people, state }, name: string, project: string) => {
   const admin = await pageOf(state, people, "admin");
-  await admin.goto(projectPath(state, project));
+  await admin.goto(`${projectPath(state, project)}?tab=work`);
   const items = section(admin).getByRole("listitem");
   await expect(items).toHaveCount(1);
   await expect(items.first().getByRole("img", { name, exact: true })).toBeVisible();

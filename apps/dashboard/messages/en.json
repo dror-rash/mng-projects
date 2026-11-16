@@ -69,6 +69,16 @@
     "moveAnyway": "Move anyway",
     "cancel": "Cancel"
   },
+  "projectTabs": {
+    "label": "Project sections",
+    "overview": "Overview",
+    "sales": "Sales",
+    "work": "Work",
+    "reports": "Reports",
+    "billing": "Billing",
+    "salesLater": "Quotes and work orders will show here.",
+    "billingLater": "Bills will show here."
+  },
   "stageBoard": {
     "view": "Board",
     "label": "Stage board",

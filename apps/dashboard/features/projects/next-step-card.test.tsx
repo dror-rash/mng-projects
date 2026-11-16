@@ -88,6 +88,12 @@ describe("NextStepCard", () => {
     expect(form(buttons[1]!)).toEqual({ projectId: "p1", item: "quote.sent", done: "true" });
   });
 
+  it("posts the open tab with each item, so ticking keeps it (task 122)", () => {
+    render(<NextStepCard {...props} tab="work" toggleAction={async () => {}} />);
+    const [button] = within(region()).getAllByRole("button");
+    expect(Object.fromEntries(new FormData(button!.closest("form")!))).toEqual({ projectId: "p1", tab: "work", item: "quote.costed", done: "false" });
+  });
+
   const moveTo = { stage: "ordered", label: "Move to Ordered", moveAnyway: "Move anyway", cancel: "Cancel" };
 
   it("gives whoever can change the project a button to the next stage", () => {

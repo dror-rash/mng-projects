@@ -89,7 +89,7 @@ Feature: Workers: internal technicians on a project's crew
     Then the "My tasks" section shows "Copy"
 
   Scenario: An admin puts a worker on a project's crew
-    When the admin opens the "GX App" project page
+    When the admin opens the "Work" tab of the "GX App" project
     And the admin adds "Worker" to the crew
     Then the admin sees the "Crew" section shows "Worker"
     When I open "/dashboard/projects"
@@ -97,7 +97,7 @@ Feature: Workers: internal technicians on a project's crew
 
   Scenario: Leaving a crew hides the project and clears my tasks there
     Given the task "Copy" is assigned to me by the admin
-    When the admin opens the "NW Site" project page
+    When the admin opens the "Work" tab of the "NW Site" project
     And the admin removes "Worker" from the crew
     And I open "/dashboard/projects"
     Then the page shows none of "NW Site"
@@ -106,9 +106,10 @@ Feature: Workers: internal technicians on a project's crew
 
   Scenario: Only admins see and change the crew
     When I am on the "NW Site" project page
+    And I open the "Work" tab
     Then I do not see the "Add to crew" button
     And I do not see the "Remove Worker" button
-    When the auditor opens the "NW Site" project page
+    When the auditor opens the "Work" tab of the "NW Site" project
     Then the auditor sees the text "Worker"
     And the auditor sees no "Add to crew" button and no "Remove Worker" button
 

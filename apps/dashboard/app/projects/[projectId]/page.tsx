@@ -2,19 +2,11 @@ import { Badge } from "@repo/ui/badge";
 import { Button } from "@repo/ui/button";
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { getTranslations } from "next-intl/server";
 
-import { isAdmin } from "@/features/access/require-change";
-import { deleteAttachmentAction } from "@/features/attachments/actions";
-import { AttachmentUploader } from "@/features/attachments/attachment-uploader";
-import { AttachmentsSection } from "@/features/attachments/attachments-section";
-import { listProjectAttachments, listProjectReports } from "@/features/attachments/queries";
-import { ReportsSection } from "@/features/attachments/reports-section";
-import { removeCrewMemberAction } from "@/features/crews/actions";
-import { AddToCrewForm } from "@/features/crews/add-to-crew-form";
-import { CrewSection } from "@/features/crews/crew-section";
-import { listCrew, listCrewChoices } from "@/features/crews/queries";
 import { AppFrame } from "@/features/layout/app-frame";
 import { recordWorkspace } from "@/features/layout/record-workspace";
+import { firstParam } from "@/features/navigation/search-params";
 import { getOrganizationForUser } from "@/features/organizations/queries";
 import { setProjectLifecycleAction } from "@/features/projects/actions";
 import { toggleChecklistItemAction } from "@/features/projects/checklist-actions";
@@ -22,33 +14,31 @@ import { listChecklistTicks } from "@/features/projects/checklist-queries";
 import { nextStep } from "@/features/projects/next-step";
 import { NextStepCard } from "@/features/projects/next-step-card";
 import { isCanceled, projectLifecycleLabel } from "@/features/projects/project-lifecycle";
+import { openProjectTab, parseProjectTab, PROJECT_TABS, projectTabPath } from "@/features/projects/project-tabs";
+import { ProjectTabs } from "@/features/projects/project-tabs-nav";
 import { getProjectForUser } from "@/features/projects/queries";
 import { changeStageAction } from "@/features/projects/stage-actions";
 import { StageBar } from "@/features/projects/stage-bar";
 import { getStageChangedAt } from "@/features/projects/stage-history";
 import { stageLabels } from "@/features/projects/stage-labels";
 import { StageSince } from "@/features/projects/stage-since";
-import { listProjectReadings } from "@/features/readings/queries";
-import { ReadingsSection } from "@/features/readings/readings-section";
-import { mapsLink } from "@/features/sites/maps-link";
-import { ProjectSiteSection } from "@/features/sites/project-site-section";
-import { getSiteForUser, listSiteContacts } from "@/features/sites/queries";
-import { listProjectVisits } from "@/features/visits/queries";
-import { VisitsSection } from "@/features/visits/visits-section";
-import { deleteTaskAction, updateTaskStatusAction } from "@/features/tasks/actions";
-import { AddTaskForm } from "@/features/tasks/add-task-form";
-import { listProjectTasks } from "@/features/tasks/queries";
 import { formatDueDate, todayUtc } from "@/features/tasks/due-dates";
-import { byPriority } from "@/features/tasks/task-priority";
-import { TaskBoard } from "@/features/tasks/task-board";
 import { requireWorkspace } from "@/features/workspaces/require-workspace";
+
+import { LaterTab } from "./_tabs/later-tab";
+import { OverviewTab } from "./_tabs/overview-tab";
+import { ReportsTab } from "./_tabs/reports-tab";
+import { WorkTab } from "./_tabs/work-tab";
 
 export const dynamic = "force-dynamic";
 
-export default async function ProjectPage({ params }: { params: Promise<{ projectId: string }> }) {
+type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
+export default async function ProjectPage({ params, searchParams }: { params: Promise<{ projectId: string }>; searchParams: SearchParams }) {
   const { projectId } = await params;
-  const { session, workspace } = await requireWorkspace(`/projects/${projectId}`);
+  // The tab in the address (task 122), kept through sign-in; any other value opens the stage's tab.
+  const tabParam = parseProjectTab(firstParam((await searchParams).tab));
+  const { session, workspace } = await requireWorkspace(projectTabPath(projectId, tabParam));
   const project = await getProjectForUser(session.user.id, projectId);
   if (!project) {
     notFound();
@@ -56,35 +46,21 @@ export default async function ProjectPage({ params }: { params: Promise<{ projec
 
   // The customer is a link only for those who can open customer pages; partners see its name only. The
   // project it was copied from shows only to those who can see that one too (rule 4a).
-  const [tasks, customerPage, copiedFrom, site, crew, manageCrew, visits, readings, attachments, reports, stageChangedAt, stages, ticks] = await Promise.all([
-    listProjectTasks(session.user.id, project.id),
+  const [customerPage, copiedFrom, stageChangedAt, stages, ticks, tabText] = await Promise.all([
     project.customerName ? getOrganizationForUser(session.user.id, project.organizationId, "customer") : null,
     project.copiedFromId ? getProjectForUser(session.user.id, project.copiedFromId) : null,
-    getSiteForUser(session.user.id, project.siteId),
-    listCrew(session.user.id, project.id),
-    isAdmin(session.user.id, project.workspaceId),
-    listProjectVisits(session.user.id, project.id),
-    listProjectReadings(session.user.id, project.id),
-    listProjectAttachments(session.user.id, project.id),
-    listProjectReports(session.user.id, project.id),
     getStageChangedAt(session.user.id, project.id),
     stageLabels(),
     listChecklistTicks(session.user.id, project.id),
+    getTranslations("projectTabs"),
   ]);
   // The stage's day (task 101): its latest change, or when the project was made if it has no history yet.
   const stageSince = todayUtc(stageChangedAt ?? project.createdAt);
   // The current stage's checklist and whose move it is (task 120, ADR-0014); a canceled project's too.
   const next = await nextStep(project.stage, ticks);
-  // Admins put the workspace's workers on the crew (task 056).
-  const crewChoices = manageCrew ? await listCrewChoices(session.user.id, project) : [];
-  // Where the work is (task 055). Every project has a site (task 071); it shows while it isn't deleted.
-  const siteContacts = site ? await listSiteContacts(session.user.id, site.id) : [];
   const canceled = isCanceled(project.lifecycle);
-  // Most urgent first in each column; tasks arrive oldest first, and the sort keeps that within a priority.
-  // Only the fields a card shows cross to the client.
-  const boardTasks = [...tasks]
-    .sort(byPriority)
-    .map(({ id, title, status, priority, dueDate, assigneeName, customerName }) => ({ id, title, status, priority, dueDate, assigneeName, customerName }));
+  // Only the open tab's sections are rendered, so only its queries run (task 122).
+  const tab = openProjectTab(tabParam, project.stage);
 
   return (
     <AppFrame email={session.user.email} name={session.user.name} role={workspace.role} {...await recordWorkspace(session.user.id, workspace, project.workspaceId)} className="max-w-6xl space-y-8 p-6">
@@ -150,61 +126,24 @@ export default async function ProjectPage({ params }: { params: Promise<{ projec
 
       <NextStepCard
         projectId={project.id}
+        tab={tab}
         {...next}
         stageLine={<StageSince line={stages.since(project.stage)} since={stageSince} sinceText={formatDueDate(stageSince)} />}
         toggleAction={project.canChange ? toggleChecklistItemAction : undefined}
         moveAction={project.canChange ? changeStageAction : undefined}
       />
 
-      {site && (
-        <ProjectSiteSection
-          site={{
-            id: site.id,
-            name: site.name,
-            address: site.address,
-            accessNotes: site.accessNotes,
-            mapsHref: mapsLink(site),
-            contacts: siteContacts,
-          }}
-        />
-      )}
-
-      <VisitsSection projectId={project.id} visits={visits} canRecord={project.canWork} />
-
-      <ReadingsSection projectId={project.id} readings={readings} showVisitDates />
-
-      <AttachmentsSection
+      <ProjectTabs
         projectId={project.id}
-        items={attachments}
-        showVisits
-        uploader={project.canWork ? <AttachmentUploader visitId={null} /> : undefined}
-        deleteAction={project.canWork ? deleteAttachmentAction : undefined}
+        open={tab}
+        tabs={PROJECT_TABS.map((t) => ({ tab: t.tab, label: tabText(t.labelKey) }))}
+        label={tabText("label")}
       />
 
-      <ReportsSection
-        projectId={project.id}
-        reports={reports}
-        uploader={project.canWork ? <AttachmentUploader visitId={null} kinds={["report"]} /> : undefined}
-        deleteAction={project.canWork ? deleteAttachmentAction : undefined}
-      />
-
-      <CrewSection
-        projectId={project.id}
-        crew={crew}
-        removeAction={manageCrew ? removeCrewMemberAction : undefined}
-        addForm={manageCrew ? <AddToCrewForm projectId={project.id} workers={crewChoices} /> : undefined}
-      />
-
-      {project.canWork && <AddTaskForm projectId={project.id} />}
-
-      <TaskBoard
-        projectId={project.id}
-        tasks={boardTasks}
-        today={todayUtc()}
-        moveAction={updateTaskStatusAction}
-        deleteAction={project.canChange ? deleteTaskAction : undefined}
-        readOnly={!project.canWork}
-      />
+      {tab === "overview" && <OverviewTab userId={session.user.id} project={project} />}
+      {tab === "work" && <WorkTab userId={session.user.id} project={project} />}
+      {tab === "reports" && <ReportsTab userId={session.user.id} project={project} />}
+      {(tab === "sales" || tab === "billing") && <LaterTab tab={tab} />}
     </AppFrame>
   );
 }

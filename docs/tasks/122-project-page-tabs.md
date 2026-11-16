@@ -1,17 +1,17 @@
 # Task 122: Project page tabs by phase
 
-- **Status:** todo
+- **Status:** in-review
 - **Milestone:** M22 Guided project flow
 - **Zone / package:** `apps/dashboard` (`app/projects/[projectId]`, `features/projects`, `features/visits`, `features/readings`, `messages/`), `e2e`
 - **Feature file:** `docs/features/project-tabs.feature` (`@task:122`); existing scenarios that use a section moved off the Overview tab gain one step at the start (see Scope)
-- **Depends on:** task 121 (the stage bar and card sit above the tabs; both tasks edit the project page)
+- **Depends on:** task 121 (done, PR #127: `StageBar` and `changeStageAction` in `features/projects/`); task 120 (done, PR #124: `NextStepCard`, `toggleChecklistItemAction`). Both sit above the tabs and edit the project page
 
 ## Why
 The project page is one long column of sections (site, visits, readings, files, reports, crew, tasks) unrelated to where the job is. Grouping them in tabs that follow the phases, and opening on the tab of the current stage, puts what the stage needs in front.
 
 ## Scope
 - **Tabs** under the stage bar and the "Next step" card, for everyone who sees the project: Overview סקירה · Sales מכירה · Work ביצוע · Reports דוחות · Billing חיוב (Hebrew *default*, "דוחות" and "חיוב" as the stage labels of task 101).
-  - A list of links labelled "Project sections" (*default*: links with `aria-current="page"` on the open one, not the ARIA tab widget, since each tab is its own address and the page is server-rendered).
+  - A list of links labelled "Project sections" ("חלקי הפרויקט", *default*; links with `aria-current="page"` on the open one, not the ARIA tab widget, since each tab is its own address and the page is server-rendered).
   - Each tab is `?tab=overview|sales|work|reports|billing`; a `const` list `PROJECT_TABS` in `features/projects/project-tabs.ts` with `parseProjectTab` and `tabForStage`.
   - Without `?tab=`, or with an unknown value, the page opens on the current stage's tab: Inquiry → Overview; Quote, Ordered → Sales; Scheduled, In work → Work; Reporting → Reports; Billing → Billing; Closed → Reports.
   - Only the open tab's sections are rendered (and queried).
@@ -24,10 +24,13 @@ The project page is one long column of sections (site, visits, readings, files, 
   - **Billing:** later bills (M19). Until then: "Bills will show here." ("חשבונות יופיעו כאן.", *default*).
   - Above the tabs on every tab: the header (name, customer, actions), the stage bar and the "Next step" card. The communications panel (task 103) sits beside the tabs, not in one.
 - **Returning to the right tab:**
-  - deleting a visit (`features/visits/actions.ts`) and the visit, reading and new-visit pages' links back to the project go to `?tab=work`;
+  - deleting a visit (`deleteVisitAction` in `features/visits/actions.ts`) and the visit, reading and new-visit pages' links back to the project (breadcrumb, Cancel) go to `?tab=work`;
+  - the task page's link back to the project (breadcrumb) and deleting a task from its page (`deleteTaskFromPageAction` in `features/tasks/actions.ts`) go to `?tab=overview`, where the task board is (*default*);
+  - ticking or unticking a checklist item on the "Next step" card keeps the open tab (*default*): `toggleChecklistItemAction` redirects (task 120), so its form posts the open tab and the action redirects to `?tab=<that tab>`, parsed with `parseProjectTab` (an unknown value: no `?tab=`);
+  - "Cancel project" / "Reopen project" open the stage's tab (no `?tab=` in the redirect, *default*);
   - after a stage move (bar or "Move to") the page opens on the new stage's tab (*default*: no `?tab=` in the redirect);
   - actions that stay on the page (`useActionState`: tasks, uploads, crew) keep the URL, so the open tab stays.
-- **Existing scenarios** (the task's first commit, a `docs(features):` commit saying why: sections moved into tabs): a scenario that opens a project page and then uses a section that is no longer on that project's opening tab gets `And I open the "<Tab>" tab` after the page step. Projects written by fixtures are at Inquiry, so they open on Overview: expect scenarios in `site-visits.feature`, `readings.feature`, `attachments.feature`, `reports.feature`, `workers.feature`, `partner-access.feature`, `soft-delete.feature`, `roles.feature` and `poc-flow.feature`. No step changes its wording; the spec-writer lists the edited scenarios in the progress log.
+- **Existing scenarios** (the task's first commit, a `docs(features):` commit saying why: sections moved into tabs): a scenario that opens a project page and then uses a section that is no longer on that project's opening tab gets `And I open the "<Tab>" tab` after the page step. Projects written by fixtures are at Inquiry, so they open on Overview: expect scenarios in `site-visits.feature` (not after "Delete visit": it now lands on Work by itself), `readings.feature`, `attachments.feature`, `reports.feature`, `workers.feature`, `partner-access.feature`, `soft-delete.feature`, `roles.feature` and `poc-flow.feature`. No step changes its wording; the spec-writer lists the edited scenarios in the progress log.
 
 ## Out of scope
 - The communications panel (task 103 places it; see its scope).
@@ -41,6 +44,8 @@ The project page is one long column of sections (site, visits, readings, files, 
 - [ ] Sales and Billing say what will show there. ("Sales and Billing say what will come")
 - [ ] On a phone in Hebrew the tabs fit and work. ("The tabs on a phone, in Hebrew")
 - [ ] A worker on the crew of a project in work lands on Work and records a visit there. ("A worker lands on the Work tab")
+- [ ] Ticking the checklist keeps the open tab; a visit's page and "Delete visit" lead back to Work; a stage move opens the new stage's tab. ("Coming back to the tab I was on")
+- [ ] A task's page and "Delete task" lead back to Overview. ("A task's page leads back to the Overview tab")
 - [ ] Every existing scenario still passes (with the added tab step where needed).
 
 ## Security notes
@@ -60,7 +65,9 @@ The project page is one long column of sections (site, visits, readings, files, 
   - `the {string} tab is open`;
   - `the page shows the sections {string}` (the region names in the open tab, in order; a name matches from its start, since the task board's columns carry their counts, "To do 1");
   - `I open the {string} project page with {string} in its address` (e.g. `?tab=reports`).
-- **Reused:** `the project {string} is at the stage {string}`, `I am on the {string} project page`, `I reload the page`, `I see the text {string}`, `my screen is {int} pixels wide`, `my language cookie is set to {string}`, `the page does not scroll sideways`, `the page is right to left`, `I am signed in as a worker`, `I am on the crew of {string}`.
+  - `the auditor opens the {string} tab of the {string} project`, `the admin opens the {string} tab of the {string} project`, `the {string} user opens the {string} tab of the {string} project` (that person's page, opened at the tab's address `?tab=…`; the auditor and "Northwind" forms are also used by the `@wip` scenarios of tasks 107 and 108).
+- **Step notes:** the tab steps look in the "Project sections" navigation (Hebrew "חלקי הפרויקט"), never the stage bar, whose phase headings are also "Sales" and "Work"; "open" is the link with `aria-current="page"`. `the page shows the sections` reads the open tab's regions only, so the "Next step" card above the tabs isn't one of them.
+- **Reused:** `the project {string} is at the stage {string}`, `I tick {string}`, `I change the stage to {string}` (task 121's bar), `{string} has a visit {int} days ago with the notes {string}`, `I open the visit {string} of {string}`, `I follow the {string} link`, `I press {string}`, `the visits listed are {string}`, `the project has a task {string}`, `I do not see the task {string}`, `I am on the {string} project page`, `I reload the page`, `I see the text {string}`, `my screen is {int} pixels wide`, `my language cookie is set to {string}`, `the page does not scroll sideways`, `the page is right to left`, `I am signed in as a worker`, `I am on the crew of {string}`.
 - **Unit:** `project-tabs.test.ts`.
 - **Storybook:** `ProjectTabs` (each open tab, Hebrew, phone).
 
@@ -71,11 +78,24 @@ None blocking. Defaults taken:
 3. **Tabs with nothing yet (Sales, Billing):** shown, with a line saying what will come.
 4. **Workers and partner users:** see all five tabs; commercial sections inside them stay hidden by ADR-0012.
 5. **After a stage move:** the page opens on the new stage's tab.
+6. **Task page and "Delete task":** back to Overview (readiness check).
+7. **Ticking the checklist:** keeps the open tab (readiness check).
+8. **Cancel / Reopen project:** opens the stage's tab (readiness check).
+9. **Hebrew name of the tab list:** "חלקי הפרויקט" (readiness check).
 
 ## Progress log
 - 2026-11-15 – Drafted with `project-tabs.feature` (`@wip`) (planner).
+- 2026-11-16 – Readiness check against tasks 120 (PR #124) and 121 (PR #127) as merged (planner): dependencies named after the real code; the return-to-tab scope gained the task page and "Delete task" (Overview), the checklist tick (keeps the tab, since it redirects) and Cancel/Reopen (stage's tab), with two `@wip` scenarios covering it (`docs(features)`); Hebrew name of the tab list; step notes (the tab steps never match the stage bar's phase headings). Tasks 103, 106, 107 and 108's `@wip` scenarios use `I open the {string} tab` as this task defines it. READY.
+- 2026-11-16 – In progress in lane 1 (`feat/project-tabs`, database `app_lane1`, shell http://localhost:3010).
+- 2026-11-16 – Existing scenarios gained `I open the "<Tab>" tab` (`docs(features)`, spec-writer): `site-visits.feature` (I record a visit…, Visits are listed newest first, Sending the same visit twice…, I edit and delete my visit… after the restore), `readings.feature` (I fill in a reading on a visit, Sending the same reading twice…, Another workspace's published form…), `attachments.feature` (I add a photo…, I add a file…, A photo must be an image…, Photos of a visit show…, I delete my photo…, A crew worker adds photos… for me, Too many unfinished uploads…), `reports.feature` (I upload a report…, which also opens Work for "Photos and files does not show" and goes back to Reports; A report must be a document…; I delete my report…; A crew worker uploads a report… for me; A report can't be put on a visit; A worker taken off the crew loses the report's address), `workers.feature` (Only admins see and change the crew, for me), `poc-flow.feature` (Reports, Work, Overview, Work around the admin's checks), `workspaces.feature` (both "Deleting a workspace…" scenarios), `language.feature` (`@wip` Visits in Hebrew, "ביצוע"). Steps that open a project page on their own (the admin's checks, tampered forms, the POC worker's visit) go to `?tab=work` or `?tab=reports`. Not edited, back to the planner: scenarios where another person (the auditor, the admin, the "Northwind" user) opens the project page and then uses a moved section, since `I open the "<Tab>" tab` acts on my page.
+- 2026-11-16 – Other people opening a moved section (`docs(features)`, planner): in 9 scenarios the auditor, the admin or the "Northwind" user's "opens the … project page" became "opens the \"<Tab>\" tab of the … project": `site-visits.feature` (A crew worker records visits…), `attachments.feature` (A crew worker adds photos…), `readings.feature` (A crew worker fills a reading…, A worker taken off the crew loses the visit's readings), `reports.feature` (A crew worker uploads a report… on Reports for the auditor and the partner; A worker taken off the crew loses the report's address), `workers.feature` (An admin puts a worker on a project's crew, Leaving a crew hides the project…, Only admins see and change the crew). Behaviour unchanged.
+- 2026-11-16 – Red (spec-writer): the `@task:122` scenarios fail on the missing "Project sections" navigation; the edited existing scenarios fail at `I open the "<Tab>" tab`.
+- 2026-11-16 – Green (implementer): `project-tabs.ts` (`PROJECT_TABS`, `parseProjectTab`, `tabForStage`, `openProjectTab`, `projectTabPath`) and `ProjectTabs` (`project-tabs-nav.tsx`, story with each tab, Hebrew and phone); the page renders only the open tab's server component (`app/projects/[projectId]/_tabs/`); the checklist form posts `tab` and `toggleChecklistItemAction` goes back to it; visit, reading and new-visit pages and "Delete visit" lead to `?tab=work`, the task page and "Delete task" to `?tab=overview`. Fixed a task 121 bug the phone scenario found: the stage bar's hidden ", done" texts escaped its scroll clip once it scrolled (Hebrew, Billing), so the page scrolled sideways; the bar is now `relative`.
+- 2026-11-16 – Step fix (implementer): `the auditor sees no {string} button and no {string} button` waited for the crew's "Worker" text, which is on the Work tab only, so the Reports scenario in `reports.feature` could not pass; it now waits for the page's title and open tab. Scenarios unchanged. E2E in the lane (`--workers=1`): `@task:122` 15/15; site-visits, readings, attachments, reports, workers, poc-flow, workspaces, project-stages, project-cancel-copy, project-tasks, task-details, partner-access, soft-delete, roles and language: 168, all green (21 timed out in a first run while the machine slept, `ERR_NETWORK_IO_SUSPENDED`, and passed on a rerun with `--timeout=90000`).
+- 2026-11-16 – In review: QA PASS (lint, typecheck uncached, unit 603, db 194 + 38, build, Storybook; full e2e 399/399 on a production build with `CI=true`, 2 workers, first run). Security review: no findings. Access audit: no leaks; three leak scenarios added and a vacuous partner check in `work-orders.feature` (task 106) moved to the Sales tab. Code review fixes applied. Main (task 124) merged in.
 
 ## Parking lot
+- A `project-stages.feature` phone scenario at a late stage in Hebrew (e.g. Billing, 360 px, the page does not scroll sideways), to pin the stage bar's `relative` fix (task 122) to the bar itself rather than to the tabs scenario.
 - Counts on tabs (e.g. "Work 3" for open visits).
 - Remembering the last tab per person or per project.
 - Hiding Sales and Billing from workers if they find them confusing (owner).

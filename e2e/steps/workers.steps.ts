@@ -3,7 +3,7 @@ import { sql } from "@repo/db";
 import { getMaintenanceDb } from "@repo/db/maintenance";
 
 import { Given, signUp, Then, userId, When } from "./fixtures";
-import { idOf, ids, pageOf, projectPath, shownText } from "./partner-access.steps";
+import { idOf, ids, pageOf, projectPath } from "./partner-access.steps";
 import { insertCustomerWithSite } from "./project-form";
 import { pressAndWait } from "./workspaces.steps";
 
@@ -71,7 +71,10 @@ Then(
   "the auditor sees no {string} button and no {string} button",
   async ({ people, state }, first: string, second: string) => {
     const auditor = await pageOf(state, people, "auditor");
-    await expect(shownText(auditor, "Worker")).toBeVisible();
+    // The page is there (its title and open tab), so the missing buttons aren't just not loaded yet. Not the crew's
+    // "Worker": the Crew section is on the Work tab only (task 122), and the reports' check is on Reports.
+    await expect(auditor.getByRole("heading", { level: 1 })).toBeVisible();
+    await expect(auditor.getByRole("navigation", { name: /^(Project sections|חלקי הפרויקט)$/ }).locator('[aria-current="page"]')).toBeVisible();
     await expect(auditor.getByRole("button", { name: first, exact: true })).toHaveCount(0);
     await expect(auditor.getByRole("button", { name: second, exact: true })).toHaveCount(0);
   },

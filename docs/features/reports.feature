@@ -13,15 +13,19 @@ Feature: Uploaded reports
   @task:064
   Scenario: I upload a report and download it from the project
     When I am on the "Panel upgrade" project page
+    And I open the "Reports" tab
     And I add the file "inspection-report.pdf" with "Upload a report"
     Then the reports listed are "inspection-report.pdf"
     And the "Reports" section shows "Test User"
+    And I open the "Work" tab
     And the "Photos and files" section does not show "inspection-report.pdf"
+    And I open the "Reports" tab
     And the report "inspection-report.pdf" downloads as "inspection-report.pdf"
 
   @task:064
   Scenario: A report must be a document, up to 50 MB
     When I am on the "Panel upgrade" project page
+    And I open the "Reports" tab
     And I add the file "walkthrough.mp4" with "Upload a report"
     Then I see the error "Reports must be PDF, Word, Excel, CSV, text or images"
     When I add a 60 MB file "huge-report.pdf" with "Upload a report"
@@ -31,6 +35,7 @@ Feature: Uploaded reports
   @task:064
   Scenario: I delete my report, and an admin restores it
     When I am on the "Panel upgrade" project page
+    And I open the "Reports" tab
     And I add the file "inspection-report.pdf" with "Upload a report"
     And I press "Delete inspection-report.pdf"
     Then the "Reports" section shows "No reports yet."
@@ -38,6 +43,7 @@ Feature: Uploaded reports
     Then I see the text "Report"
     When I press "Restore inspection-report.pdf"
     And I am on the "Panel upgrade" project page
+    And I open the "Reports" tab
     Then the reports listed are "inspection-report.pdf"
 
   # Roles and isolation: the leak suite's workspace (partner-access.feature, workers.feature).
@@ -50,14 +56,15 @@ Feature: Uploaded reports
     And I am signed in as a worker
     And I am on the crew of "NW Site"
     When I am on the "NW Site" project page
+    And I open the "Reports" tab
     And I add the file "crew-report.pdf" with "Upload a report"
     Then the reports listed are "crew-report.pdf, admin-report.pdf"
     And I see the "Delete crew-report.pdf" button
     And I do not see the "Delete admin-report.pdf" button
-    When the auditor opens the "NW Site" project page
+    When the auditor opens the "Reports" tab of the "NW Site" project
     Then the auditor sees the text "crew-report.pdf"
     And the auditor sees no "Upload a report" button and no "Delete crew-report.pdf" button
-    When the "Northwind" user opens the "NW Site" project page
+    When the "Northwind" user opens the "Reports" tab of the "NW Site" project
     Then the "Northwind" user sees the text "crew-report.pdf"
 
   @task:064
@@ -132,6 +139,7 @@ Feature: Uploaded reports
     When I start a report upload on the visit "Panel delivered" of "Panel upgrade"
     Then the upload is refused, the same as with a made-up id
     When I am on the "Panel upgrade" project page
+    And I open the "Reports" tab
     Then the "Reports" section shows "No reports yet."
 
   @task:064
@@ -143,8 +151,9 @@ Feature: Uploaded reports
     And I am signed in as a worker
     And I am on the crew of "NW Site"
     When I am on the "NW Site" project page
+    And I open the "Reports" tab
     Then the reports listed are "nw-report.pdf"
-    When the admin opens the "NW Site" project page
+    When the admin opens the "Work" tab of the "NW Site" project
     And the admin removes "Worker" from the crew
     And I open the address of the report "nw-report.pdf"
     Then it is not found, the same as a made-up photo address

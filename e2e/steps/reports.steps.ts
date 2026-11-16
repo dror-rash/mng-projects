@@ -39,7 +39,7 @@ When(
   "I start a report upload on {string} with the project id of {string}",
   async ({ page, state }, project: string, other: string) => {
     state.replay = async (id) => {
-      await page.goto(projectPath(state, project));
+      await page.goto(`${projectPath(state, project)}?tab=reports`);
       await reports(page)
         .locator('input[name="projectId"]')
         .evaluate((input, value) => {
@@ -54,13 +54,13 @@ When(
 
 Then("the admin sees no reports on {string}", async ({ people, state }, project: string) => {
   const admin = await pageOf(state, people, "admin");
-  await admin.goto(projectPath(state, project));
+  await admin.goto(`${projectPath(state, project)}?tab=reports`);
   await expect(reports(admin)).toContainText("No reports yet.");
   await expect(reports(admin).getByRole("link")).toHaveCount(0);
 });
 
 /** A user of the partner (signed up and made a member on first use), in a browser of their own. */
-async function partnerUser(state: ScenarioState, people: People, partner: string) {
+export async function partnerUser(state: ScenarioState, people: People, partner: string) {
   const key = `${partner} user`;
   const known = state.accounts?.[key]?.page;
   if (known) return known;
@@ -136,7 +136,7 @@ async function projectOfAttachment(id: string) {
 
 /** Posts the delete form of my report `mine` on the page at `path`, with its hidden fields set to the target. */
 async function postReportDelete(page: Page, path: string, mine: string, projectId: string, attachmentId: string) {
-  await page.goto(path);
+  await page.goto(`${path}?tab=reports`);
   await expect(page.getByRole("button", { name: `Delete ${mine}`, exact: true })).toBeVisible();
   await setHiddenFields(page, `Delete ${mine}`, { projectId, attachmentId });
   await pressAndWait(page, `Delete ${mine}`);
@@ -178,13 +178,13 @@ Then("the restore is refused, the same as with a made-up id", async ({ page, sta
 
 Then("the admin sees the reports {string} on {string}", async ({ people, state }, names: string, project: string) => {
   const admin = await pageOf(state, people, "admin");
-  await admin.goto(projectPath(state, project));
+  await admin.goto(`${projectPath(state, project)}?tab=reports`);
   await expect(reports(admin).getByRole("link")).toHaveText(names.split(",").map((n) => n.trim()));
 });
 
 /** Uploads a report with "Upload a report" on the page at `path`, its section's project id set to `projectId`. */
 async function uploadReportTo(page: Page, path: string, projectId: string) {
-  await page.goto(path);
+  await page.goto(`${path}?tab=reports`);
   await reports(page)
     .locator('input[name="projectId"]')
     .evaluate((input, value) => {

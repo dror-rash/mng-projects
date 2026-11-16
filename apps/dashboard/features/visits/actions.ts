@@ -6,6 +6,7 @@ import { revalidatePath } from "next/cache";
 import { requireActionSession } from "@/features/auth/require-session";
 import { type FormState, invalid } from "@/features/forms/form-state";
 import { redirectFromAction } from "@/features/navigation/redirect-from-action";
+import { projectTabPath } from "@/features/projects/project-tabs";
 import { requireProjectWorkAccess } from "@/features/projects/require-project-access";
 import { todayUtc } from "@/features/tasks/due-dates";
 import { isAssignable } from "@/features/workspaces/members";
@@ -139,5 +140,6 @@ export async function deleteVisitAction(formData: FormData) {
     return project.id;
   });
   revalidateVisits(projectId);
-  return redirectFromAction(`/projects/${projectId}`);
+  // Back to the Work tab, where the visits are (task 122).
+  return redirectFromAction(projectTabPath(projectId, "work"));
 }

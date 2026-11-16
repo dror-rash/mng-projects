@@ -7,6 +7,7 @@ import { AppFrame } from "@/features/layout/app-frame";
 import { recordWorkspace } from "@/features/layout/record-workspace";
 import { listCustomerNames } from "@/features/organizations/customer-names";
 import { getOrganizationForUser } from "@/features/organizations/queries";
+import { projectTabPath } from "@/features/projects/project-tabs";
 import { getProjectForUser } from "@/features/projects/queries";
 import { deleteTaskFromPageAction } from "@/features/tasks/actions";
 import { EditTaskForm } from "@/features/tasks/edit-task-form";
@@ -56,7 +57,7 @@ export default async function TaskPage({ params }: { params: Promise<{ projectId
   return (
     <AppFrame email={session.user.email} name={session.user.name} role={workspace.role} {...await recordWorkspace(session.user.id, workspace, project.workspaceId)} className="max-w-3xl space-y-6 p-6">
       <nav aria-label="Breadcrumb" className="text-sm text-muted-foreground">
-        <Link href={`/projects/${project.id}`} className="hover:underline">
+        <Link href={projectTabPath(project.id, "overview")} className="hover:underline">
           {project.name}
         </Link>
       </nav>

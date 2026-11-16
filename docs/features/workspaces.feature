@@ -110,6 +110,7 @@ Feature: Workspaces
     And "Acme Ltd" has a site "Haifa warehouse"
     And I have a project named "Panel upgrade" at the site "Haifa warehouse"
     And I am on the "Panel upgrade" project page
+    And I open the "Work" tab
     And I add the photo "panel.jpg" with "Add photos"
     And I add the file "wiring-plan.pdf" with "Add files"
     And I copy the download links of the photo "panel.jpg" and the file "wiring-plan.pdf"
@@ -123,6 +124,7 @@ Feature: Workspaces
     And "Acme Ltd" has a site "Haifa warehouse"
     And I have a project named "Panel upgrade" at the site "Haifa warehouse"
     And I am on the "Panel upgrade" project page
+    And I open the "Work" tab
     And I add the photo "panel.jpg" with "Add photos"
     And I add the file "wiring-plan.pdf" with "Add files"
     And I copy the download links of the photo "panel.jpg" and the file "wiring-plan.pdf"

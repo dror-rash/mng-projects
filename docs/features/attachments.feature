@@ -12,18 +12,21 @@ Feature: Photos and files
 
   Scenario: I add a photo to a project and open it from the gallery
     When I am on the "Panel upgrade" project page
+    And I open the "Work" tab
     And I add the photo "panel.jpg" with "Add photos"
     Then the "Photos and files" section shows the photo "panel.jpg"
     And the photo "panel.jpg" opens as an image
 
   Scenario: I add a file and download it under its name
     When I am on the "Panel upgrade" project page
+    And I open the "Work" tab
     And I add the file "wiring-plan.pdf" with "Add files"
     Then the "Photos and files" section shows the file "wiring-plan.pdf"
     And the file "wiring-plan.pdf" downloads as "wiring-plan.pdf"
 
   Scenario: A photo must be an image, and files have a size limit
     When I am on the "Panel upgrade" project page
+    And I open the "Work" tab
     And I add the file "notes.txt" with "Add photos"
     Then I see the error "Photos must be JPEG, PNG, WebP or HEIC images"
     When I add a 60 MB file "huge.pdf" with "Add files"
@@ -36,17 +39,20 @@ Feature: Photos and files
     And I add the photo "delivery.jpg" with "Add photos"
     Then the "Photos and files" section shows the photo "delivery.jpg"
     When I am on the "Panel upgrade" project page
+    And I open the "Work" tab
     Then the "Photos and files" section shows the photo "delivery.jpg"
     And the "Photos and files" section shows "Panel delivered"
 
   Scenario: I delete my photo, and an admin restores it
     When I am on the "Panel upgrade" project page
+    And I open the "Work" tab
     And I add the photo "panel.jpg" with "Add photos"
     And I press "Delete panel.jpg"
     Then the "Photos and files" section shows "No photos or files yet."
     When I open "/dashboard/deleted"
     And I press "Restore panel.jpg"
     And I am on the "Panel upgrade" project page
+    And I open the "Work" tab
     Then the "Photos and files" section shows the photo "panel.jpg"
 
   # Roles and isolation: the leak suite's workspace (partner-access.feature, workers.feature).
@@ -58,11 +64,12 @@ Feature: Photos and files
     And I am signed in as a worker
     And I am on the crew of "NW Site"
     When I am on the "NW Site" project page
+    And I open the "Work" tab
     And I add the photo "cables.jpg" with "Add photos"
     Then the "Photos and files" section shows the photo "cables.jpg"
     And I see the "Delete cables.jpg" button
     And I do not see the "Delete admin.jpg" button
-    When the auditor opens the "NW Site" project page
+    When the auditor opens the "Work" tab of the "NW Site" project
     Then the auditor sees the text "cables.jpg"
     And the auditor sees no "Add photos" button and no "Delete cables.jpg" button
 
@@ -104,6 +111,7 @@ Feature: Photos and files
   @task:087
   Scenario: Too many unfinished uploads are refused
     Given I am on the "Panel upgrade" project page
+    And I open the "Work" tab
     And my connection drops during 10 photo uploads
     When I add the photo "panel.jpg" with "Add photos"
     Then I see the error "Too many uploads in progress. Try again later."

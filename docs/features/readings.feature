@@ -35,6 +35,7 @@ Feature: Readings
     When I open the visit "Panel delivered" of "Panel upgrade"
     Then the "Readings" section shows "Panel check"
     When I am on the "Panel upgrade" project page
+    And I open the "Work" tab
     Then the readings listed are "Panel check"
 
   @task:061
@@ -70,6 +71,7 @@ Feature: Readings
     And I press "Save reading"
     And I send the same reading form again
     And I am on the "Panel upgrade" project page
+    And I open the "Work" tab
     Then the readings listed are "Panel check"
 
   # Roles and isolation: the leak suite's workspace (partner-access.feature, workers.feature).
@@ -89,7 +91,7 @@ Feature: Readings
     And I press "Save reading"
     Then I see the heading "Site check"
     And I see the text "Worker"
-    When the auditor opens the "NW Site" project page
+    When the auditor opens the "Work" tab of the "NW Site" project
     Then the auditor sees the text "Site check"
     When the auditor opens the visit "Cables pulled" of the project "NW Site"
     Then the auditor sees the text "Site check"
@@ -141,6 +143,7 @@ Feature: Readings
     When I open the Add a reading page of the visit "Panel delivered" with the form "Their check"
     Then the forms offered are "Panel check"
     When I am on the "Panel upgrade" project page
+    And I open the "Work" tab
     Then I see the text "No readings yet."
 
   @task:061
@@ -182,7 +185,7 @@ Feature: Readings
     And I am signed in as a worker
     And I am on the crew of "NW Site"
     When I open the "Site check" reading form on the visit "Cables pulled"
-    And the admin opens the "NW Site" project page
+    And the admin opens the "Work" tab of the "NW Site" project
     And the admin removes "Worker" from the crew
     And I fill in "Voltage" with "231"
     And I press "Save reading"
