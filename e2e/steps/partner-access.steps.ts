@@ -232,6 +232,11 @@ When("I open the address of the {string} project", async ({ page, state }, proje
   await page.goto(projectPath(state, project));
 });
 
+// The address with a query (a project tab, task 122); no wait for the page: it may be "Project not found".
+When("I open the address of the {string} project with {string}", async ({ page, state }, project: string, suffix: string) => {
+  await page.goto(`${projectPath(state, project)}${suffix}`);
+});
+
 When("I open the address of the {string} task", async ({ page, state }, task: string) => {
   await page.goto(taskPath(state, task));
 });
@@ -264,7 +269,8 @@ Then(
       visit: `/dashboard/projects/${madeUp}/visits/${crypto.randomUUID()}`,
     }[kind];
     expect(path, `no made-up address for "${kind}"`).toBeDefined();
-    const response = await page.goto(path!);
+    // The same query as the real address (a project tab, `?tab=work`), so only the id differs.
+    const response = await page.goto(`${path!}${new URL(page.url()).search}`);
     expect(response?.status()).toBe(404);
     await expect(main.getByRole("heading", { level: 1 })).toHaveText(text);
     expect(await main.innerText()).toBe(shown);
