@@ -1,6 +1,6 @@
 # Task 124: "Needs action" on the overview
 
-- **Status:** in-review
+- **Status:** done (PR #128)
 - **Milestone:** M22 Guided project flow
 - **Zone / package:** `apps/dashboard` (`app/page.tsx`, `features/projects`, `messages/`), `e2e`
 - **Feature file:** `docs/features/needs-action.feature` (`@task:124`; a file of its own, since `dashboard-home.feature` carries `@task:009` and a Background on every scenario)
@@ -66,6 +66,7 @@ None blocking. Defaults taken:
 - 2026-11-16 – Implemented (TDD, red commits with throwing stubs): `needs-action.ts` (`waitingSince`, `needsAction`), `needs-action-data.ts`, `NeedsActionSection` with stories (both groups, one group, empty, more than 10, partner user, Hebrew), `needsAction` messages in en and he, the overview reads all visible projects once (the recent five are a slice of them). No revalidation added: the overview is `force-dynamic` and "A tick restarts the wait" passes. Unit: 19 new tests; e2e `@task:124` 5/5 (implementer).
 - 2026-11-16 – Review fixes: the batch tick read returns only each project's current-stage ticks (`starts_with(item, stage || '.')`, DB test first; the board unchanged); the overview reads the stage changes of `openProjects` only (not canceled, not Job complete) and counts projects from the list it already reads (`countProjects` removed); a shared tick helper for the two e2e tick steps (implementer).
 - 2026-11-16 – In review: QA PASS (lint, typecheck, unit 607, db 194 + 38, build, Storybook; full e2e on a production build with `CI=true`, 2 workers: 387/389, the two attachments failures (task 059) under load, both pass alone; all 8 `@task:124` scenarios pass). Access audit: no leaks, three leak scenarios added. Review fix: ticks read only for the current stage, stage changes only for projects that can need action.
+- 2026-11-16 – Done (PR #128).
 
 ## Parking lot
 - A workspace setting for N.
