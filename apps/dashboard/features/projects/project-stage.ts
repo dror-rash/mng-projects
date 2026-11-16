@@ -54,6 +54,11 @@ export function stageOrder(value: string): number {
   return PROJECT_STAGES.findIndex((s) => s.stage === projectStage(value));
 }
 
+/** The stage after a stored one in the flow (an unknown value counts as Inquiry); null at Closed (task 121). */
+export function nextStage(value: string): ProjectStage | null {
+  return PROJECT_STAGES[stageOrder(value) + 1]?.stage ?? null;
+}
+
 export type StageChoice = { ok: true; value: ProjectStage | undefined } | { ok: false; field: "stage"; error: string };
 
 /** The form's Stage select: undefined when the form has none, an error for an empty or unknown value. */

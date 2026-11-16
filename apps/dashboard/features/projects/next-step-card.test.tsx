@@ -87,4 +87,20 @@ describe("NextStepCard", () => {
     expect(form(buttons[0]!)).toEqual({ projectId: "p1", item: "quote.costed", done: "false" });
     expect(form(buttons[1]!)).toEqual({ projectId: "p1", item: "quote.sent", done: "true" });
   });
+
+  const moveTo = { stage: "ordered", label: "Move to Ordered", moveAnyway: "Move anyway", cancel: "Cancel" };
+
+  it("gives whoever can change the project a button to the next stage", () => {
+    render(<NextStepCard {...props} moveTo={moveTo} moveAction={async () => ({})} />);
+    const button = within(region()).getByRole("button", { name: "Move to Ordered" });
+    expect(Object.fromEntries(new FormData(button.closest("form")!))).toEqual({ projectId: "p1", stage: "ordered", from: "next" });
+  });
+
+  it("has no button to the next stage without the action, or at Closed", () => {
+    render(<NextStepCard {...props} moveTo={moveTo} />);
+    expect(within(region()).queryByRole("button", { name: /^Move to/ })).not.toBeInTheDocument();
+    cleanup();
+    render(<NextStepCard {...props} moveAction={async () => ({})} />);
+    expect(within(region()).queryByRole("button", { name: /^Move to/ })).not.toBeInTheDocument();
+  });
 });

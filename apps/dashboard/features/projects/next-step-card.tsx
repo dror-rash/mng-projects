@@ -4,6 +4,9 @@ import { CheckIcon } from "@repo/ui/icons";
 import { cn } from "@repo/ui/lib/utils";
 import type { ReactNode } from "react";
 
+import type { FormState } from "@/features/forms/form-state";
+
+import { MoveToNextStage } from "./move-to-next-stage";
 import type { WhoseMove } from "./stage-checklist";
 import { WhoseMoveBadge } from "./whose-move-badge";
 
@@ -24,8 +27,10 @@ export type NextStepItem = {
 /**
  * The project page's "Next step" (task 120, ADR-0014): the stage line, whose move it is, "N of M done" and the
  * current stage's checklist. With `toggleAction` (whoever can change the project) each item is a submit button in
- * its own form, so it works before React hydrates; without it the same list has no buttons. The page passes the
- * server action and the translated text, so this stays free of server code.
+ * its own form, so it works before React hydrates; without it the same list has no buttons. With `moveTo` and
+ * `moveAction` (task 121: there is a next stage and whoever can change the project) the card ends with "Move to
+ * <next stage>", which asks first while items are open. The page passes the server actions and the translated
+ * text, so this stays free of server code.
  */
 export function NextStepCard({
   projectId,
@@ -38,6 +43,8 @@ export function NextStepCard({
   openLabel,
   items,
   toggleAction,
+  moveTo,
+  moveAction,
 }: {
   projectId: string;
   heading: string;
@@ -52,6 +59,9 @@ export function NextStepCard({
   openLabel: string;
   items: NextStepItem[];
   toggleAction?: (formData: FormData) => void | Promise<void>;
+  /** The next stage's stored value and the button's and question's text, translated; none at Closed. */
+  moveTo?: { stage: string; label: string; moveAnyway: string; cancel: string };
+  moveAction?: (state: FormState, formData: FormData) => Promise<FormState>;
 }) {
   return (
     <section aria-labelledby="next-step-heading">
@@ -98,6 +108,15 @@ export function NextStepCard({
               </li>
             ))}
           </ul>
+          {moveTo && moveAction && (
+            <MoveToNextStage
+              key={moveTo.stage}
+              projectId={projectId}
+              projectHref={`/projects/${projectId}`}
+              action={moveAction}
+              {...moveTo}
+            />
+          )}
         </CardContent>
       </Card>
     </section>

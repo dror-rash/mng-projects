@@ -69,8 +69,7 @@ Feature: Project stages
     Given I am signed in with an existing account
     And I have a project named "Panel upgrade"
     When I am on the "Panel upgrade" project page
-    And I choose "Made up" in "Stage" by editing the page
-    And I press "Change stage"
+    And I move the project to the stage "Made up" by editing the page
     Then I see the error "Choose a stage"
 
   @task:101
@@ -85,7 +84,7 @@ Feature: Project stages
     Then the project shows "Scheduled" since today
     And the auditor opens the "NW Site" project page
     Then the auditor sees the text "Scheduled"
-    And the auditor sees no "Change stage" button
+    And the auditor can't move the project to another stage
 
   @task:101
   Scenario: A worker sees the stage but can't change it
@@ -97,7 +96,7 @@ Feature: Project stages
     And I am on the crew of "NW Site"
     When I am on the "NW Site" project page
     Then I see the text "Ordered"
-    And I see no "Change stage" button
+    And I can't move the project to another stage
 
   @task:101
   Scenario: Another partner's project's stage can't be changed
@@ -112,7 +111,7 @@ Feature: Project stages
     When I open the address of the "GX App" project
     Then I see "Project not found", the same as for a made-up project address
     And the admin opens the "GX App" project page
-    Then the admin sees the text "Quote"
+    Then the admin sees the project at the stage "Quote"
 
   # Stage checklists and "whose move" (task 120, ADR-0014). Each stage has fixed items marked Us or Customer;
   # the first open item decides the badge: Our move, Waiting for customer, or Ready for next stage when all are done.
@@ -276,7 +275,7 @@ Feature: Project stages
   # "Change stage" button; three @task:101 scenarios are reworded in the task's first commit (see the task).
   # Phases: Sales (Inquiry, Quote, Ordered), Work (Scheduled, In work), Closing (Reporting, Billing, Closed).
 
-  @wip @task:121
+  @task:121
   Scenario: The stage bar shows where the project is
     Given I am signed in with an existing account
     And I have a project named "Panel upgrade"
@@ -288,7 +287,7 @@ Feature: Project stages
     And I reload the page
     Then the page does not scroll sideways
 
-  @wip @task:121
+  @task:121
   Scenario: Moving on when the checklist is done
     Given I am signed in with an existing account
     And I have a project named "Panel upgrade"
@@ -301,7 +300,7 @@ Feature: Project stages
     Then the project shows "Ordered" since today
     And I do not see the text "Move anyway?"
 
-  @wip @task:121
+  @task:121
   Scenario: Moving on with open items asks first
     Given I am signed in with an existing account
     And I have a project named "Panel upgrade"
@@ -317,7 +316,7 @@ Feature: Project stages
     And I press "Move anyway"
     Then the project shows "Ordered" since today
 
-  @wip @task:121
+  @task:121
   Scenario: At Closed there is no next stage
     Given I am signed in with an existing account
     And I have a project named "Panel upgrade"
@@ -326,3 +325,55 @@ Feature: Project stages
     Then the "Next step" section has no button starting with "Move to"
     When I tick "Work-completion report prepared and sent"
     Then the "Next step" section shows "Job complete"
+
+  # Leak scenarios from the task 121 access audit.
+  @task:121
+  Scenario: A worker on the crew can't move the project by posting "Move anyway"
+    Given a workspace with the partners "Northwind" and "Globex", an admin and an auditor
+    And the customer "Acme Ltd" is assigned to "Northwind" and "Globex"
+    And "Northwind" has the project "NW Site" for "Acme Ltd" with the task "Copy"
+    And the project "NW Site" is at the stage "Quote"
+    And I am signed in as a worker
+    And I am on the crew of "NW Site"
+    When I post "Move anyway" on "NW Site"
+    Then I see "Something went wrong", the same as with a made-up id
+    And the admin opens the "NW Site" project page
+    Then the admin sees the project at the stage "Quote"
+
+  @task:121
+  Scenario: An auditor can't move the project by posting the form
+    Given a workspace with the partners "Northwind" and "Globex", an admin and an auditor
+    And the customer "Acme Ltd" is assigned to "Northwind" and "Globex"
+    And "Northwind" has the project "NW Site" for "Acme Ltd" with the task "Copy"
+    And the project "NW Site" is at the stage "Quote"
+    And I am signed in as an auditor
+    When I post a stage change of "NW Site" to "Ordered"
+    Then I see "Something went wrong", the same as with a made-up id
+    And the admin opens the "NW Site" project page
+    Then the admin sees the project at the stage "Quote"
+
+  @task:121
+  Scenario: "Move to" on another partner's project doesn't tell how many items are open
+    Given a workspace with the partners "Northwind" and "Globex", an admin and an auditor
+    And the customer "Acme Ltd" is assigned to "Northwind" and "Globex"
+    And "Northwind" has the project "NW Site" for "Acme Ltd" with the task "Copy"
+    And "Globex" has the project "GX App" for "Acme Ltd" with the task "Login"
+    And the project "GX App" is at the stage "Quote"
+    And I am signed in as a user of "Northwind"
+    When I post "Move to" on "GX App"
+    Then I see "Something went wrong", the same as with a made-up id
+    And I do not see the text "Move anyway?"
+    And the admin opens the "GX App" project page
+    Then the admin sees the project at the stage "Quote"
+
+  # A page left open while another tab moved the project (task 121 review).
+  @task:121
+  Scenario: "Move to" from a page left open doesn't move the project back
+    Given I am signed in with an existing account
+    And I have a project named "Panel upgrade"
+    And the project "Panel upgrade" is at the stage "Quote"
+    When I am on the "Panel upgrade" project page
+    And the project "Panel upgrade" is moved to "Scheduled" in another tab
+    And I press "Move to Ordered"
+    Then the project shows "Scheduled" since today
+    And I do not see the text "Move anyway?"
