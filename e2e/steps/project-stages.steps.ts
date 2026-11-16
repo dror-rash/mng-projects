@@ -99,7 +99,8 @@ const CHECKLIST_KEYS: Record<string, string> = {
   "Work-completion report prepared and sent": "closed.completion_report",
 };
 
-const nextStep = (page: Page) => page.getByRole("region", { name: "Next step", exact: true });
+// Named by its heading, "Next step" or, in Hebrew, "הצעד הבא" (task 120).
+const nextStep = (page: Page) => page.getByRole("region", { name: /^(Next step|הצעד הבא)$/ });
 
 /** The checklist item that starts with `label` (its party tag and who ticked it follow). */
 const checklistItem = (page: Page, label: string) =>
