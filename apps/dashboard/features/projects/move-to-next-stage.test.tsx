@@ -13,7 +13,6 @@ const props = { projectId: "p1", stage: "ordered", projectHref: "/projects/p1", 
 const question: FormState = {
   error: "2 items are still open in this stage. Move anyway?",
   field: "confirm",
-  values: { stage: "ordered" },
 };
 
 afterEach(cleanup);

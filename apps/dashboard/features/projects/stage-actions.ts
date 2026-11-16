@@ -7,7 +7,7 @@ import { requireActionSession } from "@/features/auth/require-session";
 import { type FormState, invalid } from "@/features/forms/form-state";
 import { redirectFromAction } from "@/features/navigation/redirect-from-action";
 
-import { parseStageChoice } from "./project-stage";
+import { nextStage, parseStageChoice } from "./project-stage";
 import { requireProjectAccess } from "./require-project-access";
 import { revalidateOverviews } from "./revalidate";
 import { openItemCount } from "./stage-checklist";
@@ -20,8 +20,9 @@ import { openItemCount } from "./stage-checklist";
  * "Move to <next stage>" (task 121, ADR-0014) posts `from=next`: while the current stage's checklist has open
  * items it changes nothing and returns the question ("2 items are still open in this stage. Move anyway?") on
  * the `confirm` field; "Move anyway" posts again with `confirm=yes`. The open items are counted here, after
- * the lock, never taken from the page; the confirm field only skips the question. Posts from the stage bar
- * move at once.
+ * the lock, never taken from the page; the confirm field only skips the question. A `from=next` post for a
+ * stage that isn't the next one any more (a page left open while another tab moved the project) changes nothing
+ * and goes back to the project page, without a message. Posts from the stage bar move at once.
  */
 export async function changeStageAction(_prev: FormState, formData: FormData): Promise<FormState> {
   const session = await requireActionSession();
@@ -37,14 +38,19 @@ export async function changeStageAction(_prev: FormState, formData: FormData): P
       .from(schema.project)
       .where(eq(schema.project.id, project.id))
       .for("update");
-    if (locked && formData.get("from") === "next" && formData.get("confirm") !== "yes") {
+    const fromNext = formData.get("from") === "next";
+    // A "Move to" from a page left open after the project moved on (another tab): nothing to do, the page reloads.
+    if (locked && fromNext && choice.value !== nextStage(locked.stage)) {
+      return { id: project.id };
+    }
+    if (locked && fromNext && formData.get("confirm") !== "yes") {
       const ticks = await db
         .select({ item: schema.projectChecklistTick.item })
         .from(schema.projectChecklistTick)
         .where(eq(schema.projectChecklistTick.projectId, project.id));
       const open = openItemCount(locked.stage, ticks.map((t) => t.item));
       if (open > 0) {
-        return { ask: { open, stage: choice.value } };
+        return { ask: { open } };
       }
     }
     if (locked && locked.stage !== choice.value) {
@@ -55,7 +61,7 @@ export async function changeStageAction(_prev: FormState, formData: FormData): P
   });
   if ("ask" in result && result.ask) {
     const t = await getTranslations("stageChecklist");
-    return { error: t("openItems", { count: result.ask.open }), field: "confirm", values: { stage: result.ask.stage } };
+    return { error: t("openItems", { count: result.ask.open }), field: "confirm" };
   }
   if (!("id" in result)) {
     return result;

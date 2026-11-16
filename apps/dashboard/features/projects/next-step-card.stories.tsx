@@ -125,7 +125,7 @@ export const MoveWithOpenItems: Story = {
     progress: "1 of 3 done",
     items: quote(1),
     moveTo,
-    moveAction: async () => ({ error: "2 items are still open in this stage. Move anyway?", field: "confirm", values: { stage: "ordered" } }),
+    moveAction: async () => ({ error: "2 items are still open in this stage. Move anyway?", field: "confirm" }),
   },
   play: async ({ canvasElement }) => {
     const card = within(canvasElement).getByRole("region", { name: "Next step" });
@@ -141,7 +141,7 @@ export const MoveWithOpenItemsHebrew: Story = {
   args: {
     ...Hebrew.args,
     moveTo: { stage: "ordered", label: "העבר ל־הוזמן", moveAnyway: "העבר בכל זאת", cancel: "ביטול" },
-    moveAction: async () => ({ error: "פריט אחד עדיין פתוח בשלב הזה. להעביר בכל זאת?", field: "confirm", values: { stage: "ordered" } }),
+    moveAction: async () => ({ error: "פריט אחד עדיין פתוח בשלב הזה. להעביר בכל זאת?", field: "confirm" }),
   },
   decorators: Hebrew.decorators,
   play: async ({ canvasElement }) => {

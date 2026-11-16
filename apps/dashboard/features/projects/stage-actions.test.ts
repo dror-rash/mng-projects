@@ -136,8 +136,8 @@ describe("changeStageAction", () => {
     expect(state).toMatchObject({
       error: "2 items are still open in this stage. Move anyway?",
       field: "confirm",
-      values: { stage: "ordered" },
     });
+    expect(state).not.toHaveProperty("values");
     expect(db.updates).toEqual([]);
     expect(db.inserts).toEqual([]);
     expect(redirected).not.toHaveBeenCalled();
