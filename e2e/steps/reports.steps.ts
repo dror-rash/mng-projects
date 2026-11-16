@@ -60,7 +60,7 @@ Then("the admin sees no reports on {string}", async ({ people, state }, project:
 });
 
 /** A user of the partner (signed up and made a member on first use), in a browser of their own. */
-async function partnerUser(state: ScenarioState, people: People, partner: string) {
+export async function partnerUser(state: ScenarioState, people: People, partner: string) {
   const key = `${partner} user`;
   const known = state.accounts?.[key]?.page;
   if (known) return known;

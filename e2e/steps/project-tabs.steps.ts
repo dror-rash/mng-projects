@@ -1,7 +1,8 @@
 import { expect, type Page } from "@playwright/test";
 
 import { Then, When } from "./fixtures";
-import { ids } from "./partner-access.steps";
+import { ids, pageOf, projectPath } from "./partner-access.steps";
+import { partnerUser } from "./reports.steps";
 import { myRecordId } from "./sites.steps";
 
 // Project page tabs (task 122): a list of links named "Project sections" (Hebrew "חלקי הפרויקט") under the stage
@@ -47,5 +48,34 @@ When(
     const id = ids(state)[project] ?? (await myRecordId(page, "project", project));
     await page.goto(`/dashboard/projects/${id}${suffix}`);
     await expect(page.getByRole("heading", { name: project, level: 1 })).toBeVisible();
+  },
+);
+
+// Another person's page at a tab's address (`?tab=work` for "Work"), the way they'd land there from a link.
+const TAB_VALUES: Record<string, string> = {
+  Overview: "overview",
+  Sales: "sales",
+  Work: "work",
+  Reports: "reports",
+  Billing: "billing",
+};
+
+async function openTabOf(page: Page, path: string, tab: string, project: string) {
+  const value = TAB_VALUES[tab];
+  expect(value, `no tab named "${tab}"`).toBeDefined();
+  await page.goto(`${path}?tab=${value}`);
+  await expect(page.getByRole("heading", { name: project, level: 1 })).toBeVisible();
+}
+
+for (const who of ["admin", "auditor"] as const) {
+  When(`the ${who} opens the {string} tab of the {string} project`, async ({ people, state }, tab: string, project: string) => {
+    await openTabOf(await pageOf(state, people, who), projectPath(state, project), tab, project);
+  });
+}
+
+When(
+  "the {string} user opens the {string} tab of the {string} project",
+  async ({ people, state }, partner: string, tab: string, project: string) => {
+    await openTabOf(await partnerUser(state, people, partner), projectPath(state, project), tab, project);
   },
 );
