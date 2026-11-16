@@ -86,5 +86,12 @@
     "days": "{days, plural, one {1 day} other {# days}}",
     "longWait": "more than {days, number} days in this stage",
     "canceled": "Canceled"
+  },
+  "needsAction": {
+    "heading": "Needs action",
+    "ourMove": "Our move",
+    "waitingForCustomer": "Waiting for customer",
+    "empty": "Nothing needs action.",
+    "viewAll": "View all on the board"
   }
 }

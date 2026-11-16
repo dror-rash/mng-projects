@@ -86,5 +86,12 @@
     "days": "{days, plural, one {יום אחד} two {יומיים} other {# ימים}}",
     "longWait": "יותר מ־{days, number} ימים בשלב הזה",
     "canceled": "בוטל"
+  },
+  "needsAction": {
+    "heading": "צריך טיפול",
+    "ourMove": "תורנו",
+    "waitingForCustomer": "ממתין ללקוח",
+    "empty": "אין כרגע מה לטפל.",
+    "viewAll": "הצג הכול בלוח"
   }
 }

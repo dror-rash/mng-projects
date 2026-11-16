@@ -5,13 +5,15 @@ import { getMaintenanceDb } from "@repo/db/maintenance";
 import { Given, Then, When } from "./fixtures";
 import { ids, idOf, pageOf, projectPath, shownText } from "./partner-access.steps";
 import { chooseCustomerAndSite } from "./project-form";
-import { expectAuditorSees } from "./sites.steps";
+import { expectAuditorSees, myRecordId } from "./sites.steps";
 import { pressAndWait } from "./workspaces.steps";
 
 // Cancel and copy (task 050), in the leak suite's two-partner workspace (partner-access.steps.ts).
 
-Given("the project {string} is canceled", async ({ state }, project: string) => {
-  await getMaintenanceDb().update(schema.project).set({ lifecycle: "canceled" }).where(eq(schema.project.id, idOf(state, project)));
+// A project of the leak workspace, else one of mine by its name (task 124 cancels one of mine).
+Given("the project {string} is canceled", async ({ page, state }, project: string) => {
+  const id = state.ids?.[project] ?? (await myRecordId(page, "project", project));
+  await getMaintenanceDb().update(schema.project).set({ lifecycle: "canceled" }).where(eq(schema.project.id, id));
 });
 
 Given("the task {string} is in progress and assigned to the admin", async ({ state }, task: string) => {

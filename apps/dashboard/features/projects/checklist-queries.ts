@@ -1,4 +1,4 @@
-import { and, eq, getDb, inArray, schema, withAccess } from "@repo/db";
+import { and, eq, getDb, inArray, schema, sql, withAccess } from "@repo/db";
 
 import { todayUtc } from "@/features/tasks/due-dates";
 
@@ -30,9 +30,11 @@ export async function listChecklistTicks(userId: string, projectId: string): Pro
 export type ProjectChecklistTick = { projectId: string; item: string; tickedAt: Date };
 
 /**
- * The ticked checklist items of the listed projects, every stage's, in one query (the stage board, task 123; task
- * 124): the caller groups them by project. Only the workspace's projects `userId` can see and not deleted, whatever
- * ids are asked for (`visibleProjects`, on top of RLS).
+ * The ticked checklist items of the listed projects' current stages, in one query (the stage board, task 123; Needs
+ * action, task 124): the caller groups them by project. Item keys start with their stage ("quote.sent"), so other
+ * stages' ticks, which don't count for whose move or the wait (ADR-0014), stay in the database; a project at an
+ * unknown stored stage gets none. Only the workspace's projects `userId` can see and not deleted, whatever ids are
+ * asked for (`visibleProjects`, on top of RLS).
  */
 export async function listChecklistTicksForProjects(userId: string, workspaceId: string, projectIds: string[]): Promise<ProjectChecklistTick[]> {
   if (projectIds.length === 0) return [];
@@ -45,6 +47,12 @@ export async function listChecklistTicksForProjects(userId: string, workspaceId:
       })
       .from(schema.projectChecklistTick)
       .innerJoin(schema.project, eq(schema.projectChecklistTick.projectId, schema.project.id))
-      .where(and(inArray(schema.projectChecklistTick.projectId, projectIds), visibleProjects(userId, workspaceId))),
+      .where(
+        and(
+          inArray(schema.projectChecklistTick.projectId, projectIds),
+          visibleProjects(userId, workspaceId),
+          sql`starts_with(${schema.projectChecklistTick.item}, ${schema.project.stage} || '.')`,
+        ),
+      ),
   );
 }
