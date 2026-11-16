@@ -1,6 +1,6 @@
 # Task 123: Stage board view of the projects list
 
-- **Status:** todo
+- **Status:** in-progress
 - **Milestone:** M22 Guided project flow
 - **Zone / package:** `apps/dashboard` (`app/projects`, `features/projects`, `messages/`), `e2e`
 - **Feature file:** `docs/features/project-board.feature` (`@task:123`; a file of its own, since `project-list.feature` carries `@task:043` and a Background on every scenario)
@@ -62,6 +62,7 @@ None blocking. Defaults taken:
 ## Progress log
 - 2026-11-15 – Drafted with `project-board.feature` (`@wip`) (planner).
 - 2026-11-16 – Readiness check against task 120 as merged (PR #124): the query renamed `listChecklistTicksForProjects` (task 120 already has `listChecklistTicks` for one project); `STAGE_PHASES` shared with task 121; step notes for the board's cards. READY (planner).
+- 2026-11-16 – In progress in lane 2 (`feat/stage-board`, database `app_lane2`, shell http://localhost:3020).
 
 ## Parking lot
 - Drag a card to another column to move its stage (owner-approved to park; it would go through `changeStageAction`).
