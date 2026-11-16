@@ -14,7 +14,10 @@ export const PROJECT_TABS = [
 
 export type ProjectTab = (typeof PROJECT_TABS)[number]["tab"];
 
-/** A tab of the list, or null for anything else (no tab, a made-up one, a repeated `?tab=`). */
+/**
+ * A tab of the list, or null for anything else (no tab, a made-up one, a list). The page passes the first `?tab=`
+ * value (`firstParam`), so `?tab=work&tab=x` opens Work.
+ */
 export function parseProjectTab(value: unknown): ProjectTab | null {
   return PROJECT_TABS.find((t) => t.tab === value)?.tab ?? null;
 }
