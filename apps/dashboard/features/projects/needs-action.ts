@@ -1,6 +1,8 @@
-import type { CalendarDate } from "@/features/tasks/due-dates";
+import { type CalendarDate, todayUtc } from "@/features/tasks/due-dates";
 
-import type { WhoseMove } from "./stage-checklist";
+import { isCanceled } from "./project-lifecycle";
+import { daysInStage, isLongWait, movesByProject, stageSince } from "./stage-board";
+import { checklistFor, type WhoseMove } from "./stage-checklist";
 
 /**
  * "Needs action" on the overview (task 124): active projects whose move is ours (Ready for next stage included)
@@ -20,11 +22,15 @@ export type NeedsActionGroup = (typeof NEEDS_ACTION_GROUPS)[number];
  * stages' ticks don't count.
  */
 export function waitingSince(
-  _stage: string,
-  _stageStart: CalendarDate,
-  _ticks: readonly { item: string; tickedAt: Date }[],
+  stage: string,
+  stageStart: CalendarDate,
+  ticks: readonly { item: string; tickedAt: Date }[],
 ): CalendarDate {
-  throw new Error("not implemented");
+  const items = new Set<string>(checklistFor(stage).map((i) => i.key));
+  return ticks
+    .filter((t) => items.has(t.item))
+    .map((t) => todayUtc(t.tickedAt))
+    .reduce((latest, day) => (day > latest ? day : latest), stageStart);
 }
 
 type NeedsActionProject = { id: string; name: string; stage: string; lifecycle: string; createdAt: Date };
@@ -36,10 +42,30 @@ export type NeedsActionEntry<T> = T & { move: WhoseMove; days: number };
  * group had more than `NEEDS_ACTION_LIMIT`.
  */
 export function needsAction<T extends NeedsActionProject>(
-  _projects: readonly T[],
-  _ticks: readonly { projectId: string; item: string; tickedAt: Date }[],
-  _changedAt: ReadonlyMap<string, Date>,
-  _today: CalendarDate,
+  projects: readonly T[],
+  ticks: readonly { projectId: string; item: string; tickedAt: Date }[],
+  changedAt: ReadonlyMap<string, Date>,
+  today: CalendarDate,
 ): { group: NeedsActionGroup; projects: NeedsActionEntry<T>[]; more: boolean }[] {
-  throw new Error("not implemented");
+  const active = projects.filter((p) => !isCanceled(p.lifecycle));
+  const moves = movesByProject(active, ticks);
+  const ticksOf = new Map<string, (typeof ticks)[number][]>();
+  for (const t of ticks) ticksOf.set(t.projectId, [...(ticksOf.get(t.projectId) ?? []), t]);
+  const entries = active
+    .map((p) => {
+      const since = waitingSince(p.stage, stageSince(changedAt.get(p.id) ?? null, p.createdAt), ticksOf.get(p.id) ?? []);
+      return { ...p, move: moves.get(p.id)!, days: daysInStage(since, today) };
+    })
+    .filter((p) => isLongWait(p.days))
+    .sort((a, b) => b.days - a.days || a.name.localeCompare(b.name));
+  return NEEDS_ACTION_GROUPS.map((group) => {
+    const listed = entries.filter((p) => groupOf(p.move) === group);
+    return { group, projects: listed.slice(0, NEEDS_ACTION_LIMIT), more: listed.length > NEEDS_ACTION_LIMIT };
+  });
+}
+
+/** The group of a move: Ready for next stage is ours too; a finished job is in none. */
+function groupOf(move: WhoseMove): NeedsActionGroup | null {
+  if (move === "our_move" || move === "ready") return "our_move";
+  return move === "waiting_for_customer" ? "waiting_for_customer" : null;
 }
