@@ -3,7 +3,7 @@
 import { FieldError } from "@repo/ui/field-error";
 import { CheckIcon } from "@repo/ui/icons";
 import { cn } from "@repo/ui/lib/utils";
-import { useActionState, useEffect, useRef } from "react";
+import { useActionState, useEffect, useId, useRef } from "react";
 
 import type { FormState } from "@/features/forms/form-state";
 
@@ -19,7 +19,9 @@ const noAction = async (): Promise<FormState> => ({});
  * behind it checked and "done" for screen readers, the current one ringed and `aria-current="step"`, later ones
  * muted. With `action` (whoever can change the project) every other stage is a submit button in its own form
  * that moves the project there at once, forward or back, before React hydrates too; a refused stage's error
- * shows above the bar. On a narrow screen the bar scrolls inside itself, the current stage scrolled into view.
+ * shows above the bar. On a narrow screen the bar scrolls inside itself (focusable for those without buttons
+ * on it), the current stage centred when it is out of view; only the bar scrolls, never the page. The phases are
+ * h3s under a visually hidden "Stages" h2 that names the group.
  */
 export function StageBar({
   projectId,
@@ -45,19 +47,37 @@ export function StageBar({
   const order = phases.flatMap((p) => p.stages.map((s) => s.value));
   const currentIndex = order.indexOf(current);
   const currentRef = useRef<HTMLLIElement>(null);
+  const barRef = useRef<HTMLDivElement>(null);
+  const headingId = useId();
 
+  // Centre the current stage when it is out of the bar's view. Boxes and scrollLeft are physical (left to right)
+  // in both directions, so the same arithmetic holds right to left.
   useEffect(() => {
-    currentRef.current?.scrollIntoView({ block: "nearest", inline: "nearest" });
+    const bar = barRef.current;
+    const item = currentRef.current;
+    if (!bar || !item) return;
+    const view = bar.getBoundingClientRect();
+    const box = item.getBoundingClientRect();
+    if (box.left >= view.left && box.right <= view.right) return;
+    bar.scrollLeft = bar.scrollLeft + box.left - view.left - (view.width - box.width) / 2;
   }, [current]);
 
   return (
     <div className="min-w-0 space-y-2">
       <FieldError message={error} />
-      <div role="group" aria-label={label} className="overflow-x-auto pb-1">
+      <h2 id={headingId} className="sr-only">{label}</h2>
+      <div
+        ref={barRef}
+        role="group"
+        aria-labelledby={headingId}
+        // Without buttons nothing on the bar takes focus, so the bar itself does, for scrolling by keyboard.
+        tabIndex={action ? undefined : 0}
+        className="overflow-x-auto pb-1 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+      >
         <ol className="flex w-max gap-4">
           {phases.map((phase) => (
             <li key={phase.phase} className="space-y-1">
-              <h2 className="px-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">{phase.label}</h2>
+              <h3 className="px-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">{phase.label}</h3>
               <ol className="flex gap-1">
                 {phase.stages.map((s) => {
                   const index = order.indexOf(s.value);
