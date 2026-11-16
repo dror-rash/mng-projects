@@ -63,6 +63,7 @@ None blocking. Defaults taken:
 - 2026-11-16 – Readiness check against tasks 120 (PR #124) and 123 (PR #126) as merged: reuses 123's batch reads (with `workspaceId`) and `stage-board.ts` helpers; the wait counts only the current stage's ticks; step notes for the new tick step (UTC times) and `the project {string} is canceled` on a project of mine. Scenarios unchanged. READY (planner).
 - 2026-11-16 – In progress in lane 2 (`feat/needs-action`, database `app_lane2`, shell http://localhost:3020).
 - 2026-11-16 – `@wip` removed; new step `the checklist item {string} of {string} was ticked {int} days ago` (UTC `ticked_at`), `the project {string} is canceled` falls back to one of my projects. Red run: all 5 scenarios fail at their first Then, no "Our move" / "Needs action" region on the overview (spec-writer).
+- 2026-11-16 – Implemented (TDD, red commits with throwing stubs): `needs-action.ts` (`waitingSince`, `needsAction`), `needs-action-data.ts`, `NeedsActionSection` with stories (both groups, one group, empty, more than 10, partner user, Hebrew), `needsAction` messages in en and he, the overview reads all visible projects once (the recent five are a slice of them). No revalidation added: the overview is `force-dynamic` and "A tick restarts the wait" passes. Unit: 19 new tests; e2e `@task:124` 5/5 (implementer).
 
 ## Parking lot
 - A workspace setting for N.
