@@ -167,13 +167,13 @@ When("I post the delete form of the visit {string}", async ({ page, state }, not
 
 Then("the admin sees the visit {string} on {string}", async ({ people, state }, notes: string, project: string) => {
   const admin = await pageOf(state, people, "admin");
-  await admin.goto(projectPath(state, project));
+  await admin.goto(`${projectPath(state, project)}?tab=work`);
   await expect(visitsSection(admin)).toContainText(notes);
 });
 
 Then("the admin sees no visits on {string}", async ({ people, state }, project: string) => {
   const admin = await pageOf(state, people, "admin");
-  await admin.goto(projectPath(state, project));
+  await admin.goto(`${projectPath(state, project)}?tab=work`);
   await expect(visitsSection(admin)).toContainText("No visits yet.");
 });
 

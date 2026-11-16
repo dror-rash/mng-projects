@@ -9,7 +9,7 @@ Feature: Project page tabs
   # every tab. Projects written by fixtures start at Inquiry, so they open on Overview. Pages and actions that
   # lead back to the project return to the tab they belong to; a stage move opens the new stage's tab.
 
-  @wip @task:122
+  @task:122
   Scenario Outline: The project page opens on the current stage's tab
     Given I am signed in with an existing account
     And I have a project named "Panel upgrade"
@@ -28,7 +28,7 @@ Feature: Project page tabs
       | Billing   | Billing  |
       | Closed    | Reports  |
 
-  @wip @task:122
+  @task:122
   Scenario: Each tab shows its own sections
     Given I am signed in with an existing account
     And I have a project named "Panel upgrade"
@@ -42,7 +42,7 @@ Feature: Project page tabs
     When I open the "Reports" tab
     Then the page shows the sections "Reports"
 
-  @wip @task:122
+  @task:122
   Scenario: A tab has its own address
     Given I am signed in with an existing account
     And I have a project named "Panel upgrade"
@@ -56,7 +56,7 @@ Feature: Project page tabs
     When I open the "Panel upgrade" project page with "?tab=made-up" in its address
     Then the "Work" tab is open
 
-  @wip @task:122
+  @task:122
   Scenario: Sales and Billing say what will come
     Given I am signed in with an existing account
     And I have a project named "Panel upgrade"
@@ -66,7 +66,7 @@ Feature: Project page tabs
     When I open the "Billing" tab
     Then I see the text "Bills will show here."
 
-  @wip @task:122
+  @task:122
   Scenario: The tabs on a phone, in Hebrew
     Given I am signed in with an existing account
     And my language cookie is set to "he"
@@ -80,7 +80,7 @@ Feature: Project page tabs
     When I open the "דוחות" tab
     Then the "דוחות" tab is open
 
-  @wip @task:122
+  @task:122
   Scenario: Coming back to the tab I was on
     Given I am signed in with an existing account
     And I have a project named "Panel upgrade"
@@ -101,7 +101,7 @@ Feature: Project page tabs
     When I change the stage to "Billing"
     Then the "Billing" tab is open
 
-  @wip @task:122
+  @task:122
   Scenario: A task's page leads back to the Overview tab
     Given I am signed in with an existing account
     And I have a project named "Panel upgrade"
@@ -117,7 +117,7 @@ Feature: Project page tabs
     Then the "Overview" tab is open
     And I do not see the task "Label circuits"
 
-  @wip @task:122
+  @task:122
   Scenario: A worker lands on the Work tab
     Given a workspace with the partners "Northwind" and "Globex", an admin and an auditor
     And the customer "Acme Ltd" is assigned to "Northwind" and "Globex"

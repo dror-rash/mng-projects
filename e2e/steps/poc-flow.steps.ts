@@ -60,7 +60,7 @@ for (const role of ["worker", "partner user"] as const) {
 When("the worker records a visit with the notes {string}", async ({ state }, notes: string) => {
   const worker = person(state, "worker");
   expect(worker.projectPath, "the worker hasn't opened a project").toBeDefined();
-  await worker.page.goto(worker.projectPath!);
+  await worker.page.goto(`${worker.projectPath!}?tab=work`);
   await worker.page.getByRole("link", { name: "Record a visit", exact: true }).click();
   await expect(worker.page.getByRole("heading", { name: "Record a visit", level: 1 })).toBeVisible();
   await worker.page.getByLabel("Notes", { exact: true }).fill(notes);

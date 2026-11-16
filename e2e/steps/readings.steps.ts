@@ -172,7 +172,7 @@ When(
 
 Then("the admin sees no readings on {string}", async ({ people, state }, project: string) => {
   const admin = await pageOf(state, people, "admin");
-  await admin.goto(projectPath(state, project));
+  await admin.goto(`${projectPath(state, project)}?tab=work`);
   await expect(admin.getByRole("heading", { name: project, level: 1 })).toBeVisible();
   await expect(readingsSection(admin)).toContainText("No readings yet.");
   await expect(readingsSection(admin).getByRole("listitem")).toHaveCount(0);
