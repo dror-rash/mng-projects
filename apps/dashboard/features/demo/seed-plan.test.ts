@@ -87,7 +87,7 @@ describe("buildDemoPlan", () => {
 
   it("shows every badge across the demo projects (task 120)", () => {
     const moves = new Set(projects.map((p) => whoseMove(p.stage, p.ticks.map((t) => t.item))));
-    expect(moves).toEqual(new Set(WHOSE_MOVE));
+    expect(moves).toEqual(new Set(WHOSE_MOVE.map((m) => m.move)));
   });
 
   it("gives each customer contacts with one primary, and notes", () => {

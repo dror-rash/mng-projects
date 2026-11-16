@@ -37,22 +37,28 @@ export type ChecklistParty = ChecklistItem["party"];
 
 /**
  * Whose move it is at a stage (ADR-0014): the first open item decides; with everything done the project is
- * ready for its next stage, or, at Closed, complete.
+ * ready for its next stage, or, at Closed, complete. `labelKey` is a key in the `stageChecklist.move` messages;
+ * `chartSlot` is the badge's color (`--chart-N`, task 118): amber for our move, blue while waiting, green when done.
  */
-export const WHOSE_MOVE = ["our_move", "waiting_for_customer", "ready", "complete"] as const;
+export const WHOSE_MOVE = [
+  { move: "our_move", labelKey: "ourMove", chartSlot: 4 },
+  { move: "waiting_for_customer", labelKey: "waitingForCustomer", chartSlot: 1 },
+  { move: "ready", labelKey: "ready", chartSlot: 3 },
+  { move: "complete", labelKey: "complete", chartSlot: 3 },
+] as const;
 
-export type WhoseMove = (typeof WHOSE_MOVE)[number];
+export type WhoseMove = (typeof WHOSE_MOVE)[number]["move"];
 
-const WHOSE_MOVE_LABEL_KEYS = {
-  our_move: "ourMove",
-  waiting_for_customer: "waitingForCustomer",
-  ready: "ready",
-  complete: "complete",
-} as const satisfies Record<WhoseMove, string>;
+const whoseMoveEntry = (move: WhoseMove) => WHOSE_MOVE.find((m) => m.move === move)!;
 
 /** The badge's message key in `stageChecklist.move`. */
 export function whoseMoveLabelKey(move: WhoseMove) {
-  return WHOSE_MOVE_LABEL_KEYS[move];
+  return whoseMoveEntry(move).labelKey;
+}
+
+/** The badge's chart color slot. */
+export function whoseMoveChartSlot(move: WhoseMove) {
+  return whoseMoveEntry(move).chartSlot;
 }
 
 export function parseChecklistItem(value: unknown): ChecklistItemKey | null {

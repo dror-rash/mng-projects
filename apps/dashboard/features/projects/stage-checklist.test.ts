@@ -7,7 +7,15 @@ import en from "../../messages/en.json";
 import he from "../../messages/he.json";
 
 import { PROJECT_STAGES } from "./project-stage";
-import { checklistFor, parseChecklistItem, STAGE_CHECKLIST, WHOSE_MOVE, whoseMove, whoseMoveLabelKey } from "./stage-checklist";
+import {
+  checklistFor,
+  parseChecklistItem,
+  STAGE_CHECKLIST,
+  WHOSE_MOVE,
+  whoseMove,
+  whoseMoveChartSlot,
+  whoseMoveLabelKey,
+} from "./stage-checklist";
 
 describe("STAGE_CHECKLIST", () => {
   it("lists the twenty items in display order, stage by stage", () => {
@@ -132,17 +140,28 @@ describe("whoseMove", () => {
 
 describe("whoseMoveLabelKey", () => {
   it("has the badges' texts in English and Hebrew", () => {
-    expect(WHOSE_MOVE.map((m) => en.stageChecklist.move[whoseMoveLabelKey(m)])).toEqual([
+    expect(WHOSE_MOVE.map((m) => en.stageChecklist.move[whoseMoveLabelKey(m.move)])).toEqual([
       "Our move",
       "Waiting for customer",
       "Ready for next stage",
       "Job complete",
     ]);
-    expect(WHOSE_MOVE.map((m) => he.stageChecklist.move[whoseMoveLabelKey(m)])).toEqual([
+    expect(WHOSE_MOVE.map((m) => he.stageChecklist.move[whoseMoveLabelKey(m.move)])).toEqual([
       "תורנו",
       "ממתין ללקוח",
       "מוכן לשלב הבא",
       "העבודה הושלמה",
+    ]);
+  });
+});
+
+describe("whoseMoveChartSlot", () => {
+  it("colors the badge from the chart palette: amber for our move, blue while waiting, green when done", () => {
+    expect(WHOSE_MOVE.map((m) => [m.move, whoseMoveChartSlot(m.move)])).toEqual([
+      ["our_move", 4],
+      ["waiting_for_customer", 1],
+      ["ready", 3],
+      ["complete", 3],
     ]);
   });
 });

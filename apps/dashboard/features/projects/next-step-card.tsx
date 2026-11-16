@@ -4,7 +4,7 @@ import { CheckIcon } from "@repo/ui/icons";
 import { cn } from "@repo/ui/lib/utils";
 import type { ReactNode } from "react";
 
-import type { WhoseMove } from "./stage-checklist";
+import { type WhoseMove, whoseMoveChartSlot } from "./stage-checklist";
 
 /** A checklist item as the card shows it, its text translated by the page. */
 export type NextStepItem = {
@@ -20,12 +20,11 @@ export type NextStepItem = {
   tickedOnText: string | null;
 };
 
-/** The badge's colors, from the chart palette (task 118): amber, blue, and green when the stage is done. */
-const MOVE_COLORS: Record<WhoseMove, string> = {
-  our_move: "border-chart-4 bg-chart-4/15",
-  waiting_for_customer: "border-chart-1 bg-chart-1/15",
-  ready: "border-chart-3 bg-chart-3/15",
-  complete: "border-chart-3 bg-chart-3/15",
+/** The badge's colors by its chart slot (task 118, `whoseMoveChartSlot`); the text stays the foreground's. */
+const SLOT_COLORS: Record<ReturnType<typeof whoseMoveChartSlot>, string> = {
+  1: "border-chart-1 bg-chart-1/15",
+  3: "border-chart-3 bg-chart-3/15",
+  4: "border-chart-4 bg-chart-4/15",
 };
 
 /**
@@ -66,7 +65,7 @@ export function NextStepCard({
         <CardHeader className="gap-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <CardTitle id="next-step-heading" className="text-base">{heading}</CardTitle>
-            <Badge className={cn("border text-foreground", MOVE_COLORS[move])}>{moveLabel}</Badge>
+            <Badge className={cn("border text-foreground", SLOT_COLORS[whoseMoveChartSlot(move)])}>{moveLabel}</Badge>
           </div>
           {stageLine}
         </CardHeader>

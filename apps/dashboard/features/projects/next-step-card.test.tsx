@@ -34,6 +34,17 @@ describe("NextStepCard", () => {
     expect(within(region()).getByText("1 of 3 done")).toBeInTheDocument();
   });
 
+  it("colors the badge from its chart slot", () => {
+    render(<NextStepCard {...props} />);
+    expect(within(region()).getByText("Our move")).toHaveClass("border-chart-4", "bg-chart-4/15");
+    cleanup();
+    render(<NextStepCard {...props} move="waiting_for_customer" moveLabel="Waiting for customer" />);
+    expect(within(region()).getByText("Waiting for customer")).toHaveClass("border-chart-1", "bg-chart-1/15");
+    cleanup();
+    render(<NextStepCard {...props} move="complete" moveLabel="Job complete" />);
+    expect(within(region()).getByText("Job complete")).toHaveClass("border-chart-3", "bg-chart-3/15");
+  });
+
   it("lists the items in order, each starting with its text, with its party", () => {
     render(<NextStepCard {...props} />);
     const listItems = within(region()).getAllByRole("listitem");
