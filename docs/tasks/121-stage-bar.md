@@ -76,6 +76,7 @@ None blocking. Defaults taken:
 - 2026-11-15 – Drafted with `@wip` scenarios in `project-stages.feature` (planner).
 - 2026-11-16 – Readiness check against task 120 as merged (PR #124): dependencies and reused steps named after the real code; the bar and the button use `useActionState` so their messages show; `STAGE_PHASES` shared with task 123. READY (planner).
 - 2026-11-16 – In progress in lane 1 (`feat/stage-bar`, database `app_lane1`, shell http://localhost:3010).
+- 2026-11-16 – Three `@task:101` scenarios reworded (`docs(features)`); `@wip` removed from `@task:121`; bar, "Move to" and cancel steps written, the stage steps switched to the bar. Red run: every `@task:121` scenario fails on the missing bar or "Move to Ordered" button except "At Closed there is no next stage", which passes already (it checks an absence and task 120's "Job complete"); the reworded and bar-driven `@task:101` scenarios and "Ticks stay with their stage" fail on the missing bar (spec-writer).
 
 ## Parking lot
 - Dragging a project between stages (bar or board).

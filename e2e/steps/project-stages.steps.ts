@@ -1,4 +1,4 @@
-import { expect, type Page } from "@playwright/test";
+import { expect, type Locator, type Page } from "@playwright/test";
 import { sql } from "@repo/db";
 import { getMaintenanceDb } from "@repo/db/maintenance";
 
@@ -35,9 +35,124 @@ Given("the project {string} is at the stage {string}", async ({ page, state }, p
   );
 });
 
+// The stage bar (task 121): a group named "Stages" (Hebrew "שלבים") at the top of the project page, its phases
+// headings, its stages the innermost list items in order. A done stage says "done" to screen readers (text, or the
+// label of its check), the current one carries `aria-current="step"`; for whoever can change the project every
+// other stage is a submit button named by the stage (a done one's name may end in "done").
+const stageBar = (page: Page) => {
+  const name = /^(Stages|שלבים)$/;
+  return page.getByRole("group", { name }).or(page.getByRole("navigation", { name }));
+};
+
+/** The bar's stages, one innermost list item each (a phase may be a list item holding its own list). */
+const barStages = (page: Page) => stageBar(page).getByRole("listitem").filter({ hasNot: page.getByRole("listitem") });
+
+/** The stage's item on the bar: its text is the stage's name, maybe with "done". */
+const barStage = (page: Page, stage: string) =>
+  barStages(page).filter({ hasText: new RegExp(`^\\W*${escape(stage)}(?:\\W+done)?\\W*$`, "i") });
+
+/** The bar's button that moves the project to `stage` (exact: "Quote" never matches "Move to Quote"). */
+const stageButton = (page: Page, stage: string) =>
+  stageBar(page).getByRole("button", { name: new RegExp(`^${escape(stage)}(?:\\W+done)?$`, "i") });
+
+/** What says a stage is done: "done" in its text, or a label with "done" (its check). */
+const doneMark = (item: Locator) => item.getByText(/\bdone\b/i).or(item.locator('[aria-label~="done" i]'));
+
 When("I change the stage to {string}", async ({ page }, stage: string) => {
-  await page.getByLabel("Stage", { exact: true }).selectOption({ label: stage });
-  await pressAndWait(page, "Change stage");
+  await pressButton(page, stageButton(page, stage));
+});
+
+/** Presses a button that submits a form and waits for the post's response. */
+async function pressButton(page: Page, button: Locator) {
+  await expect(button).toBeVisible();
+  await Promise.all([page.waitForResponse((r) => r.request().method() === "POST"), button.click()]);
+}
+
+/** Puts `value` in what a bar button posts as the stage: its own value when it is named "stage", else its form's field. */
+async function setPostedStage(button: Locator, value: string) {
+  await button.evaluate((element, stage) => {
+    const pressed = element as HTMLButtonElement;
+    const field = pressed.name === "stage" ? pressed : pressed.form?.querySelector<HTMLInputElement>('input[name="stage"]');
+    if (!field) throw new Error("the stage button posts no stage field");
+    field.value = stage;
+  }, value);
+}
+
+/** Puts `id` in the hidden project id of a bar button's form. */
+async function setPostedProject(button: Locator, id: string) {
+  await button.evaluate((element, value) => {
+    const field = (element as HTMLButtonElement).form?.querySelector<HTMLInputElement>('input[name="projectId"]');
+    if (!field) throw new Error("the stage button's form has no project id");
+    field.value = value;
+  }, id);
+}
+
+Then("the stage bar shows the phases {string}", async ({ page }, phases: string) => {
+  await expect(stageBar(page).getByRole("heading")).toHaveText(phases.split(",").map((phase) => phase.trim()));
+});
+
+Then(
+  "the stage bar shows {string} done, {string} current and {string} ahead",
+  async ({ page }, done: string, current: string, ahead: string) => {
+    const list = (names: string) => names.split(",").map((name) => name.trim());
+    const all = [...list(done), current, ...list(ahead)];
+    await expect(barStages(page)).toHaveCount(all.length);
+    for (const [index, stage] of all.entries()) {
+      await expect(barStages(page).nth(index), `stage ${index + 1}`).toContainText(stage);
+    }
+    for (const stage of list(done)) {
+      const item = barStage(page, stage);
+      await expect(doneMark(item).first(), `"${stage}" is done`).toBeAttached();
+      await expect(item.locator('[aria-current="step"]').or(item.and(page.locator('[aria-current="step"]')))).toHaveCount(0);
+    }
+    const now = stageBar(page).locator('[aria-current="step"]');
+    await expect(now).toHaveCount(1);
+    await expect(now).toContainText(current);
+    await expect(doneMark(barStage(page, current))).toHaveCount(0);
+    for (const stage of list(ahead)) {
+      const item = barStage(page, stage);
+      await expect(item).toHaveCount(1);
+      await expect(doneMark(item), `"${stage}" is ahead`).toHaveCount(0);
+      await expect(item.locator('[aria-current="step"]').or(item.and(page.locator('[aria-current="step"]')))).toHaveCount(0);
+    }
+  },
+);
+
+// A tampered form: the first stage button on the bar, the stage it posts changed to `stage`.
+When("I move the project to the stage {string} by editing the page", async ({ page }, stage: string) => {
+  const button = stageBar(page).getByRole("button").first();
+  await expect(button).toBeVisible();
+  await setPostedStage(button, stage);
+  await pressButton(page, button);
+});
+
+/** The bar is shown with its current stage, without a button, and there is no "Move to" button. */
+async function expectNoStageMoves(page: Page) {
+  await expect(stageBar(page).locator('[aria-current="step"]')).toBeVisible();
+  await expect(stageBar(page).getByRole("button")).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^(Move to|העבר ל)/ })).toHaveCount(0);
+}
+
+Then("I can't move the project to another stage", async ({ page }) => {
+  await expectNoStageMoves(page);
+});
+
+Then("the auditor can't move the project to another stage", async ({ people, state }) => {
+  await expectNoStageMoves(await pageOf(state, people, "auditor"));
+});
+
+// The question's "Cancel" ("I press" would also match "Cancel project"): a button, or a link back to the page.
+When("I cancel the move", async ({ page }) => {
+  const cancel = nextStep(page)
+    .getByRole("button", { name: "Cancel", exact: true })
+    .or(nextStep(page).getByRole("link", { name: "Cancel", exact: true }));
+  await cancel.click();
+});
+
+Then("the {string} section has no button starting with {string}", async ({ page }, section: string, start: string) => {
+  const region = page.getByRole("region", { name: section, exact: true });
+  await expect(region).toBeVisible();
+  await expect(region.getByRole("button", { name: new RegExp(`^${escape(start)}`) })).toHaveCount(0);
 });
 
 // "<Stage> since <date>", the date a <time datetime="YYYY-MM-DD"> like the other calendar days the pages show.
@@ -56,19 +171,15 @@ Then("I see no {string} button", async ({ page }, name: string) => {
   await expect(page.getByRole("button", { name, exact: true })).toHaveCount(0);
 });
 
-// A tampered form: my own project's stage form (NW Site), its hidden project id set to the other partner's
+// A tampered form: my own project's stage button on the bar (NW Site), its hidden project id set to the other partner's
 // project (`state.replay` posts it again with another id).
 When("I post a stage change of {string} to {string}", async ({ page, state }, project: string, stage: string) => {
   state.replay = async (id) => {
     await page.goto(projectPath(state, "NW Site"));
-    await page.getByLabel("Stage", { exact: true }).selectOption({ label: stage });
-    await page
-      .locator("form", { has: page.getByRole("button", { name: "Change stage" }) })
-      .locator('input[name="projectId"]')
-      .evaluate((input, value) => {
-        (input as HTMLInputElement).value = value;
-      }, id);
-    await pressAndWait(page, "Change stage");
+    const button = stageButton(page, stage);
+    await expect(button).toBeVisible();
+    await setPostedProject(button, id);
+    await pressButton(page, button);
   };
   await state.replay(idOf(state, project));
 });

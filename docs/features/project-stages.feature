@@ -275,7 +275,7 @@ Feature: Project stages
   # "Change stage" button; three @task:101 scenarios are reworded in the task's first commit (see the task).
   # Phases: Sales (Inquiry, Quote, Ordered), Work (Scheduled, In work), Closing (Reporting, Billing, Closed).
 
-  @wip @task:121
+  @task:121
   Scenario: The stage bar shows where the project is
     Given I am signed in with an existing account
     And I have a project named "Panel upgrade"
@@ -287,7 +287,7 @@ Feature: Project stages
     And I reload the page
     Then the page does not scroll sideways
 
-  @wip @task:121
+  @task:121
   Scenario: Moving on when the checklist is done
     Given I am signed in with an existing account
     And I have a project named "Panel upgrade"
@@ -300,7 +300,7 @@ Feature: Project stages
     Then the project shows "Ordered" since today
     And I do not see the text "Move anyway?"
 
-  @wip @task:121
+  @task:121
   Scenario: Moving on with open items asks first
     Given I am signed in with an existing account
     And I have a project named "Panel upgrade"
@@ -316,7 +316,7 @@ Feature: Project stages
     And I press "Move anyway"
     Then the project shows "Ordered" since today
 
-  @wip @task:121
+  @task:121
   Scenario: At Closed there is no next stage
     Given I am signed in with an existing account
     And I have a project named "Panel upgrade"
