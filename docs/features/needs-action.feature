@@ -53,7 +53,46 @@ Feature: Needs action on the overview
     And I am signed in as a user of "Northwind"
     When I open "/dashboard"
     Then the "Our move" section shows "NW Site"
+    And the "Our move" section shows "Acme Ltd"
+    And I do not see the "Acme Ltd" link
     And the page shows none of "GX App"
+
+  @task:124
+  Scenario: An auditor sees every partner's waiting projects in Needs action
+    Given a workspace with the partners "Northwind" and "Globex", an admin and an auditor
+    And the customer "Acme Ltd" is assigned to "Northwind" and "Globex"
+    And "Northwind" has the project "NW Site" for "Acme Ltd" with the task "Copy"
+    And "Globex" has the project "GX App" for "Acme Ltd" with the task "Login"
+    And the project "NW Site" has been at the stage "Quote" for 10 days
+    And the project "GX App" has been at the stage "Quote" for 10 days
+    And I am signed in as an auditor
+    When I open "/dashboard"
+    Then the "Our move" section shows "NW Site"
+    And the "Our move" section shows "GX App"
+
+  @task:124
+  Scenario: Needs action shows only the current workspace's projects
+    Given I am signed in with an existing account
+    And I have a project named "Panel upgrade"
+    And the project "Panel upgrade" has been at the stage "Quote" for 10 days
+    And I create a workspace named "Side Gig"
+    And I have a project named "Garden"
+    And the project "Garden" has been at the stage "Quote" for 10 days
+    And I switch to "Test User's workspace"
+    When I open "/dashboard"
+    Then the "Our move" section shows "Panel upgrade"
+    And the page shows none of "Garden"
+
+  @task:124
+  Scenario: A deleted project is not in Needs action
+    Given I am signed in with an existing account
+    And I have projects named "Panel upgrade, Old job"
+    And the project "Panel upgrade" has been at the stage "Quote" for 10 days
+    And the project "Old job" has been at the stage "Quote" for 10 days
+    And I delete the project "Old job"
+    When I open "/dashboard"
+    Then the "Our move" section shows "Panel upgrade"
+    And the page shows none of "Old job"
 
   @task:124
   Scenario: A worker sees only their crew's projects in Needs action

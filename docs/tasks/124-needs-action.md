@@ -69,3 +69,4 @@ None blocking. Defaults taken:
 - A workspace setting for N.
 - A count of "Needs action" in the side menu.
 - Waiting on a supplier (materials, M18) as a third party.
+- The overview passes every visible project's id to two `inArray` queries, which grows with the workspace (Postgres caps a statement at 65,535 bind parameters). If workspaces grow large, push the visible/active filter into the batch queries as a join (access audit, task 124).
