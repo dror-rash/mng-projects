@@ -20,17 +20,20 @@ async function projectId(page: Page, state: ScenarioState, name: string) {
 const escape = (text: string) => text.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 // A stage set that many days ago (UTC), as the stage form would have set it then: the project's stage and its
-// history row. The project is created no later than that, so its creation can't be the newer "since".
+// history row. The project and its earlier history rows (its first stage, from the new-project form) move back to
+// before that, so the history stays in order and neither the creation nor an earlier change is the newer "since".
 Given(
   "the project {string} has been at the stage {string} for {int} days",
   async ({ page, state }, project: string, stage: string, days: number) => {
     const db = getMaintenanceDb();
     const id = await projectId(page, state, project);
     const changedAt = new Date(Date.now() - days * 86_400_000);
+    const before = new Date(changedAt.getTime() - 60_000);
     const [from] = (await db.execute<{ stage: string }>(sql`select stage from project where id = ${id}`)).rows;
     await db.execute(
-      sql`update project set stage = ${stageValue(stage)}, created_at = least(created_at, ${changedAt}) where id = ${id}`,
+      sql`update project set stage = ${stageValue(stage)}, created_at = least(created_at, ${before}) where id = ${id}`,
     );
+    await db.execute(sql`update project_stage_change set changed_at = least(changed_at, ${before}) where project_id = ${id}`);
     await db.execute(
       sql`insert into project_stage_change (id, project_id, from_stage, to_stage, changed_at)
           values (${crypto.randomUUID()}, ${id}, ${from?.stage ?? null}, ${stageValue(stage)}, ${changedAt})`,
