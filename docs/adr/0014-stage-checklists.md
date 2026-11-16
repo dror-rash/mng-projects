@@ -21,6 +21,8 @@ That needs somewhere to keep which items are done, a rule for the badge, and a r
   - Whoever sees the project sees the checklist and the badge (`can_see_project`), workers and partner users included.
   - Whoever can change the project ticks and unticks (`can_change_project`): admins, and partner users on their own partner's projects, like the stage itself. Auditors and workers read only.
   - Row-level security: select with `can_see_project`, insert (as oneself, without `ticked_at`) and delete with `can_change_project`, no update grant; pinned in `rls-pins.mjs`. The app writes through a `@repo/db` helper, like `recordStageChange`.
+  - Who ticked an item shows by name to everyone who sees the project (task 120), as task assignees and the crew do.
+  - `can_see_project` lets admins and auditors read a deleted project's ticks at the database level (they can see deleted projects to restore them). The project page only reads ticks of a project it has found, so this doesn't show; any query that lists ticks without going through the project row (the stage board, task 123; "Needs action", task 124) must join the project and filter `deleted_at is null`.
 - **"Waiting since"** (for the overview's "Needs action", task 124) is the later of the day the current stage started and the latest tick among its items. The stage board shows days in the current stage (since the stage started).
 
 ## Alternatives considered
