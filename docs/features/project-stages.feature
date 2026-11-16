@@ -69,8 +69,7 @@ Feature: Project stages
     Given I am signed in with an existing account
     And I have a project named "Panel upgrade"
     When I am on the "Panel upgrade" project page
-    And I choose "Made up" in "Stage" by editing the page
-    And I press "Change stage"
+    And I move the project to the stage "Made up" by editing the page
     Then I see the error "Choose a stage"
 
   @task:101
@@ -85,7 +84,7 @@ Feature: Project stages
     Then the project shows "Scheduled" since today
     And the auditor opens the "NW Site" project page
     Then the auditor sees the text "Scheduled"
-    And the auditor sees no "Change stage" button
+    And the auditor can't move the project to another stage
 
   @task:101
   Scenario: A worker sees the stage but can't change it
@@ -97,7 +96,7 @@ Feature: Project stages
     And I am on the crew of "NW Site"
     When I am on the "NW Site" project page
     Then I see the text "Ordered"
-    And I see no "Change stage" button
+    And I can't move the project to another stage
 
   @task:101
   Scenario: Another partner's project's stage can't be changed
