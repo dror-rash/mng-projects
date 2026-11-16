@@ -1,4 +1,4 @@
-import { desc, eq, getDb, recordStageChange, schema, withAccess } from "@repo/db";
+import { desc, eq, getDb, inArray, recordStageChange, schema, sql, withAccess } from "@repo/db";
 
 import type { ProjectStage } from "./project-stage";
 
@@ -24,4 +24,23 @@ export async function getStageChangedAt(userId: string, projectId: string): Prom
       .limit(1),
   );
   return latest?.changedAt ?? null;
+}
+
+/**
+ * Each listed project's latest stage change, in one query (the stage board, task 123); a project without history
+ * has none. Rows follow the project's visibility (RLS).
+ */
+export async function listStageChangedAt(userId: string, projectIds: string[]): Promise<Map<string, Date>> {
+  if (projectIds.length === 0) return new Map();
+  const rows = await withAccess(userId, () =>
+    getDb()
+      .select({
+        projectId: schema.projectStageChange.projectId,
+        changedAt: sql<Date>`max(${schema.projectStageChange.changedAt})`.mapWith(schema.projectStageChange.changedAt),
+      })
+      .from(schema.projectStageChange)
+      .where(inArray(schema.projectStageChange.projectId, projectIds))
+      .groupBy(schema.projectStageChange.projectId),
+  );
+  return new Map(rows.map((r) => [r.projectId, r.changedAt]));
 }

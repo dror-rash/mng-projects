@@ -1,4 +1,4 @@
-import { eq, getDb, schema, withAccess } from "@repo/db";
+import { eq, getDb, inArray, schema, withAccess } from "@repo/db";
 
 import { todayUtc } from "@/features/tasks/due-dates";
 
@@ -22,4 +22,25 @@ export async function listChecklistTicks(userId: string, projectId: string): Pro
       .where(eq(schema.projectChecklistTick.projectId, projectId)),
   );
   return rows.map(({ item, tickedByName, tickedAt }) => ({ item, tickedByName, tickedOn: todayUtc(tickedAt) }));
+}
+
+/** A tick as the stage board reads it (task 123): which project and item, and when. */
+export type ProjectChecklistTick = { projectId: string; item: string; tickedAt: Date };
+
+/**
+ * The ticked checklist items of the listed projects, every stage's, in one query (the stage board, task 123):
+ * the caller groups them by project. Rows follow each project's visibility (RLS: `can_see_project`).
+ */
+export async function listChecklistTicksForProjects(userId: string, projectIds: string[]): Promise<ProjectChecklistTick[]> {
+  if (projectIds.length === 0) return [];
+  return withAccess(userId, () =>
+    getDb()
+      .select({
+        projectId: schema.projectChecklistTick.projectId,
+        item: schema.projectChecklistTick.item,
+        tickedAt: schema.projectChecklistTick.tickedAt,
+      })
+      .from(schema.projectChecklistTick)
+      .where(inArray(schema.projectChecklistTick.projectId, projectIds)),
+  );
 }

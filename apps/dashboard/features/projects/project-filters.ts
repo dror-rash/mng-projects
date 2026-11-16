@@ -3,7 +3,14 @@ import { firstParam } from "@/features/navigation/search-params";
 import { parseProjectStage, type ProjectStage, projectStage } from "./project-stage";
 import { parseProjectStatus, type ProjectStatus } from "./project-status";
 
-export type ProjectView = "table" | "tiles";
+/** The list's views: the table (default), tiles, and the stage board (task 123). */
+export const PROJECT_VIEWS = ["table", "tiles", "board"] as const;
+
+export type ProjectView = (typeof PROJECT_VIEWS)[number];
+
+function parseProjectView(value: unknown): ProjectView {
+  return PROJECT_VIEWS.find((v) => v === value) ?? "table";
+}
 
 export type ProjectFilters = {
   /** A customer id (every project has one, task 071). */
@@ -32,7 +39,7 @@ export function parseProjectFilters(params: SearchParams, customerIds: string[])
     ...(stage && { stage }),
     overdue: firstParam(params.overdue) === "1",
     ...(q && { q }),
-    view: firstParam(params.view) === "tiles" ? "tiles" : "table",
+    view: parseProjectView(firstParam(params.view)),
   };
 }
 
@@ -44,7 +51,7 @@ export function filterParams(filters: ProjectFilters): Record<string, string> {
     ...(filters.stage && { stage: filters.stage }),
     ...(filters.overdue && { overdue: "1" }),
     ...(filters.q && { q: filters.q }),
-    ...(filters.view === "tiles" && { view: "tiles" }),
+    ...(filters.view !== "table" && { view: filters.view }),
   };
 }
 

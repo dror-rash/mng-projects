@@ -2,11 +2,13 @@ import { Button } from "@repo/ui/button";
 import { Card } from "@repo/ui/card";
 import { FilterChip } from "@repo/ui/filter-chip";
 import Link from "next/link";
+import { getTranslations } from "next-intl/server";
 
 import { canChange, canSeeCustomers } from "@/features/access/scope";
 import { AppFrame } from "@/features/layout/app-frame";
 import { firstParam, withParams } from "@/features/navigation/search-params";
 import { listCustomerNames } from "@/features/organizations/customer-names";
+import { listChecklistTicksForProjects } from "@/features/projects/checklist-queries";
 import { ProjectFilterForm } from "@/features/projects/project-filter-form";
 import { filterParams, filterProjects, parseProjectFilters, type ProjectFilters } from "@/features/projects/project-filters";
 import { ProjectList } from "@/features/projects/project-list";
@@ -14,6 +16,9 @@ import { parseProjectSort, type ProjectSort, sortParams, sortProjects } from "@/
 import { projectStatus } from "@/features/projects/project-status";
 import { ProjectTable } from "@/features/projects/project-table";
 import { listProjects } from "@/features/projects/queries";
+import { StageBoard } from "@/features/projects/stage-board-view";
+import { stageBoard } from "@/features/projects/stage-board-data";
+import { listStageChangedAt } from "@/features/projects/stage-history";
 import { stageLabels } from "@/features/projects/stage-labels";
 import { todayUtc } from "@/features/tasks/due-dates";
 import { groupStatusCountsByProject, summarizeProjectStatusCounts } from "@/features/tasks/progress";
@@ -33,12 +38,13 @@ export default async function AllProjectsPage({ searchParams }: { searchParams: 
     withParams("/projects", Object.fromEntries(FILTER_KEYS.map((key) => [key, firstParam(params[key])]))),
   );
 
-  const [projects, projectCounts, overdue, customers, stages] = await Promise.all([
+  const [projects, projectCounts, overdue, customers, stages, t] = await Promise.all([
     listProjects(session.user.id, workspace.id),
     countTasksByProjectAndStatus(session.user.id, workspace.id),
     countOverdueTasksByProject(session.user.id, workspace.id, todayUtc()),
     listCustomerNames(session.user.id, workspace.id),
     stageLabels(),
+    getTranslations("stageBoard"),
   ]);
   const filters = parseProjectFilters(params, customers.map((c) => c.id));
   const sort = parseProjectSort(params);
@@ -52,6 +58,13 @@ export default async function AllProjectsPage({ searchParams }: { searchParams: 
     progress: progress.get(p.id)?.completionRate ?? 0,
   }));
   const shown = sortProjects(filterProjects(rows, filters), sort);
+  // The stage board (task 123): whose move and since when, for the listed projects only (no queries otherwise).
+  const boardIds = filters.view === "board" ? shown.map((p) => p.id) : [];
+  const [ticks, changedAt] = await Promise.all([
+    listChecklistTicksForProjects(session.user.id, boardIds),
+    listStageChangedAt(session.user.id, boardIds),
+  ]);
+  const board = filters.view === "board" ? await stageBoard(shown, ticks, changedAt, todayUtc()) : null;
   // Each link changes one thing and keeps the rest.
   const link = (next: Partial<ProjectFilters>, nextSort: ProjectSort = sort) =>
     withParams("/projects", { ...filterParams({ ...filters, ...next }), ...sortParams(nextSort) });
@@ -89,6 +102,9 @@ export default async function AllProjectsPage({ searchParams }: { searchParams: 
               <FilterChip selected={filters.view === "tiles"}>
                 <Link href={link({ view: "tiles" })}>Tiles</Link>
               </FilterChip>
+              <FilterChip selected={filters.view === "board"}>
+                <Link href={link({ view: "board" })}>{t("view")}</Link>
+              </FilterChip>
             </nav>
           </div>
 
@@ -106,6 +122,8 @@ export default async function AllProjectsPage({ searchParams }: { searchParams: 
 
           {shown.length === 0 ? (
             <Card className="border-dashed p-8 text-center text-muted-foreground">No projects match these filters.</Card>
+          ) : board ? (
+            <StageBoard phases={board.phases} text={board.text} linkCustomers={canSeeCustomers(workspace.role)} />
           ) : filters.view === "tiles" ? (
             <ProjectList projects={shown} progress={progress} linkCustomers={canSeeCustomers(workspace.role)} />
           ) : (
