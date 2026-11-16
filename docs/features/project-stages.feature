@@ -211,6 +211,56 @@ Feature: Project stages
     And the admin opens the "GX App" project page
     Then the admin sees the text "0 of 3 done"
 
+  # Leak scenarios from the task 120 access audit.
+  @task:120
+  Scenario: Another partner's tick can't be unticked
+    Given a workspace with the partners "Northwind" and "Globex", an admin and an auditor
+    And the customer "Acme Ltd" is assigned to "Northwind" and "Globex"
+    And "Northwind" has the project "NW Site" for "Acme Ltd" with the task "Copy"
+    And "Globex" has the project "GX App" for "Acme Ltd" with the task "Login"
+    And the project "GX App" is at the stage "Quote"
+    And the checklist item "Quote sent to the customer" of "GX App" is ticked
+    And I am signed in as a user of "Northwind"
+    When I post an untick of "Quote sent to the customer" on "GX App"
+    Then I see "Something went wrong", the same as with a made-up id
+    And the admin opens the "GX App" project page
+    Then the admin sees the text "1 of 3 done"
+
+  @task:120
+  Scenario: A worker on the crew can't tick by posting the form
+    Given a workspace with the partners "Northwind" and "Globex", an admin and an auditor
+    And the customer "Acme Ltd" is assigned to "Northwind" and "Globex"
+    And "Northwind" has the project "NW Site" for "Acme Ltd" with the task "Copy"
+    And the project "NW Site" is at the stage "Quote"
+    And I am signed in as a worker
+    And I am on the crew of "NW Site"
+    When I post a tick of "Quote sent to the customer" on "NW Site"
+    Then I see "Something went wrong", the same as with a made-up id
+    And the admin opens the "NW Site" project page
+    Then the admin sees the text "0 of 3 done"
+
+  @task:120
+  Scenario: An auditor can't tick by posting the form
+    Given a workspace with the partners "Northwind" and "Globex", an admin and an auditor
+    And the customer "Acme Ltd" is assigned to "Northwind" and "Globex"
+    And "Northwind" has the project "NW Site" for "Acme Ltd" with the task "Copy"
+    And the project "NW Site" is at the stage "Quote"
+    And I am signed in as an auditor
+    When I post a tick of "Quote sent to the customer" on "NW Site"
+    Then I see "Something went wrong", the same as with a made-up id
+    And the admin opens the "NW Site" project page
+    Then the admin sees the text "0 of 3 done"
+
+  @task:120
+  Scenario: A deleted project's checklist can't be ticked
+    Given I am signed in with an existing account
+    And I have a project named "Panel upgrade"
+    And the project "Panel upgrade" is at the stage "Quote"
+    When I am on the "Panel upgrade" project page
+    And the project "Panel upgrade" is deleted in another tab
+    And I tick "Materials and labour costed"
+    Then I see "Something went wrong", the same as with a made-up id
+
   # The item texts are the owner's (2026-11-15); the stage label is task 101's.
   @task:120
   Scenario: The checklist in Hebrew
