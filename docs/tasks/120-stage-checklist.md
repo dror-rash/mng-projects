@@ -106,6 +106,7 @@ None blocking. Defaults taken (owner may change them in review):
 - 2026-11-15 – Drafted with `@wip` scenarios in `project-stages.feature` and ADR-0014 (planner).
 - 2026-11-16 – In progress in lane 1 (`feat/stage-checklist`, database `app_lane1`, shell http://localhost:3010).
 - 2026-11-16 – Steps written, `@wip` removed; red run: all 8 `@task:120` scenarios fail on the missing "Next step" checklist (and the missing `project_checklist_tick` table) (spec-writer).
+- 2026-11-16 – Implemented in lane 1 (implementer): migration 0046 `project_checklist_tick` with RLS and `tickChecklistItem` / `untickChecklistItem` (DB tests per role, keys, time, cascade, deleted user; `rls-pins.mjs`); `stage-checklist.ts` (unit); `toggleChecklistItemAction` (unit; a made-up item throws, the form being a single button, like a made-up task status); `listChecklistTicks` (DB test, a copy has no ticks); `NextStepCard` with its story; en/he catalogue; demo seed ticks. The step `nextStep` now finds the region by its Hebrew name too (the task names the heading הצעד הבא; the scenario is unchanged). All 8 `@task:120` scenarios pass. Locally, the first scenarios of a run time out while cold dev servers compile (the same with `@task:101` on `main`'s code); runs against warm lane servers pass.
 
 ## Parking lot
 - Ticking items from records as an explicit action: "Work order from an authorised person" when a work order is recorded (task 106), "Quote sent" / "Customer accepted the quote" from quotes (M16), report delivery (M17), bills (M19), "Crew assigned" from the crew list.
