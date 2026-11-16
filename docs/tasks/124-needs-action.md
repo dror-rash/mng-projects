@@ -62,6 +62,7 @@ None blocking. Defaults taken:
 - 2026-11-15 – Drafted with `needs-action.feature` (`@wip`) (planner).
 - 2026-11-16 – Readiness check against tasks 120 (PR #124) and 123 (PR #126) as merged: reuses 123's batch reads (with `workspaceId`) and `stage-board.ts` helpers; the wait counts only the current stage's ticks; step notes for the new tick step (UTC times) and `the project {string} is canceled` on a project of mine. Scenarios unchanged. READY (planner).
 - 2026-11-16 – In progress in lane 2 (`feat/needs-action`, database `app_lane2`, shell http://localhost:3020).
+- 2026-11-16 – `@wip` removed; new step `the checklist item {string} of {string} was ticked {int} days ago` (UTC `ticked_at`), `the project {string} is canceled` falls back to one of my projects. Red run: all 5 scenarios fail at their first Then, no "Our move" / "Needs action" region on the overview (spec-writer).
 
 ## Parking lot
 - A workspace setting for N.

@@ -176,6 +176,22 @@ Given("the checklist item {string} of {string} is ticked", async ({ page, state 
   );
 });
 
+// The same tick, that many days ago (task 124).
+Given(
+  "the checklist item {string} of {string} was ticked {int} days ago",
+  async ({ page, state }, label: string, project: string, days: number) => {
+    const key = CHECKLIST_KEYS[label];
+    expect(key, `no checklist item "${label}"`).toBeDefined();
+    const id = await projectId(page, state, project);
+    const by = state.ids?.Admin ?? (await userId(page));
+    // A UTC ISO string: node-postgres would send a Date in the runner's local time, which a `timestamp` keeps as is.
+    const tickedAt = new Date(Date.now() - days * 86_400_000).toISOString();
+    await getMaintenanceDb().execute(
+      sql`insert into project_checklist_tick (project_id, item, ticked_by, ticked_at) values (${id}, ${key}, ${by}, ${tickedAt})`,
+    );
+  },
+);
+
 /**
  * A tampered form: the item's tick (`tick`) or untick button on a project of my own where I can press it (a decoy
  * in a workspace of mine, at the item's stage, the item ticked for an untick), its hidden project id set to `id`.
