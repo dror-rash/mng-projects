@@ -27,8 +27,9 @@ Given(
   async ({ page, state }, project: string, stage: string, days: number) => {
     const db = getMaintenanceDb();
     const id = await projectId(page, state, project);
-    const changedAt = new Date(Date.now() - days * 86_400_000);
-    const before = new Date(changedAt.getTime() - 60_000);
+    // UTC ISO strings: node-postgres would send a Date in the runner's local time, which a `timestamp` keeps as is.
+    const changedAt = new Date(Date.now() - days * 86_400_000).toISOString();
+    const before = new Date(Date.parse(changedAt) - 60_000).toISOString();
     const [from] = (await db.execute<{ stage: string }>(sql`select stage from project where id = ${id}`)).rows;
     await db.execute(
       sql`update project set stage = ${stageValue(stage)}, created_at = least(created_at, ${before}) where id = ${id}`,
@@ -59,4 +60,11 @@ Then("the {string} project card does not show {string}", async ({ page }, name: 
   const card = page.getByRole("listitem").filter({ has: page.getByRole("link", { name }) });
   await expect(card).toBeVisible();
   await expect(card).not.toContainText(text);
+});
+
+// A column's count is part of its name ("Ordered 1"), so a card a person can't see can't hide in the number.
+Then("the {string} column's count is {int}", async ({ page }, column: string, count: number) => {
+  await expect(page.getByRole("region", { name: column })).toHaveAccessibleName(
+    new RegExp(`^\\s*${escape(column)}\\D*\\b${count}\\b\\D*$`),
+  );
 });

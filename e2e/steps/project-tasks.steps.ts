@@ -162,7 +162,9 @@ Then("the {string} column lists {string}", async ({ page }, column: string, titl
   await expect(region).toBeVisible();
   const items = region.getByRole("listitem");
   await expect
-    .poll(() => items.evaluateAll((lis) => lis.map((li) => li.querySelector("a")?.textContent?.trim() ?? "")))
+    .poll(async () =>
+      Promise.all((await items.all()).map(async (li) => (await li.getByRole("link").allTextContents())[0]?.trim() ?? "")),
+    )
     .toEqual(titles.split(",").map((t) => t.trim()));
 });
 
