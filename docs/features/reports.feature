@@ -61,10 +61,10 @@ Feature: Uploaded reports
     Then the reports listed are "crew-report.pdf, admin-report.pdf"
     And I see the "Delete crew-report.pdf" button
     And I do not see the "Delete admin-report.pdf" button
-    When the auditor opens the "NW Site" project page
+    When the auditor opens the "Reports" tab of the "NW Site" project
     Then the auditor sees the text "crew-report.pdf"
     And the auditor sees no "Upload a report" button and no "Delete crew-report.pdf" button
-    When the "Northwind" user opens the "NW Site" project page
+    When the "Northwind" user opens the "Reports" tab of the "NW Site" project
     Then the "Northwind" user sees the text "crew-report.pdf"
 
   @task:064
@@ -153,7 +153,7 @@ Feature: Uploaded reports
     When I am on the "NW Site" project page
     And I open the "Reports" tab
     Then the reports listed are "nw-report.pdf"
-    When the admin opens the "NW Site" project page
+    When the admin opens the "Work" tab of the "NW Site" project
     And the admin removes "Worker" from the crew
     And I open the address of the report "nw-report.pdf"
     Then it is not found, the same as a made-up photo address

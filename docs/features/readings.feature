@@ -91,7 +91,7 @@ Feature: Readings
     And I press "Save reading"
     Then I see the heading "Site check"
     And I see the text "Worker"
-    When the auditor opens the "NW Site" project page
+    When the auditor opens the "Work" tab of the "NW Site" project
     Then the auditor sees the text "Site check"
     When the auditor opens the visit "Cables pulled" of the project "NW Site"
     Then the auditor sees the text "Site check"
@@ -185,7 +185,7 @@ Feature: Readings
     And I am signed in as a worker
     And I am on the crew of "NW Site"
     When I open the "Site check" reading form on the visit "Cables pulled"
-    And the admin opens the "NW Site" project page
+    And the admin opens the "Work" tab of the "NW Site" project
     And the admin removes "Worker" from the crew
     And I fill in "Voltage" with "231"
     And I press "Save reading"

@@ -79,7 +79,7 @@ Feature: Site visits
     When I fill in "Notes" with "Cables pulled"
     And I press "Save visit"
     Then I see the text "Cables pulled"
-    When the auditor opens the "NW Site" project page
+    When the auditor opens the "Work" tab of the "NW Site" project
     Then the auditor sees the text "Cables pulled"
     And the auditor sees no "Record a visit" link
 

@@ -69,7 +69,7 @@ Feature: Photos and files
     Then the "Photos and files" section shows the photo "cables.jpg"
     And I see the "Delete cables.jpg" button
     And I do not see the "Delete admin.jpg" button
-    When the auditor opens the "NW Site" project page
+    When the auditor opens the "Work" tab of the "NW Site" project
     Then the auditor sees the text "cables.jpg"
     And the auditor sees no "Add photos" button and no "Delete cables.jpg" button
 
