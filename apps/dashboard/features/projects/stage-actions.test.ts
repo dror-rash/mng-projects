@@ -3,7 +3,8 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 // `changeStageAction` with stand-ins around it: the session, the project access check (its own DB tests and the
 // acceptance scenarios cover who may change a stage) and the database. What is checked here is that a stage is
-// changed with its history row, in one transaction, and that an empty or made-up stage changes nothing.
+// changed with its history row, in one transaction, that an empty or made-up stage changes nothing, and that
+// "Move to <next stage>" (task 121) asks first while the stage's checklist has open items.
 
 vi.mock("@/features/auth/require-session", () => ({
   requireActionSession: async () => ({ user: { id: "user-1" } }),
@@ -11,11 +12,18 @@ vi.mock("@/features/auth/require-session", () => ({
 const access = vi.hoisted(() => vi.fn());
 vi.mock("@/features/projects/require-project-access", () => ({ requireProjectAccess: access }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
+vi.mock("next-intl/server", async () => {
+  const { createTranslator } = await import("next-intl");
+  const en = (await import("../../messages/en.json")).default;
+  return { getTranslations: async (namespace: "stageChecklist") => createTranslator({ locale: "en", messages: en, namespace }) };
+});
 const redirected = vi.hoisted(() => vi.fn());
 vi.mock("@/features/navigation/redirect-from-action", () => ({ redirectFromAction: redirected }));
 
 const db = vi.hoisted(() => ({
   current: "inquiry",
+  /** The project's ticked checklist items. */
+  ticks: [] as string[],
   transactions: 0,
   updates: [] as Record<string, unknown>[],
   inserts: [] as Record<string, unknown>[],
@@ -23,7 +31,13 @@ const db = vi.hoisted(() => ({
 vi.mock("@repo/db", async (importOriginal) => {
   const actual = await importOriginal<typeof Db>();
   const fake = {
-    select: () => ({ from: () => ({ where: () => ({ for: async () => [{ stage: db.current }] }) }) }),
+    // The project row, locked (`for update`), or the project's ticks (awaited as is).
+    select: () => ({
+      from: () => ({
+        where: () =>
+          Object.assign(Promise.resolve(db.ticks.map((item) => ({ item }))), { for: async () => [{ stage: db.current }] }),
+      }),
+    }),
     update: () => ({ set: (values: Record<string, unknown>) => ({ where: async () => void db.updates.push(values) }) }),
   };
   return {
@@ -48,6 +62,7 @@ const post = (entries: Record<string, string>) => {
 
 beforeEach(() => {
   db.current = "inquiry";
+  db.ticks = [];
   db.transactions = 0;
   db.updates = [];
   db.inserts = [];
@@ -96,6 +111,55 @@ describe("changeStageAction", () => {
     await expect(post({ projectId: "someone-elses", stage: "closed" })).rejects.toThrow("Not found");
     await expect(post({ projectId: "someone-elses", stage: "Made up" })).rejects.toThrow("Not found");
     expect(db.updates).toEqual([]);
+    expect(db.inserts).toEqual([]);
+  });
+
+  it("moves from the stage bar at once, whatever is still open (ADR-0014)", async () => {
+    db.current = "quote";
+    await post({ projectId: "project-1", stage: "ordered" });
+    expect(db.inserts).toEqual([expect.objectContaining({ fromStage: "quote", toStage: "ordered" })]);
+    expect(redirected).toHaveBeenCalledWith("/projects/project-1");
+  });
+
+  it("moves to the next stage at once when the checklist is done", async () => {
+    db.current = "quote";
+    db.ticks = ["quote.costed", "quote.sent", "quote.accepted"];
+    await post({ projectId: "project-1", stage: "ordered", from: "next" });
+    expect(db.inserts).toEqual([expect.objectContaining({ fromStage: "quote", toStage: "ordered" })]);
+    expect(redirected).toHaveBeenCalledWith("/projects/project-1");
+  });
+
+  it("asks first when items of the stage are still open, counting them itself, and changes nothing", async () => {
+    db.current = "quote";
+    db.ticks = ["quote.costed", "ordered.work_order"];
+    const state = await post({ projectId: "project-1", stage: "ordered", from: "next", open: "0" });
+    expect(state).toMatchObject({
+      error: "2 items are still open in this stage. Move anyway?",
+      field: "confirm",
+      values: { stage: "ordered" },
+    });
+    expect(db.updates).toEqual([]);
+    expect(db.inserts).toEqual([]);
+    expect(redirected).not.toHaveBeenCalled();
+  });
+
+  it("says one item is open", async () => {
+    db.current = "quote";
+    db.ticks = ["quote.costed", "quote.sent"];
+    const state = await post({ projectId: "project-1", stage: "ordered", from: "next" });
+    expect(state).toMatchObject({ error: "1 item is still open in this stage. Move anyway?", field: "confirm" });
+  });
+
+  it("moves anyway once confirmed", async () => {
+    db.current = "quote";
+    await post({ projectId: "project-1", stage: "ordered", from: "next", confirm: "yes" });
+    expect(db.inserts).toEqual([expect.objectContaining({ fromStage: "quote", toStage: "ordered" })]);
+    expect(redirected).toHaveBeenCalledWith("/projects/project-1");
+  });
+
+  it("refuses a confirmed move of a project I can't change like a missing one", async () => {
+    access.mockRejectedValue(new Error("Not found"));
+    await expect(post({ projectId: "someone-elses", stage: "closed", from: "next", confirm: "yes" })).rejects.toThrow("Not found");
     expect(db.inserts).toEqual([]);
   });
 });
