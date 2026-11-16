@@ -96,7 +96,7 @@ Feature: Work orders
     And I open the "Sales" tab
     Then I do not see the text "Work orders"
     And I do not see the text "PO-4471"
-    And the "Northwind" user opens the "NW Site" project page
+    And the "Northwind" user opens the "Sales" tab of the "NW Site" project
     Then the "Northwind" user sees no "Work orders" section on "NW Site"
     And the auditor opens the "Sales" tab of the "NW Site" project
     Then the auditor sees the text "PO-4471"
