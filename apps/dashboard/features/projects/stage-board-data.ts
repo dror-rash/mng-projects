@@ -4,7 +4,7 @@ import type { CalendarDate } from "@/features/tasks/due-dates";
 
 import { isCanceled } from "./project-lifecycle";
 import type { StageBoardCard, StageBoardPhase } from "./stage-board-view";
-import { boardPhases, daysInStage, isLongWait, movesByProject, stageSince } from "./stage-board";
+import { boardPhases, daysInStage, isLongWait, LONG_WAIT_DAYS, movesByProject, stageSince } from "./stage-board";
 import { whoseMoveLabelKey } from "./stage-checklist";
 
 type BoardProject = {
@@ -54,6 +54,6 @@ export async function stageBoard(
       label: stages(`phase.${phase.labelKey}`),
       columns: phase.columns.map((column) => ({ stage: column.stage, label: stages(column.labelKey), cards: column.projects.map(card) })),
     })),
-    text: { label: t("label"), empty: t("empty"), longWait: t("longWait") },
+    text: { label: t("label"), empty: t("empty"), longWait: t("longWait", { days: LONG_WAIT_DAYS }) },
   };
 }

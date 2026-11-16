@@ -139,6 +139,9 @@ export const Phone: Story = {
   ],
   play: async ({ canvasElement }) => {
     const board = within(canvasElement).getByRole("region", { name: "Stage board" });
-    await expect(board.clientWidth).toBeLessThanOrEqual(360);
+    const phone = board.parentElement!;
+    // The columns overflow the board, which scrolls; the 360 px wrapper around it doesn't.
+    await expect(board.scrollWidth).toBeGreaterThan(board.clientWidth);
+    await expect(phone.scrollWidth).toBeLessThanOrEqual(phone.clientWidth);
   },
 };

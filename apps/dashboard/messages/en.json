@@ -68,7 +68,7 @@
     "label": "Stage board",
     "empty": "No projects",
     "days": "{days, plural, one {1 day} other {# days}}",
-    "longWait": "more than 7 days in this stage",
+    "longWait": "more than {days, number} days in this stage",
     "canceled": "Canceled"
   }
 }

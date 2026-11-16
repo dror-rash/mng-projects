@@ -68,7 +68,7 @@
     "label": "לוח שלבים",
     "empty": "אין פרויקטים",
     "days": "{days, plural, one {יום אחד} two {יומיים} other {# ימים}}",
-    "longWait": "יותר מ־7 ימים בשלב הזה",
+    "longWait": "יותר מ־{days, number} ימים בשלב הזה",
     "canceled": "בוטל"
   }
 }

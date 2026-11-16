@@ -40,16 +40,17 @@ const stageLabelKey = (stage: string) => PROJECT_STAGES.find((s) => s.stage === 
 
 /**
  * The board's phases and columns, every stage's (empty ones too), with each column's projects the longest in the
- * stage first (`days`); an unknown stored stage counts as Inquiry. Keys are message keys in `projectStage`.
+ * stage first (`days`), then by name; an unknown stored stage counts as Inquiry. Keys are message keys in
+ * `projectStage`.
  */
-export function boardPhases<T extends { stage: string; days: number }>(projects: readonly T[]) {
+export function boardPhases<T extends { name: string; stage: string; days: number }>(projects: readonly T[]) {
   return STAGE_PHASES.map(({ phase, labelKey, stages }) => ({
     phase,
     labelKey,
     columns: stages.map((stage) => ({
       stage,
       labelKey: stageLabelKey(stage),
-      projects: projects.filter((p) => projectStage(p.stage) === stage).sort((a, b) => b.days - a.days),
+      projects: projects.filter((p) => projectStage(p.stage) === stage).sort((a, b) => b.days - a.days || a.name.localeCompare(b.name)),
     })),
   }));
 }

@@ -49,7 +49,7 @@ describe("movesByProject", () => {
 });
 
 describe("boardPhases", () => {
-  const project = (id: string, stage: string, days: number) => ({ id, stage, days });
+  const project = (id: string, stage: string, days: number) => ({ id, name: id, stage, days });
 
   it("gives every stage a column under its phase, in the flow's order, empty ones too", () => {
     const phases = boardPhases([project("a", "quote", 1), project("b", "in_work", 2)]);
@@ -63,6 +63,12 @@ describe("boardPhases", () => {
   it("lists the longest in the stage first", () => {
     const phases = boardPhases([project("a", "quote", 3), project("b", "quote", 12), project("c", "quote", 5)]);
     expect(phases[0]!.columns[1]!.projects.map((p) => p.id)).toEqual(["b", "c", "a"]);
+  });
+
+  it("breaks a tie by the project's name", () => {
+    const named = (id: string, name: string) => ({ ...project(id, "quote", 4), name });
+    const phases = boardPhases([named("a", "Shelf lighting"), named("b", "Fire alarm"), named("c", "Panel upgrade")]);
+    expect(phases[0]!.columns[1]!.projects.map((p) => p.name)).toEqual(["Fire alarm", "Panel upgrade", "Shelf lighting"]);
   });
 
   it("puts a project with an unknown stored stage under Inquiry", () => {
