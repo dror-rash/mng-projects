@@ -10,7 +10,6 @@ vi.mock("@/features/auth/require-session", () => ({
 }));
 const access = vi.hoisted(() => vi.fn());
 vi.mock("@/features/projects/require-project-access", () => ({ requireProjectAccess: access }));
-vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 const redirected = vi.hoisted(() => vi.fn());
 vi.mock("@/features/navigation/redirect-from-action", () => ({ redirectFromAction: redirected }));
 
@@ -73,6 +72,15 @@ describe("toggleChecklistItemAction", () => {
   it("refuses a missing or made-up item and changes nothing", async () => {
     for (const entries of [{}, { item: "" }, { item: "quote.made_up" }, { item: "Quote sent" }] as Record<string, string>[]) {
       await expect(post({ projectId: "project-1", done: "true", ...entries })).rejects.toThrow("Choose an item of the checklist");
+    }
+    expect(db.ticks).toEqual([]);
+    expect(db.unticks).toEqual([]);
+    expect(redirected).not.toHaveBeenCalled();
+  });
+
+  it("refuses a missing or made-up done and changes nothing", async () => {
+    for (const entries of [{}, { done: "" }, { done: "yes" }, { done: "TRUE" }] as Record<string, string>[]) {
+      await expect(post({ projectId: "project-1", item: "quote.sent", ...entries })).rejects.toThrow("Choose an item of the checklist");
     }
     expect(db.ticks).toEqual([]);
     expect(db.unticks).toEqual([]);
