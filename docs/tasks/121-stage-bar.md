@@ -1,6 +1,6 @@
 # Task 121: Stage bar and "Move to the next stage"
 
-- **Status:** todo
+- **Status:** in-progress
 - **Milestone:** M22 Guided project flow
 - **Zone / package:** `apps/dashboard` (`features/projects`, `messages/`), `e2e`
 - **Feature file:** `docs/features/project-stages.feature` (`@task:121`, and three `@task:101` scenarios reworded at the start)
@@ -75,6 +75,7 @@ None blocking. Defaults taken:
 ## Progress log
 - 2026-11-15 – Drafted with `@wip` scenarios in `project-stages.feature` (planner).
 - 2026-11-16 – Readiness check against task 120 as merged (PR #124): dependencies and reused steps named after the real code; the bar and the button use `useActionState` so their messages show; `STAGE_PHASES` shared with task 123. READY (planner).
+- 2026-11-16 – In progress in lane 1 (`feat/stage-bar`, database `app_lane1`, shell http://localhost:3010).
 
 ## Parking lot
 - Dragging a project between stages (bar or board).
