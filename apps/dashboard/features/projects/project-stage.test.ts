@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import en from "../../messages/en.json";
 import he from "../../messages/he.json";
 
-import { parseProjectStage, parseStageChoice, PROJECT_STAGES, projectStage, projectStageLabelKey } from "./project-stage";
+import { parseProjectStage, parseStageChoice, PROJECT_STAGES, projectStage, projectStageLabelKey, STAGE_PHASES } from "./project-stage";
 
 const form = (entries: Record<string, string>) => {
   const data = new FormData();
@@ -94,5 +94,21 @@ describe("parseStageChoice", () => {
     for (const stage of ["", "Made up", "In work"]) {
       expect(parseStageChoice(form({ stage }))).toEqual({ ok: false, field: "stage", error: "Choose a stage" });
     }
+  });
+});
+
+describe("STAGE_PHASES", () => {
+  it("puts every stage under one phase, in the flow's order (ADR-0014)", () => {
+    expect(STAGE_PHASES.map((p) => [p.phase, [...p.stages]])).toEqual([
+      ["sales", ["inquiry", "quote", "ordered"]],
+      ["work", ["scheduled", "in_work"]],
+      ["closing", ["reporting", "billing", "closed"]],
+    ]);
+    expect(STAGE_PHASES.flatMap((p) => p.stages)).toEqual(PROJECT_STAGES.map((s) => s.stage));
+  });
+
+  it("has a label for every phase in English and Hebrew", () => {
+    expect(STAGE_PHASES.map((p) => en.projectStage.phase[p.labelKey])).toEqual(["Sales", "Work", "Closing"]);
+    expect(STAGE_PHASES.map((p) => he.projectStage.phase[p.labelKey])).toEqual(["מכירה", "ביצוע", "סגירה"]);
   });
 });

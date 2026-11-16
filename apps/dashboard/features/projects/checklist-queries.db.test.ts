@@ -2,7 +2,7 @@ import { schema, sql } from "@repo/db";
 import { getMaintenanceDb } from "@repo/db/maintenance";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 
-import { listChecklistTicks } from "./checklist-queries";
+import { listChecklistTicks, listChecklistTicksForProjects } from "./checklist-queries";
 import { copyProject } from "./copy";
 
 // A project's checklist ticks as the project page reads them (task 120), against the migrated database in
@@ -17,6 +17,7 @@ const ids = {
   customer: `${run}-customer`,
   site: `${run}-site`,
   project: `${run}-project`,
+  other: `${run}-other`,
 };
 
 beforeAll(async () => {
@@ -32,10 +33,14 @@ beforeAll(async () => {
   await db.insert(schema.project).values({
     id: ids.project, name: "Panel upgrade", workspaceId: ids.workspace, organizationId: ids.customer, siteId: ids.site, stage: "quote",
   });
+  await db.insert(schema.project).values({
+    id: ids.other, name: "Fire alarm", workspaceId: ids.workspace, organizationId: ids.customer, siteId: ids.site, stage: "ordered",
+  });
   await db.execute(sql`insert into project_checklist_tick (project_id, item, ticked_by, ticked_at) values
     (${ids.project}, 'quote.costed', ${ids.admin}, '2026-11-02 10:00'),
     (${ids.project}, 'quote.sent', ${ids.leaver}, '2026-11-03 23:30'),
-    (${ids.project}, 'inquiry.logged', ${ids.admin}, '2026-11-01 08:00')`);
+    (${ids.project}, 'inquiry.logged', ${ids.admin}, '2026-11-01 08:00'),
+    (${ids.other}, 'ordered.payment_terms', ${ids.admin}, '2026-11-05 12:00')`);
   await db.execute(sql`delete from "user" where id = ${ids.leaver}`);
 });
 
@@ -57,6 +62,28 @@ describe("listChecklistTicks", () => {
 
   it("gives nothing to someone who can't see the project", async () => {
     expect(await listChecklistTicks(`${run}-nobody`, ids.project)).toEqual([]);
+  });
+});
+
+describe("listChecklistTicksForProjects", () => {
+  it("gives the listed projects' ticks with each tick's project, item and time", async () => {
+    const ticks = await listChecklistTicksForProjects(ids.admin, ids.workspace, [ids.project, ids.other]);
+    expect([...ticks].sort((a, b) => a.tickedAt.getTime() - b.tickedAt.getTime())).toEqual([
+      { projectId: ids.project, item: "inquiry.logged", tickedAt: new Date("2026-11-01T08:00:00Z") },
+      { projectId: ids.project, item: "quote.costed", tickedAt: new Date("2026-11-02T10:00:00Z") },
+      { projectId: ids.project, item: "quote.sent", tickedAt: new Date("2026-11-03T23:30:00Z") },
+      { projectId: ids.other, item: "ordered.payment_terms", tickedAt: new Date("2026-11-05T12:00:00Z") },
+    ]);
+  });
+
+  it("gives only the listed projects' ticks", async () => {
+    const ticks = await listChecklistTicksForProjects(ids.admin, ids.workspace, [ids.other]);
+    expect(ticks.map((t) => t.item)).toEqual(["ordered.payment_terms"]);
+  });
+
+  it("gives nothing to someone who can't see the projects, or for no projects", async () => {
+    expect(await listChecklistTicksForProjects(`${run}-nobody`, ids.workspace, [ids.project, ids.other])).toEqual([]);
+    expect(await listChecklistTicksForProjects(ids.admin, ids.workspace, [])).toEqual([]);
   });
 });
 

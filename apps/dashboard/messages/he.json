@@ -18,7 +18,12 @@
     "reporting": "דוחות",
     "billing": "חיוב",
     "closed": "סגור",
-    "since": "<label>{stage}</label> מאז"
+    "since": "<label>{stage}</label> מאז",
+    "phase": {
+      "sales": "מכירה",
+      "work": "ביצוע",
+      "closing": "סגירה"
+    }
   },
   "stageChecklist": {
     "heading": "הצעד הבא",
@@ -57,5 +62,13 @@
       "billingReceived": "הלקוח אישר קבלה",
       "closedCompletionReport": "דוח סיום עבודה הוכן ונשלח"
     }
+  },
+  "stageBoard": {
+    "view": "לוח",
+    "label": "לוח שלבים",
+    "empty": "אין פרויקטים",
+    "days": "{days, plural, one {יום אחד} two {יומיים} other {# ימים}}",
+    "longWait": "יותר מ־{days, number} ימים בשלב הזה",
+    "canceled": "בוטל"
   }
 }

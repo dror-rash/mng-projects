@@ -1,6 +1,7 @@
-import { desc, eq, getDb, recordStageChange, schema, withAccess } from "@repo/db";
+import { and, desc, eq, getDb, inArray, recordStageChange, schema, sql, withAccess } from "@repo/db";
 
 import type { ProjectStage } from "./project-stage";
+import { visibleProjects } from "./queries";
 
 /**
  * A new project's first history row (from nothing to its first stage), by its creator (task 101). Inside the
@@ -24,4 +25,25 @@ export async function getStageChangedAt(userId: string, projectId: string): Prom
       .limit(1),
   );
   return latest?.changedAt ?? null;
+}
+
+/**
+ * Each listed project's latest stage change, in one query (the stage board, task 123); a project without history
+ * has none. Only the workspace's projects `userId` can see and not deleted, whatever ids are asked for
+ * (`visibleProjects`, on top of RLS).
+ */
+export async function listStageChangedAt(userId: string, workspaceId: string, projectIds: string[]): Promise<Map<string, Date>> {
+  if (projectIds.length === 0) return new Map();
+  const rows = await withAccess(userId, () =>
+    getDb()
+      .select({
+        projectId: schema.projectStageChange.projectId,
+        changedAt: sql<Date>`max(${schema.projectStageChange.changedAt})`.mapWith(schema.projectStageChange.changedAt),
+      })
+      .from(schema.projectStageChange)
+      .innerJoin(schema.project, eq(schema.projectStageChange.projectId, schema.project.id))
+      .where(and(inArray(schema.projectStageChange.projectId, projectIds), visibleProjects(userId, workspaceId)))
+      .groupBy(schema.projectStageChange.projectId),
+  );
+  return new Map(rows.map((r) => [r.projectId, r.changedAt]));
 }

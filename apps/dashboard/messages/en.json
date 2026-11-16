@@ -18,7 +18,12 @@
     "reporting": "Reporting",
     "billing": "Billing",
     "closed": "Closed",
-    "since": "<label>{stage}</label> since"
+    "since": "<label>{stage}</label> since",
+    "phase": {
+      "sales": "Sales",
+      "work": "Work",
+      "closing": "Closing"
+    }
   },
   "stageChecklist": {
     "heading": "Next step",
@@ -57,5 +62,13 @@
       "billingReceived": "Customer confirmed receipt",
       "closedCompletionReport": "Work-completion report prepared and sent"
     }
+  },
+  "stageBoard": {
+    "view": "Board",
+    "label": "Stage board",
+    "empty": "No projects",
+    "days": "{days, plural, one {1 day} other {# days}}",
+    "longWait": "more than {days, number} days in this stage",
+    "canceled": "Canceled"
   }
 }

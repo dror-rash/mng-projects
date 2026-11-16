@@ -4,7 +4,8 @@ import { CheckIcon } from "@repo/ui/icons";
 import { cn } from "@repo/ui/lib/utils";
 import type { ReactNode } from "react";
 
-import { type WhoseMove, whoseMoveChartSlot } from "./stage-checklist";
+import type { WhoseMove } from "./stage-checklist";
+import { WhoseMoveBadge } from "./whose-move-badge";
 
 /** A checklist item as the card shows it, its text translated by the page. */
 export type NextStepItem = {
@@ -18,13 +19,6 @@ export type NextStepItem = {
   /** The day it was ticked, "YYYY-MM-DD", and as people read it; null when not done. */
   tickedOn: string | null;
   tickedOnText: string | null;
-};
-
-/** The badge's colors by its chart slot (task 118, `whoseMoveChartSlot`); the text stays the foreground's. */
-const SLOT_COLORS: Record<ReturnType<typeof whoseMoveChartSlot>, string> = {
-  1: "border-chart-1 bg-chart-1/15",
-  3: "border-chart-3 bg-chart-3/15",
-  4: "border-chart-4 bg-chart-4/15",
 };
 
 /**
@@ -65,7 +59,7 @@ export function NextStepCard({
         <CardHeader className="gap-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
             <CardTitle id="next-step-heading" className="text-base">{heading}</CardTitle>
-            <Badge className={cn("border text-foreground", SLOT_COLORS[whoseMoveChartSlot(move)])}>{moveLabel}</Badge>
+            <WhoseMoveBadge move={move} label={moveLabel} />
           </div>
           {stageLine}
         </CardHeader>
