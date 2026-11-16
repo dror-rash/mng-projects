@@ -1,6 +1,6 @@
 # Task 122: Project page tabs by phase
 
-- **Status:** in-review
+- **Status:** done (PR #129)
 - **Milestone:** M22 Guided project flow
 - **Zone / package:** `apps/dashboard` (`app/projects/[projectId]`, `features/projects`, `features/visits`, `features/readings`, `messages/`), `e2e`
 - **Feature file:** `docs/features/project-tabs.feature` (`@task:122`); existing scenarios that use a section moved off the Overview tab gain one step at the start (see Scope)
@@ -93,6 +93,7 @@ None blocking. Defaults taken:
 - 2026-11-16 – Green (implementer): `project-tabs.ts` (`PROJECT_TABS`, `parseProjectTab`, `tabForStage`, `openProjectTab`, `projectTabPath`) and `ProjectTabs` (`project-tabs-nav.tsx`, story with each tab, Hebrew and phone); the page renders only the open tab's server component (`app/projects/[projectId]/_tabs/`); the checklist form posts `tab` and `toggleChecklistItemAction` goes back to it; visit, reading and new-visit pages and "Delete visit" lead to `?tab=work`, the task page and "Delete task" to `?tab=overview`. Fixed a task 121 bug the phone scenario found: the stage bar's hidden ", done" texts escaped its scroll clip once it scrolled (Hebrew, Billing), so the page scrolled sideways; the bar is now `relative`.
 - 2026-11-16 – Step fix (implementer): `the auditor sees no {string} button and no {string} button` waited for the crew's "Worker" text, which is on the Work tab only, so the Reports scenario in `reports.feature` could not pass; it now waits for the page's title and open tab. Scenarios unchanged. E2E in the lane (`--workers=1`): `@task:122` 15/15; site-visits, readings, attachments, reports, workers, poc-flow, workspaces, project-stages, project-cancel-copy, project-tasks, task-details, partner-access, soft-delete, roles and language: 168, all green (21 timed out in a first run while the machine slept, `ERR_NETWORK_IO_SUSPENDED`, and passed on a rerun with `--timeout=90000`).
 - 2026-11-16 – In review: QA PASS (lint, typecheck uncached, unit 603, db 194 + 38, build, Storybook; full e2e 399/399 on a production build with `CI=true`, 2 workers, first run). Security review: no findings. Access audit: no leaks; three leak scenarios added and a vacuous partner check in `work-orders.feature` (task 106) moved to the Sales tab. Code review fixes applied. Main (task 124) merged in.
+- 2026-11-16 – Done (PR #129). M22 done.
 
 ## Parking lot
 - A `project-stages.feature` phone scenario at a late stage in Hebrew (e.g. Billing, 360 px, the page does not scroll sideways), to pin the stage bar's `relative` fix (task 122) to the bar itself rather than to the tabs scenario.
