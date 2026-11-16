@@ -19,5 +19,43 @@
     "billing": "Billing",
     "closed": "Closed",
     "since": "<label>{stage}</label> since"
+  },
+  "stageChecklist": {
+    "heading": "Next step",
+    "progress": "{done} of {total} done",
+    "done": "Done",
+    "open": "Not done",
+    "party": {
+      "us": "Us",
+      "customer": "Customer"
+    },
+    "move": {
+      "ourMove": "Our move",
+      "waitingForCustomer": "Waiting for customer",
+      "ready": "Ready for next stage",
+      "complete": "Job complete"
+    },
+    "items": {
+      "inquiryDetailsRecorded": "Customer and site details recorded",
+      "inquiryLogged": "Inquiry logged in the communications log",
+      "quoteCosted": "Materials and labour costed",
+      "quoteSent": "Quote sent to the customer",
+      "quoteAccepted": "Customer accepted the quote",
+      "orderedWorkOrder": "Work order from an authorised person at the customer",
+      "orderedPaymentTerms": "Payment terms agreed",
+      "scheduledDateSet": "Work date set",
+      "scheduledCrewAssigned": "Crew assigned",
+      "scheduledCustomerConfirmed": "Customer confirmed the date",
+      "inWorkVisitsDone": "Site visits done",
+      "inWorkMaterialsReported": "Materials from suppliers reported on the project",
+      "inWorkReportsHandedOver": "Field reports handed over to the office",
+      "reportingPrepared": "Report prepared in the office",
+      "reportingSent": "Report sent to the customer",
+      "reportingReceived": "Customer confirmed receiving the report",
+      "billingPrepared": "Bill or invoice prepared",
+      "billingSent": "Sent to the customer",
+      "billingReceived": "Customer confirmed receipt",
+      "closedCompletionReport": "Work-completion report prepared and sent"
+    }
   }
 }
