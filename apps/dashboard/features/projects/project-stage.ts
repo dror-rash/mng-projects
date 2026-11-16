@@ -19,6 +19,18 @@ export type ProjectStage = (typeof PROJECT_STAGES)[number]["stage"];
 
 export type ProjectStageLabelKey = (typeof PROJECT_STAGES)[number]["labelKey"];
 
+/**
+ * The stages under their phases (ADR-0014), in the flow's order: the stage bar (task 121) and the stage board
+ * (task 123). `labelKey` is a key in the `projectStage.phase` messages: the caller translates it.
+ */
+export const STAGE_PHASES = [
+  { phase: "sales", labelKey: "sales", stages: ["inquiry", "quote", "ordered"] },
+  { phase: "work", labelKey: "work", stages: ["scheduled", "in_work"] },
+  { phase: "closing", labelKey: "closing", stages: ["reporting", "billing", "closed"] },
+] as const satisfies readonly { phase: string; labelKey: string; stages: readonly ProjectStage[] }[];
+
+export type StagePhase = (typeof STAGE_PHASES)[number]["phase"];
+
 /** Where new projects and copies start, and what an unknown stored value shows as. */
 export const DEFAULT_STAGE: ProjectStage = "inquiry";
 
@@ -40,6 +52,11 @@ export function projectStageLabelKey(value: string): ProjectStageLabelKey {
 /** Where a stage sorts: its place in the flow. */
 export function stageOrder(value: string): number {
   return PROJECT_STAGES.findIndex((s) => s.stage === projectStage(value));
+}
+
+/** The stage after a stored one in the flow (an unknown value counts as Inquiry); null at Closed (task 121). */
+export function nextStage(value: string): ProjectStage | null {
+  return PROJECT_STAGES[stageOrder(value) + 1]?.stage ?? null;
 }
 
 export type StageChoice = { ok: true; value: ProjectStage | undefined } | { ok: false; field: "stage"; error: string };

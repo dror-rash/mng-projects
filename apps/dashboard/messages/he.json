@@ -18,7 +18,12 @@
     "reporting": "דוחות",
     "billing": "חיוב",
     "closed": "סגור",
-    "since": "<label>{stage}</label> מאז"
+    "since": "<label>{stage}</label> מאז",
+    "phase": {
+      "sales": "מכירה",
+      "work": "ביצוע",
+      "closing": "סגירה"
+    }
   },
   "stageChecklist": {
     "heading": "הצעד הבא",

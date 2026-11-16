@@ -71,6 +71,12 @@ export function checklistFor(stage: string): ChecklistItem[] {
   return STAGE_CHECKLIST.filter((i) => i.stage === current);
 }
 
+/** How many of `stage`'s items aren't ticked, given the project's ticked item keys (task 121's "Move to" question). */
+export function openItemCount(stage: string, doneKeys: readonly string[]): number {
+  const done = new Set(doneKeys);
+  return checklistFor(stage).filter((i) => !done.has(i.key)).length;
+}
+
 /** Whose move it is at `stage`, given the project's ticked item keys (other stages' ticks don't count). */
 export function whoseMove(stage: string, doneKeys: readonly string[]): WhoseMove {
   const done = new Set(doneKeys);

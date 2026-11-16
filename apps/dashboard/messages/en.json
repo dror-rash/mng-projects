@@ -18,7 +18,12 @@
     "reporting": "Reporting",
     "billing": "Billing",
     "closed": "Closed",
-    "since": "<label>{stage}</label> since"
+    "since": "<label>{stage}</label> since",
+    "phase": {
+      "sales": "Sales",
+      "work": "Work",
+      "closing": "Closing"
+    }
   },
   "stageChecklist": {
     "heading": "Next step",
