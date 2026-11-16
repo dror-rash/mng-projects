@@ -72,7 +72,9 @@ export function StageBar({
         aria-labelledby={headingId}
         // Without buttons nothing on the bar takes focus, so the bar itself does, for scrolling by keyboard.
         tabIndex={action ? undefined : 0}
-        className="overflow-x-auto pb-1 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+        // `relative`: the visually hidden ", done" texts are positioned, and without a positioned bar they escape its
+        // clip once it scrolls (a late stage on a phone, task 122) and the page scrolls sideways.
+        className="relative overflow-x-auto pb-1 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
       >
         <ol className="flex w-max gap-4">
           {phases.map((phase) => (
