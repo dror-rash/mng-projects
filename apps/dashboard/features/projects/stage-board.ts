@@ -32,7 +32,11 @@ export function movesByProject(
   ticks: readonly { projectId: string; item: string }[],
 ): Map<string, WhoseMove> {
   const done = new Map<string, string[]>();
-  for (const tick of ticks) done.set(tick.projectId, [...(done.get(tick.projectId) ?? []), tick.item]);
+  for (const tick of ticks) {
+    const items = done.get(tick.projectId);
+    if (items) items.push(tick.item);
+    else done.set(tick.projectId, [tick.item]);
+  }
   return new Map(projects.map((p) => [p.id, whoseMove(p.stage, done.get(p.id) ?? [])]));
 }
 

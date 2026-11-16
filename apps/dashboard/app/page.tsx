@@ -5,8 +5,15 @@ import Link from "next/link";
 
 import { canSeeCustomers } from "@/features/access/scope";
 import { AppFrame } from "@/features/layout/app-frame";
+import { listChecklistTicksForProjects } from "@/features/projects/checklist-queries";
+import { needsActionSection } from "@/features/projects/needs-action-data";
+import { NeedsActionSection } from "@/features/projects/needs-action-section";
+import { openProjects } from "@/features/projects/needs-action";
+import { isCanceled } from "@/features/projects/project-lifecycle";
 import { ProjectList } from "@/features/projects/project-list";
-import { countProjects, listProjects } from "@/features/projects/queries";
+import { listProjects } from "@/features/projects/queries";
+import { listStageChangedAt } from "@/features/projects/stage-history";
+import { todayUtc } from "@/features/tasks/due-dates";
 import { overviewWindow, summarizeOverview } from "@/features/tasks/overview";
 import { summarizeProjectStatusCounts } from "@/features/tasks/progress";
 import { countTasksByProjectAndStatus, countWorkspaceOverview } from "@/features/tasks/queries";
@@ -18,12 +25,21 @@ const RECENT_PROJECTS = 5;
 
 export default async function DashboardPage() {
   const { session, workspace } = await requireWorkspace("/");
-  const [projectCount, recentProjects, overviewCounts, projectCounts] = await Promise.all([
-    countProjects(session.user.id, workspace.id),
-    listProjects(session.user.id, workspace.id, RECENT_PROJECTS),
+  const [allProjects, overviewCounts, projectCounts] = await Promise.all([
+    listProjects(session.user.id, workspace.id),
     countWorkspaceOverview(session.user.id, workspace.id, overviewWindow(new Date())),
     countTasksByProjectAndStatus(session.user.id, workspace.id),
   ]);
+  const projectCount = allProjects.length;
+  const recentProjects = allProjects.slice(0, RECENT_PROJECTS);
+  // Needs action (task 124): the current stage's ticks of the projects not canceled (canceled ones never need
+  // action, so their ticks aren't read), then the stage changes of those that can still need action only
+  // (`openProjects` also drops finished jobs, which pile up over time).
+  const active = allProjects.filter((p) => !isCanceled(p.lifecycle));
+  const ticks = await listChecklistTicksForProjects(session.user.id, workspace.id, active.map((p) => p.id));
+  const open = openProjects(active, ticks);
+  const changedAt = await listStageChangedAt(session.user.id, workspace.id, open.map((p) => p.id));
+  const needsAction = await needsActionSection(open, ticks, changedAt, todayUtc());
   const { summary: overall, overdue, dueSoon, thisWeek, byStatus } = summarizeOverview(overviewCounts);
 
   const stats = [
@@ -41,6 +57,8 @@ export default async function DashboardPage() {
   return (
     <AppFrame email={session.user.email} name={session.user.name} role={workspace.role} workspaceName={workspace.name} className="max-w-6xl space-y-8 p-6">
       <h1 className="text-2xl font-bold tracking-tight">Project Dashboard</h1>
+
+      <NeedsActionSection groups={needsAction.groups} text={needsAction.text} linkCustomers={canSeeCustomers(workspace.role)} />
 
       <section className="space-y-4">
         <h2 className="text-xl font-semibold tracking-tight">Overview</h2>

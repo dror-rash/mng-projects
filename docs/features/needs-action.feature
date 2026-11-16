@@ -7,7 +7,7 @@ Feature: Needs action on the overview
   # "Waited" counts from the later of the day the stage started and the latest tick in it (ADR-0014).
   # Listed after more than 7 days. Whose move comes from the stage's checklist (task 120).
 
-  @wip @task:124
+  @task:124
   Scenario: Needs action lists the projects that waited too long
     Given I am signed in with an existing account
     And I have projects named "Panel upgrade, Shelf lighting, Fire alarm, Door locks, Old warehouse"
@@ -29,7 +29,7 @@ Feature: Needs action on the overview
     And the "Needs action" section does not show "Door locks"
     And the "Needs action" section does not show "Old warehouse"
 
-  @wip @task:124
+  @task:124
   Scenario: A tick restarts the wait
     Given I am signed in with an existing account
     And I have a project named "Panel upgrade"
@@ -42,7 +42,7 @@ Feature: Needs action on the overview
     And I open "/dashboard"
     Then the "Needs action" section does not show "Panel upgrade"
 
-  @wip @task:124
+  @task:124
   Scenario: A partner user sees only their projects in Needs action
     Given a workspace with the partners "Northwind" and "Globex", an admin and an auditor
     And the customer "Acme Ltd" is assigned to "Northwind" and "Globex"
@@ -53,9 +53,48 @@ Feature: Needs action on the overview
     And I am signed in as a user of "Northwind"
     When I open "/dashboard"
     Then the "Our move" section shows "NW Site"
+    And the "Our move" section shows "Acme Ltd"
+    And I do not see the "Acme Ltd" link
     And the page shows none of "GX App"
 
-  @wip @task:124
+  @task:124
+  Scenario: An auditor sees every partner's waiting projects in Needs action
+    Given a workspace with the partners "Northwind" and "Globex", an admin and an auditor
+    And the customer "Acme Ltd" is assigned to "Northwind" and "Globex"
+    And "Northwind" has the project "NW Site" for "Acme Ltd" with the task "Copy"
+    And "Globex" has the project "GX App" for "Acme Ltd" with the task "Login"
+    And the project "NW Site" has been at the stage "Quote" for 10 days
+    And the project "GX App" has been at the stage "Quote" for 10 days
+    And I am signed in as an auditor
+    When I open "/dashboard"
+    Then the "Our move" section shows "NW Site"
+    And the "Our move" section shows "GX App"
+
+  @task:124
+  Scenario: Needs action shows only the current workspace's projects
+    Given I am signed in with an existing account
+    And I have a project named "Panel upgrade"
+    And the project "Panel upgrade" has been at the stage "Quote" for 10 days
+    And I create a workspace named "Side Gig"
+    And I have a project named "Garden"
+    And the project "Garden" has been at the stage "Quote" for 10 days
+    And I switch to "Test User's workspace"
+    When I open "/dashboard"
+    Then the "Our move" section shows "Panel upgrade"
+    And the page shows none of "Garden"
+
+  @task:124
+  Scenario: A deleted project is not in Needs action
+    Given I am signed in with an existing account
+    And I have projects named "Panel upgrade, Old job"
+    And the project "Panel upgrade" has been at the stage "Quote" for 10 days
+    And the project "Old job" has been at the stage "Quote" for 10 days
+    And I delete the project "Old job"
+    When I open "/dashboard"
+    Then the "Our move" section shows "Panel upgrade"
+    And the page shows none of "Old job"
+
+  @task:124
   Scenario: A worker sees only their crew's projects in Needs action
     Given a workspace with the partners "Northwind" and "Globex", an admin and an auditor
     And the customer "Acme Ltd" is assigned to "Northwind" and "Globex"
@@ -69,7 +108,7 @@ Feature: Needs action on the overview
     Then the "Our move" section shows "NW Site"
     And the page shows none of "GX App"
 
-  @wip @task:124
+  @task:124
   Scenario: Nothing needs action
     Given I am signed in with an existing account
     And I have a project named "Panel upgrade"

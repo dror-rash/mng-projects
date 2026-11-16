@@ -66,10 +66,9 @@ describe("listChecklistTicks", () => {
 });
 
 describe("listChecklistTicksForProjects", () => {
-  it("gives the listed projects' ticks with each tick's project, item and time", async () => {
+  it("gives the listed projects' ticks of their current stage with each tick's project, item and time", async () => {
     const ticks = await listChecklistTicksForProjects(ids.admin, ids.workspace, [ids.project, ids.other]);
     expect([...ticks].sort((a, b) => a.tickedAt.getTime() - b.tickedAt.getTime())).toEqual([
-      { projectId: ids.project, item: "inquiry.logged", tickedAt: new Date("2026-11-01T08:00:00Z") },
       { projectId: ids.project, item: "quote.costed", tickedAt: new Date("2026-11-02T10:00:00Z") },
       { projectId: ids.project, item: "quote.sent", tickedAt: new Date("2026-11-03T23:30:00Z") },
       { projectId: ids.other, item: "ordered.payment_terms", tickedAt: new Date("2026-11-05T12:00:00Z") },
