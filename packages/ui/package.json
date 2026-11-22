@@ -44,8 +44,8 @@
     "@repo/i18n": "workspace:*",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
-    "lucide-react": "1.72.0",
-    "tailwind-merge": "^3.3.0"
+    "lucide-react": "1.76.0",
+    "tailwind-merge": "^3.7.1"
   },
   "peerDependencies": {
     "react": "^19.0.0",

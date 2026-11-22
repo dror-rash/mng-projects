@@ -21,7 +21,7 @@
     "@repo/storage": "workspace:*",
     "@repo/ui": "workspace:*",
     "next": "^15.5.0",
-    "next-intl": "4.14.9",
+    "next-intl": "4.15.3",
     "pg": "^8.23.1",
     "pg-connection-string": "^2.14.1",
     "react": "^19.0.0",
