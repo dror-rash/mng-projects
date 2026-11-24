@@ -1,6 +1,6 @@
 # Task 125: Upgrade TypeScript to 6
 
-- **Status:** todo
+- **Status:** in-progress
 - **Milestone:** none (chore, outside M15's order; owner 2026-11-24: "take care of the upgrades")
 - **Zone / package:** every `package.json` that lists `typescript` (root, `packages/*`, `apps/*`, `e2e`), `pnpm-lock.yaml`, and the tsconfig or type declarations the new errors need
 - **Feature file:** none (no behavior change; the existing suites are the acceptance test)
@@ -52,6 +52,8 @@ Bump, `pnpm install`, run `pnpm typecheck` to list the errors, fix each with the
 - [ ] PR links this task and closes/supersedes #122
 
 ## Progress log
+
+- 2026-11-24: started in lane 1.
 - 2026-11-24 – Drafted by the planner from the owner's "take care of the upgrades" and #122's CI failure.
 
 ## Parking lot
