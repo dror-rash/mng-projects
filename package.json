@@ -40,7 +40,7 @@
   },
   "devDependencies": {
     "turbo": "^2.11.10",
-    "typescript": "^5.9.0"
+    "typescript": "^6.0.0"
   },
   "description": "A full-stack multi-zone web app built from Waypoint"
 }
