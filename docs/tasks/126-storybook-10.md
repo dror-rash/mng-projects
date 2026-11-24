@@ -1,6 +1,6 @@
 # Task 126: Upgrade Storybook to 10
 
-- **Status:** todo
+- **Status:** in-progress
 - **Milestone:** none (chore, outside M15's order; owner 2026-11-24: "take care of the upgrades")
 - **Zone / package:** `packages/ui` (`package.json`, `.storybook/`), `apps/dashboard` (`package.json`; its stories are built by `packages/ui`'s Storybook), `pnpm-lock.yaml`
 - **Feature file:** none (no behavior change; the existing suites and stories are the acceptance test)
@@ -53,6 +53,8 @@ Bump the set, `pnpm install`, apply the migration notes that touch `.storybook/m
 - [ ] PR links this task and closes/supersedes #121 and #123
 
 ## Progress log
+
+- 2026-11-24: started in lane 2.
 - 2026-11-24 – Drafted by the planner from the owner's "take care of the upgrades" and #121/#123's CI failure.
 
 ## Parking lot
