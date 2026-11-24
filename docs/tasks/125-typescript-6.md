@@ -54,6 +54,8 @@ Bump, `pnpm install`, run `pnpm typecheck` to list the errors, fix each with the
 ## Progress log
 
 - 2026-11-24: started in lane 1.
+- 2026-11-24: bumped `typescript` to `^6.0.0` in all 11 `package.json` files; the lockfile resolves 6.0.3 only (no 5.x left, no new packages; peers of `typescript-eslint` 8.73, `@storybook/react-vite` 9.1 and `react-docgen-typescript` now resolve against 6.0.3). Red: `pnpm typecheck --continue` failed in shell, dashboard and example-zone with TS2882 on `import "./globals.css"` (TS 6 turns on `noUncheckedSideEffectImports`; Next 15.5's types declare only `*.module.css`). No other new error.
+- 2026-11-24: fix: a one-line `css.d.ts` (`declare module "*.css";`) per zone. Chosen over `noUncheckedSideEffectImports: false` in `tsconfig.nextjs.json` because it keeps TS 6's check for every other side-effect import (a mistyped package or path still fails) and only answers for stylesheets, which Next's bundler resolves; `*.module.css` keeps Next's more specific typed declaration. Per zone, not shared, because the zone tsconfigs set their own `include` and each zone owns its stylesheet (no cross-zone imports). No tooling bump needed: `typescript-eslint` 8.73, Next 15.5 build type check, Vitest, Playwright/`bddgen`, Storybook 9 `react-vite` and `drizzle-kit check` all work on 6.0.3. Green: `pnpm lint`, `pnpm typecheck`, `pnpm test` (900 unit tests), `pnpm build`, `pnpm --filter @repo/ui build-storybook`; e2e on a production build (`CI=true`): `@smoke` 3/3 and zone-navigation, workspaces, project-tasks, form-validation 28/28. Full `pnpm test:e2e` left to QA.
 - 2026-11-24 – Drafted by the planner from the owner's "take care of the upgrades" and #122's CI failure.
 
 ## Parking lot
