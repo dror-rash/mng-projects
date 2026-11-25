@@ -1,6 +1,6 @@
 # Task 125: Upgrade TypeScript to 6
 
-- **Status:** in-review
+- **Status:** done
 - **Milestone:** none (chore, outside M15's order; owner 2026-11-24: "take care of the upgrades")
 - **Zone / package:** every `package.json` that lists `typescript` (root, `packages/*`, `apps/*`, `e2e`), `pnpm-lock.yaml`, and the tsconfig or type declarations the new errors need
 - **Feature file:** none (no behavior change; the existing suites are the acceptance test)
@@ -59,6 +59,8 @@ Bump, `pnpm install`, run `pnpm typecheck` to list the errors, fix each with the
 - 2026-11-24: fix: a one-line `css.d.ts` (`declare module "*.css";`) per zone. Chosen over `noUncheckedSideEffectImports: false` in `tsconfig.nextjs.json` because it keeps TS 6's check for every other side-effect import (a mistyped package or non-CSS path still fails; a mistyped stylesheet path now passes `tsc` and is caught by the bundler in `next build`) and only answers for stylesheets, which Next's bundler resolves; `*.module.css` keeps Next's more specific typed declaration. Per zone, not shared, because the zone tsconfigs set their own `include` and each zone owns its stylesheet (no cross-zone imports). No tooling bump needed: `typescript-eslint` 8.73, Next 15.5 build type check, Vitest, Playwright/`bddgen`, Storybook 9 `react-vite` and `drizzle-kit check` all work on 6.0.3. Green: `pnpm lint`, `pnpm typecheck`, `pnpm test` (900 unit tests), `pnpm build`, `pnpm --filter @repo/ui build-storybook`; e2e on a production build (`CI=true`): `@smoke` 3/3 and zone-navigation, workspaces, project-tasks, form-validation 28/28. Full `pnpm test:e2e` left to QA.
 - 2026-11-24: review: no blockers. Security: one Info note: the lockfile dropped 54 `libc:` lines: the pinned pnpm 10.18 doesn't write them, Dependabot's newer pnpm does (checked: 10.18 with an empty cache gives 3, 10.34.9 gives main's 57). Fixed by regenerating the lockfile from main's with pnpm 10.34.9, so the diff is TypeScript-only; 10.18's `--frozen-lockfile` accepts it.
 - 2026-11-24: QA PASS: lint, typecheck, 900 unit tests, build, Storybook build, full e2e 407/407 on a production build (`CI=true`, 2 workers). In review.
+
+- 2026-11-25: merged in PR #134; Dependabot #122 closed.
 
 ## Parking lot
 - Adopting TS 6 options or features (stricter checks, new defaults made explicit) as a separate task.

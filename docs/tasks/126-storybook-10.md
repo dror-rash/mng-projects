@@ -1,6 +1,6 @@
 # Task 126: Upgrade Storybook to 10
 
-- **Status:** in-progress
+- **Status:** in-review
 - **Milestone:** none (chore, outside M15's order; owner 2026-11-24: "take care of the upgrades")
 - **Zone / package:** `packages/ui` (`package.json`, `.storybook/`), `apps/dashboard` (`package.json`; its stories are built by `packages/ui`'s Storybook), `pnpm-lock.yaml`
 - **Feature file:** none (no behavior change; the existing suites and stories are the acceptance test)
@@ -61,6 +61,8 @@ Bump the set, `pnpm install`, apply the migration notes that touch `.storybook/m
 - 2026-11-24: checks: `build-storybook` indexes the same 202 stories as the 9.1.21 build (20 ui + 24 dashboard story files, identical ids); a Playwright pass over the static build rendered 201/202 (the 202nd, `FieldError / Empty`, renders nothing by design, as on 9); `storybook dev` starts on 10.6.8; the Accessibility panel loads and reports 0 violations on the stories sampled (Button, AttachmentsSection, SubCompaniesSection, NextStepCard Hebrew, StageBoard). The Vite "Module level directives… use client" warnings were already there on 9. Lockfile: outside Storybook's own tree only its transitive deps change (oxc parser/resolver, `open` 10, `glob` 13, …); `next-intl` stays 4.15.3 (peer key only); Storybook 10 carries its own `@testing-library/jest-dom` 6.9.1, `@repo/ui` still uses `^7.0.1`; no zone runtime dependency changes.
 
 - 2026-11-25: review: no blockers; should-fix: the lockfile had lost every `libc:` field (the pinned pnpm 10.18 drops them; without them the Alpine image installs glibc binaries too). Fixed when merging main (TypeScript 6 included): lockfile regenerated from main's with pnpm 10.34.9, 73 `libc:` lines (main's 57 plus the new oxc bindings); 10.18's `--frozen-lockfile` accepts it. `next-intl`'s peer key now includes `@babel/core` (already in the tree; no version change). Security: Info only: dev-only `glob` 13 / `minimatch` 10 advisories, already on main through Storybook 9's docgen plugin; production closure unchanged (584 packages). The earlier full e2e run is void (the machine slept; dev servers); QA reruns it on a production build.
+
+- 2026-11-25: QA PASS on f26b047: `pnpm install --frozen-lockfile`, lint, typecheck, 900 unit tests, build, `build-storybook` (v10.6.8, 202 stories), full e2e 407/407 on a production build (`CI=true`, 2 workers, 4.4 min; Playwright's new Chromium installed first). In review.
 
 ## Parking lot
 - A Dependabot group for all `storybook` / `@storybook/*` packages so they arrive as one PR instead of one failing PR per addon.
