@@ -1,6 +1,6 @@
 # Task 125: Upgrade TypeScript to 6
 
-- **Status:** todo
+- **Status:** in-review
 - **Milestone:** none (chore, outside M15's order; owner 2026-11-24: "take care of the upgrades")
 - **Zone / package:** every `package.json` that lists `typescript` (root, `packages/*`, `apps/*`, `e2e`), `pnpm-lock.yaml`, and the tsconfig or type declarations the new errors need
 - **Feature file:** none (no behavior change; the existing suites are the acceptance test)
@@ -52,8 +52,16 @@ Bump, `pnpm install`, run `pnpm typecheck` to list the errors, fix each with the
 - [ ] PR links this task and closes/supersedes #122
 
 ## Progress log
+
 - 2026-11-24 – Drafted by the planner from the owner's "take care of the upgrades" and #122's CI failure.
+- 2026-11-24: started in lane 1.
+- 2026-11-24: bumped `typescript` to `^6.0.0` in all 11 `package.json` files; the lockfile resolves 6.0.3 only (no 5.x left, no new packages; peers of `typescript-eslint` 8.73, `@storybook/react-vite` 9.1 and `react-docgen-typescript` now resolve against 6.0.3). Red: `pnpm typecheck --continue` failed in shell, dashboard and example-zone with TS2882 on `import "./globals.css"` (TS 6 turns on `noUncheckedSideEffectImports`; Next 15.5's types declare only `*.module.css`). No other new error.
+- 2026-11-24: fix: a one-line `css.d.ts` (`declare module "*.css";`) per zone. Chosen over `noUncheckedSideEffectImports: false` in `tsconfig.nextjs.json` because it keeps TS 6's check for every other side-effect import (a mistyped package or non-CSS path still fails; a mistyped stylesheet path now passes `tsc` and is caught by the bundler in `next build`) and only answers for stylesheets, which Next's bundler resolves; `*.module.css` keeps Next's more specific typed declaration. Per zone, not shared, because the zone tsconfigs set their own `include` and each zone owns its stylesheet (no cross-zone imports). No tooling bump needed: `typescript-eslint` 8.73, Next 15.5 build type check, Vitest, Playwright/`bddgen`, Storybook 9 `react-vite` and `drizzle-kit check` all work on 6.0.3. Green: `pnpm lint`, `pnpm typecheck`, `pnpm test` (900 unit tests), `pnpm build`, `pnpm --filter @repo/ui build-storybook`; e2e on a production build (`CI=true`): `@smoke` 3/3 and zone-navigation, workspaces, project-tasks, form-validation 28/28. Full `pnpm test:e2e` left to QA.
+- 2026-11-24: review: no blockers. Security: one Info note: the lockfile dropped 54 `libc:` lines: the pinned pnpm 10.18 doesn't write them, Dependabot's newer pnpm does (checked: 10.18 with an empty cache gives 3, 10.34.9 gives main's 57). Fixed by regenerating the lockfile from main's with pnpm 10.34.9, so the diff is TypeScript-only; 10.18's `--frozen-lockfile` accepts it.
+- 2026-11-24: QA PASS: lint, typecheck, 900 unit tests, build, Storybook build, full e2e 407/407 on a production build (`CI=true`, 2 workers). In review.
 
 ## Parking lot
 - Adopting TS 6 options or features (stricter checks, new defaults made explicit) as a separate task.
 - A Dependabot group or ignore rule so major TypeScript bumps arrive as a task instead of a failing PR.
+- Bump `packageManager` to the pnpm version Dependabot uses, so `libc:` lines in `pnpm-lock.yaml` stop flipping between Dependabot PRs and local installs (review of task 125; without them the Alpine image may install both glibc and musl native variants).
+- A line in `docs/ARCHITECTURE.md` that every zone has a `css.d.ts` for its global stylesheet (a new zone without one fails typecheck with TS2882).

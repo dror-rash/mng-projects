@@ -14,14 +14,14 @@
     "test": "vitest run"
   },
   "devDependencies": {
-    "@playwright/test": "^1.65.0",
+    "@playwright/test": "^1.65.1",
     "@repo/config": "workspace:*",
     "@repo/db": "workspace:*",
     "@repo/storage": "workspace:*",
     "@types/node": "^22.0.0",
     "eslint": "^9.0.0",
     "playwright-bdd": "^9.2.1",
-    "typescript": "^5.9.0",
+    "typescript": "^6.0.0",
     "vitest": "^3.2.0"
   }
 }
