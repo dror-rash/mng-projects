@@ -1,6 +1,6 @@
 # Task 126: Upgrade Storybook to 10
 
-- **Status:** in-review
+- **Status:** done
 - **Milestone:** none (chore, outside M15's order; owner 2026-11-24: "take care of the upgrades")
 - **Zone / package:** `packages/ui` (`package.json`, `.storybook/`), `apps/dashboard` (`package.json`; its stories are built by `packages/ui`'s Storybook), `pnpm-lock.yaml`
 - **Feature file:** none (no behavior change; the existing suites and stories are the acceptance test)
@@ -63,6 +63,8 @@ Bump the set, `pnpm install`, apply the migration notes that touch `.storybook/m
 - 2026-11-25: review: no blockers; should-fix: the lockfile had lost every `libc:` field (the pinned pnpm 10.18 drops them; without them the Alpine image installs glibc binaries too). Fixed when merging main (TypeScript 6 included): lockfile regenerated from main's with pnpm 10.34.9, 73 `libc:` lines (main's 57 plus the new oxc bindings); 10.18's `--frozen-lockfile` accepts it. `next-intl`'s peer key now includes `@babel/core` (already in the tree; no version change). Security: Info only: dev-only `glob` 13 / `minimatch` 10 advisories, already on main through Storybook 9's docgen plugin; production closure unchanged (584 packages). The earlier full e2e run is void (the machine slept; dev servers); QA reruns it on a production build.
 
 - 2026-11-25: QA PASS on f26b047: `pnpm install --frozen-lockfile`, lint, typecheck, 900 unit tests, build, `build-storybook` (v10.6.8, 202 stories), full e2e 407/407 on a production build (`CI=true`, 2 workers, 4.4 min; Playwright's new Chromium installed first). In review.
+
+- 2026-11-25: merged in PR #135; Dependabot #121 and #123 closed.
 
 ## Parking lot
 - A Dependabot group for all `storybook` / `@storybook/*` packages so they arrive as one PR instead of one failing PR per addon.
