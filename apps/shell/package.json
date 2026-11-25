@@ -23,12 +23,12 @@
   "devDependencies": {
     "@next/env": "^15.5.0",
     "@repo/config": "workspace:*",
-    "@tailwindcss/postcss": "^4.3.4",
+    "@tailwindcss/postcss": "^4.3.5",
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "eslint": "^9.0.0",
-    "tailwindcss": "^4.3.4",
+    "tailwindcss": "^4.3.5",
     "typescript": "^6.0.0",
     "vitest": "^3.2.0"
   }
