@@ -26,7 +26,7 @@ The POC needs about nine tasks in eight days. Today one session does everything,
   - A `feat:` or `fix:` commit whose staged files include `docs/features/*.feature` (rule 2: feature changes go in their own commit).
 - **Lanes** (`scripts/lane.sh <n>`): a worktree with its own branch, database (`app_lane<n>` in the local Postgres) and ports (`3000+10n`, `3001+10n`, `3002+10n`), and a `.env` written to match. The zone dev and start scripts and the Playwright config read the ports from the environment, with today's defaults.
 - **Skills** (`.claude/skills/`):
-  - `task-start <id>`: lane, branch, `@wip` off, task status.
+  - `task-start <id>`: readiness check, lane, branch, task status. It leaves `@wip` on; the spec-writer removes it in the task's `test:` commit.
   - `dod`: runs the Definition of Done and reports each check.
   - `lane-merge`: merges a finished lane into its target branch after the checks, then removes the worktree and database.
   - `run-task <id>`: the pipeline for one task (planner check → spec-writer → implementer → access-auditor and reviewer in parallel → qa).
